@@ -19,7 +19,7 @@ setenv_script =  os.path.join(omnetpp_root, "setenv").replace('\\', '/')
 sim_path = os.path.join(project_dir, 'flora', 'simulations').replace('\\', '/')
 omnetpp_command = "opp_run"
 ini_file = os.path.join(sim_path, 'omnetpp.ini').replace('\\', '/')
-mingwenv_cmd_path = os.path.join(omnetpp_root, 'mingwenv.cmd').replace('\\', '/')
+mingwenv_cmd_path = os.path.join(omnetpp_root, "tools/win32.x86_64/msys2_shell.cmd").replace('\\', '/')
 
 # Unpack toolchains and dependencies if not already unpacked
 def unpack_tools():
@@ -51,7 +51,7 @@ def run_simulation():
 
     # Construct the command to run OMNeT++ simulation
     command = (
-        f' "{os.path.join(omnetpp_root, "tools/win32.x86_64/msys2_shell.cmd").replace('\\', '/')}" -mingw64 -c '
+        f' "{mingwenv_cmd_path}" -mingw64 -c '
         f'"cd {sim_path} && '
         f'source {setenv_script} && '
         f'opp_run -m -u Cmdenv -n ../src:.:../../inet4.4/examples:../../inet4.4/showcases:../../inet4.4/src:../../inet4.4/tests/validation:../../inet4.4/tests/networks:../../inet4.4/tutorials -x inet.common.selfdoc:inet.linklayer.configurator.gatescheduling.z3:inet.emulation:inet.showcases.visualizer.osg:inet.examples.emulation:inet.showcases.emulation:inet.transportlayer.tcp_lwip:inet.applications.voipstream:inet.visualizer.osg:inet.examples.voipstream --image-path=../../inet4.4/images -l ../../inet4.4/src/libINET.dll -l ../src/libflora.dll omnetpp.ini"'
