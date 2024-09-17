@@ -29,6 +29,7 @@ O = $(PROJECT_OUTPUT_DIR)/$(CONFIGNAME)/$(PROJECTRELATIVE_PATH)
 
 # Object files for local .cc, .msg and .sm files
 OBJS = \
+    $O/demo/nodedemo.o \
     $O/inet/applications/base/ApplicationBase.o \
     $O/inet/applications/base/ApplicationPacketSerializer.o \
     $O/inet/applications/clock/SimpleClockSynchronizer.o \
@@ -482,6 +483,7 @@ OBJS = \
     $O/inet/linklayer/xmac/XMacHeaderSerializer.o \
     $O/inet/linklayer/xmac/XMacProtocolDissector.o \
     $O/inet/linklayer/xmac/XMacProtocolPrinter.o \
+    $O/inet/mobility/RL/SimpleRLMobility.o \
     $O/inet/mobility/base/LinearRotatingMobilityBase.o \
     $O/inet/mobility/base/LineSegmentsMobilityBase.o \
     $O/inet/mobility/base/MobilityBase.o \
