@@ -16,9 +16,9 @@ omnetpp_root = config['omnetpp_root']
 # Path variables based on project dir and omnet dir
 mingw_tools = os.path.join(omnetpp_root, 'tools', 'win32.x86_64', 'opt', 'mingw64', 'bin').replace('\\', '/')
 setenv_script =  os.path.join(omnetpp_root, "setenv").replace('\\', '/')
-proj_path = os.path.join(project_dir, 'flora', 'simulations').replace('\\', '/')
+sim_path = os.path.join(project_dir, 'flora', 'simulations').replace('\\', '/')
 omnetpp_command = "opp_run"
-ini_file = os.path.join(proj_path, 'omnetpp.ini').replace('\\', '/')
+ini_file = os.path.join(sim_path, 'omnetpp.ini').replace('\\', '/')
 mingwenv_cmd_path = os.path.join(omnetpp_root, 'mingwenv.cmd').replace('\\', '/')
 
 # Unpack toolchains and dependencies if not already unpacked
@@ -52,9 +52,9 @@ def run_simulation():
     # Construct the command to run OMNeT++ simulation
     command = (
         f' "{os.path.join(omnetpp_root, "tools/win32.x86_64/msys2_shell.cmd").replace('\\', '/')}" -mingw64 -c '
-        f'"cd {proj_path} && '
+        f'"cd {sim_path} && '
         f'source {setenv_script} && '
-        f'opp_run -m -u Cmdenv -n ../src:.:../../inet4.4/examples:../../inet4.4/showcases:../../inet4.4/src:../../inet4.4/tests/validation:../../inet4.4/tests/networks:../../inet4.4/tutorials -x inet.common.selfdoc:inet.linklayer.configurator.gatescheduling.z3:inet.emulation:inet.showcases.visualizer.osg:inet.examples.emulation:inet.showcases.emulation:inet.transportlayer.tcp_lwip:inet.applications.voipstream:inet.visualizer.osg:inet.examples.voipstream --image-path=../../inet4.4/images -l ../../inet4.4/src/libINET.dll -l ../src/libflora.dll C:/Users/simon/Desktop/AI_Lora_Mobility/flora/simulations/omnetpp.ini"'
+        f'opp_run -m -u Cmdenv -n ../src:.:../../inet4.4/examples:../../inet4.4/showcases:../../inet4.4/src:../../inet4.4/tests/validation:../../inet4.4/tests/networks:../../inet4.4/tutorials -x inet.common.selfdoc:inet.linklayer.configurator.gatescheduling.z3:inet.emulation:inet.showcases.visualizer.osg:inet.examples.emulation:inet.showcases.emulation:inet.transportlayer.tcp_lwip:inet.applications.voipstream:inet.visualizer.osg:inet.examples.voipstream --image-path=../../inet4.4/images -l ../../inet4.4/src/libINET.dll -l ../src/libflora.dll omnetpp.ini"'
     )
 
     print(f'Running command: {command}')
