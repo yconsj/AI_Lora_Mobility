@@ -23,6 +23,9 @@ module HostNode extends StandardHost {
      	out <-- {} <-- nodeDemo.out;
      	
 }
+
+simple ModelModule { }
+
 network MobilityShowcase
 {
     parameters:
@@ -31,9 +34,9 @@ network MobilityShowcase
         @display("bgb=400,400");
     submodules:
         host[numHosts]: HostNode {
-            
             @display("i=misc/smartphone");
         }
+        model: ModelModule;
         visualizer: IntegratedVisualizer {
             @display("p=50,50");
         }
