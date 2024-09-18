@@ -1,7 +1,6 @@
 # Custom ignores
 flora/.nedfolders
 flora/.oppbuildspec
-flora4.4/.settings/language.settings.xml
 flora/.nedexclusions
 flora/src/libflora.def
 
