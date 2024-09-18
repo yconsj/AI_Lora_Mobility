@@ -1,3 +1,10 @@
+# Custom ignores
+flora/.nedfolders
+flora/.oppbuildspec
+flora/.project
+flora4.4/.settings/language.settings.xml
+
+
 # Prerequisites
 *.d
 
