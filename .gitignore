@@ -8,6 +8,7 @@ inet4.4/out/clang-release/src/.last-copts
 inet4.4/out/clang-release/src/inet/
 inet4.4/src/inet/opp_defines.h
 inet4.4/src/Makefile
+inet4.4/.settings/
 
 # Prerequisites
 *.d
