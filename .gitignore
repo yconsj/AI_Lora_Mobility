@@ -1,5 +1,4 @@
 # Custom ignores
-flora/.nedfolders
 flora/.oppbuildspec
 flora/.nedexclusions
 flora/src/libflora.def
