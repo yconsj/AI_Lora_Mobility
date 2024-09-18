@@ -4,6 +4,10 @@ flora/.oppbuildspec
 flora/.project
 flora4.4/.settings/language.settings.xml
 flora/.nedexclusions
+flora/src/libflora.def
+
+inet4.4/out/clang-release/src/libINET.def
+inet4.4/src/libINET.def
 inet4.4/out/clang-release/src/.last-copts
 inet4.4/out/clang-release/src/inet/
 inet4.4/src/inet/opp_defines.h
