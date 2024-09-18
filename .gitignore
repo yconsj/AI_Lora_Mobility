@@ -1,6 +1,4 @@
 # Custom ignores
-flora/.oppbuildspec
-flora/.nedexclusions
 flora/src/libflora.def
 
 inet4.4/out/clang-release/src/libINET.def
