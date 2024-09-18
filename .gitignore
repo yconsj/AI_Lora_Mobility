@@ -3,7 +3,8 @@ flora/.nedfolders
 flora/.oppbuildspec
 flora/.project
 flora4.4/.settings/language.settings.xml
-
+flora/.nedexclusions
+inet4.4/out/clang-release/src/inet/
 
 # Prerequisites
 *.d
