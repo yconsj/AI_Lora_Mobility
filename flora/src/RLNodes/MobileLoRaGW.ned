@@ -16,7 +16,7 @@
 package flora.RLNodes;
 
 import inet.node.contract.INetworkNode;
-import inet.mobility.static.StationaryMobility;
+import inet.mobility.RL.SimpleRLMobility;
 import inet.networklayer.common.InterfaceTable;
 import inet.networklayer.contract.INetworkLayer;
 import inet.linklayer.loopback.LoopbackInterface;
@@ -86,7 +86,7 @@ module MobileLoRaGW like INetworkNode
         interfaceTable: InterfaceTable {
             @display("p=135.36,69.936005");
         }
-        mobility: StationaryMobility {
+        mobility: SimpleRLMobility {
             @display("p=135.36,199.656");
         }
         LoRaGWNic: LoRaGWNic {

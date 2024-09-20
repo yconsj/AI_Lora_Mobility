@@ -1,7 +1,16 @@
 package flora.simulations.scenarios.basecase;
 
+import flora.RLNodes.MobileLoRaGW;
 import inet.node.inet.StandardHost;
 import inet.visualizer.common.IntegratedVisualizer;
+import inet.applications.udpapp.UdpBasicApp;
+import inet.node.inet.Router;
+import inet.node.internetcloud.InternetCloud;
+import flora.LoRaPhy.LoRaMedium;
+import flora.LoraNode.LoRaNode;
+import inet.node.inet.StandardHost;
+import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
+import inet.node.ethernet.Eth1G;
 
 @namespace(inet);
 simple NodeDemo
@@ -26,20 +35,46 @@ module HostNode extends StandardHost {
 network MobilityShowcase
 {
     parameters:
-        int numHosts;
-
+        int numberOfNodes = default(0);
+        int numberOfGateways = default(1);
+        int networkSizeX = default(500);
+        int networkSizeY = default(500);
+        @display("bgb=562,417");
         @display("bgb=400,400");
     submodules:
-        host[numHosts]: HostNode {
+        loRaNodes[numberOfNodes]: LoRaNode {
+            @display("p=400,304");
+        }
+        MobileLoraGw[numberOfGateways]: MobileLoRaGW {
             
-            @display("i=misc/smartphone");
+            @display("p=157,238;is=s");
         }
-        visualizer: IntegratedVisualizer {
-            @display("p=50,50");
+        LoRaMedium: LoRaMedium {
+            @display("p=309,102");
         }
-     connections:
-         //host[0].
-        host[0].out --> {  delay = 100ms; } --> host[1].in;
-        host[0].in <-- {  delay = 100ms; } <-- host[1].out;
-        
+        networkServer: StandardHost {
+            parameters:
+                @display("p=49,44");
+        }
+        configurator: Ipv4NetworkConfigurator {
+            parameters:
+                assignDisjunctSubnetAddresses = false;
+                @display("p=318,27");
+        }
+        internetCloud: InternetCloud {
+            @display("p=231,44");
+        }
+        gwRouter[numberOfGateways]: Router {
+            @display("p=231,134");
+        }
+        nsRouter: Router {
+            @display("p=137,44");
+        }
+        connections:
+        networkServer.ethg++ <--> Eth1G <--> nsRouter.ethg++;
+        nsRouter.pppg++ <--> Eth1G <--> internetCloud.pppg++;
+        for i=0..numberOfGateways-1 {
+            internetCloud.pppg++ <--> Eth1G <--> gwRouter[i].pppg++;
+            gwRouter[i].ethg++ <--> Eth1G <--> MobileLoraGw[i].ethg++;
+        }
 }
