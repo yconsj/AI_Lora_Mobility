@@ -20,7 +20,7 @@ Define_Module(SimpleRLMobility);
 SimpleRLMobility::SimpleRLMobility()
 {
     speed = 1;
-    mySpeed = 1;
+
 }
 
 void SimpleRLMobility::initialize(int stage)
@@ -36,7 +36,21 @@ void SimpleRLMobility::initialize(int stage)
         Coord direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
 
         lastVelocity = direction * speed;
+        mySpeed = getSpeedFromXML(par("configScript"));
     }
+}
+double SimpleRLMobility::getSpeedFromXML(cXMLElement *nodes) {
+    // Recursively traverse the whole config file, looking for
+            // speed attributes
+            cXMLElementList childs = nodes->getChildren();
+            for (auto& child : childs) {
+                const char *speedAttr = child->getAttribute("speed");
+                if (speedAttr) {
+                    double speed = std::stod(speedAttr);
+                    EV_TRACE << speed << endl;
+                    return speed;
+                }
+            }
 }
 
 void SimpleRLMobility::move()
@@ -51,14 +65,11 @@ void SimpleRLMobility::move()
     //    EV_TRACE << "test " <<  endl;
 
     lastPosition += lastVelocity * elapsedTime * mySpeed;
-
+    mySpeed *= 1.5;
 
     // do something if we reach the wall
     Coord dummyCoord;
     handleIfOutside(REFLECT, dummyCoord, lastVelocity);
-
-
-
 }
 
 } // namespace inet

@@ -24,7 +24,7 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
     double mySpeed;
   protected:
     double speed;
-
+    cXMLElement *configScript;
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
 
@@ -34,8 +34,10 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
     /** @brief Move the host*/
     virtual void move() override;
 
+
   public:
     virtual double getMaxSpeed() const override { return speed; }
+    virtual double getSpeedFromXML(cXMLElement *nodes);
     SimpleRLMobility();
 };
 
