@@ -35,7 +35,7 @@ module HostNode extends StandardHost {
 network MobilityShowcase
 {
     parameters:
-        int numberOfNodes = default(0);
+        int numberOfNodes = default(1);
         int numberOfGateways = default(1);
         int networkSizeX = default(500);
         int networkSizeY = default(500);
