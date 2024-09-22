@@ -35,8 +35,10 @@ void SimpleRLMobility::initialize(int stage)
         rad elevation = deg(fmod(par("initialMovementElevation").doubleValue(), 360));
         Coord direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
 
-        lastVelocity = direction * speed;
         mySpeed = getSpeedFromXML(par("configScript"));
+        speed = mySpeed;
+        lastVelocity = direction * speed;
+
     }
 }
 double SimpleRLMobility::getSpeedFromXML(cXMLElement *nodes) {
@@ -64,8 +66,8 @@ void SimpleRLMobility::move()
     //subjectModule->
     //    EV_TRACE << "test " <<  endl;
 
-    lastPosition += lastVelocity * elapsedTime * mySpeed;
-    mySpeed *= 1.5;
+    lastPosition += lastVelocity * elapsedTime;
+    // mySpeed *= 1.5;
 
     // do something if we reach the wall
     Coord dummyCoord;
