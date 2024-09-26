@@ -28,6 +28,7 @@ simple SimpleRLMobility extends MovingMobilityBase
         double speed @unit(mps) = default(0mps); // speed of the host
         double initialMovementHeading @unit(deg) = default(uniform(0deg, 360deg));
         double initialMovementElevation @unit(deg) = default(0deg);
+		xml configScript;
         @class(SimpleRLMobility);
 }
 
