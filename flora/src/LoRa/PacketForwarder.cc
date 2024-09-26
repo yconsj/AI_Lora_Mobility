@@ -43,11 +43,11 @@ void PacketForwarder::initialize(int stage)
 
 void PacketForwarder::startUDP()
 {
-    EV << "Wywalamy sie tutaj" << endl;
+    EV << "PacketForwarder: Starting UDP" << endl;
     socket.setOutputGate(gate("socketOut"));
     const char *localAddress = par("localAddress");
     socket.bind(*localAddress ? L3AddressResolver().resolve(localAddress) : L3Address(), localPort);
-    EV << "Dojechalismy za pierwszy resolv" << endl;
+    EV << "PacketForwarder: Reached past first resolve" << endl;
     // TODO: is this required?
     //setSocketOptions();
 
@@ -57,18 +57,18 @@ void PacketForwarder::startUDP()
 
     // Create UDP sockets to multiple destination addresses (network servers)
     while ((token = tokenizer.nextToken()) != nullptr) {
-        EV << "Wchodze w petle" << endl;
+        EV << "PacketForwarder: entering loop" << endl;
         EV << token << endl;
         L3Address result;
         L3AddressResolver().tryResolve(token, result);
-        EV << "Wychodze z petli" << endl;
+        EV << "PacketForwarder: entering loop" << endl;
         if (result.isUnspecified())
             EV_ERROR << "cannot resolve destination address: " << token << endl;
         else
             EV << "Got destination address: " << token << endl;
         destAddresses.push_back(result);
     }
-    EV << "Dojechalismy do konca" << endl;
+    EV << "We've reached the end." << endl;
 }
 
 
