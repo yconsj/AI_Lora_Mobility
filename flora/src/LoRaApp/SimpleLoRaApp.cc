@@ -45,7 +45,7 @@ void SimpleLoRaApp::initialize(int stage)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
         do {
             timeToFirstPacket = par("timeToFirstPacket");
-            EV << "Wylosowalem czas :" << timeToFirstPacket << endl;
+            EV << "I selected a time: " << timeToFirstPacket << endl;
             //if(timeToNextPacket < 5) error("Time to next packet must be grater than 3");
         } while(timeToFirstPacket <= 5);
 
@@ -218,8 +218,8 @@ void SimpleLoRaApp::sendJoinRequest()
 
     sfVector.record(getSF());
     tpVector.record(getTP());
-    EV << "Wysylam pakiet z TP: " << getTP() << endl;
-    EV << "Wysylam pakiet z SF: " << getSF() << endl;
+    EV << "Sending a packet with TP: " << getTP() << endl;
+    EV << "Sending a packet with SF: " << getSF() << endl;
     pktRequest->insertAtBack(payload);
     send(pktRequest, "socketOut");
     if(evaluateADRinNode)
