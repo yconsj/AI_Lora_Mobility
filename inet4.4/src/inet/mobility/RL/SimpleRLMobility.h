@@ -22,6 +22,7 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
 {
   public:
     double mySpeed;
+    double directionX;
   protected:
     double speed;
     cXMLElement *configScript;
@@ -38,6 +39,7 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
   public:
     virtual double getMaxSpeed() const override { return speed; }
     virtual double getSpeedFromXML(cXMLElement *nodes);
+    virtual double pollModel();
     SimpleRLMobility();
 };
 
