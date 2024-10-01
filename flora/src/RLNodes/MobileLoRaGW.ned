@@ -23,7 +23,7 @@ import inet.networklayer.contract.INetworkLayer;
 import inet.linklayer.loopback.LoopbackInterface;
 import flora.LoRa.LoRaGWNic;
 import flora.LoRaApp.SimpleLoRaApp;
-import flora.LoRa.PacketForwarder;
+import flora.RLNodes.MobileGatewayLoRaApp;
 import inet.linklayer.contract.IEthernetInterface;
 import inet.applications.contract.IApp;
 import inet.transportlayer.contract.IUdp;
@@ -93,7 +93,7 @@ module MobileLoRaGW like INetworkNode
         LoRaGWNic: LoRaGWNic {
             @display("p=626.04004,94.75201");
         }
-        packetForwarder: PacketForwarder {
+        mobileGatewayLoRaApp: MobileGatewayLoRaApp {
             @display("p=394.80002,69.936005;is=vl");
         }
         eth[sizeof(ethg)]: <default("EthernetInterface")> like IEthernetInterface {
@@ -123,10 +123,10 @@ module MobileLoRaGW like INetworkNode
         at.out++ --> udp.appIn;
         at.in++ <-- udp.appOut;
 
-        packetForwarder.lowerLayerOut --> LoRaGWNic.upperLayerIn;
-        LoRaGWNic.upperLayerOut --> packetForwarder.lowerLayerIn;
-        packetForwarder.socketOut --> at.in++;
-        packetForwarder.socketIn <-- at.out++;
+        mobileGatewayLoRaApp.lowerLayerOut --> LoRaGWNic.upperLayerIn;
+        LoRaGWNic.upperLayerOut --> mobileGatewayLoRaApp.lowerLayerIn;
+        mobileGatewayLoRaApp.socketOut --> at.in++;
+        mobileGatewayLoRaApp.socketIn <-- at.out++;
 
         for i=0..sizeof(ethg)-1 {
             ethg[i] <--> { @display("m=s"); } <--> eth[i].phys;
