@@ -12,26 +12,11 @@ import inet.node.inet.StandardHost;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.ethernet.Eth1G;
 
-@namespace(inet);
-simple NodeDemo
-{
-    gates:
-        input in;
-        output out;
-}
+import flora.RLNodes.MobileGatewayLoRaApp;
 
-module HostNode extends StandardHost {
-    gates:
-        input in;
-        output out; 
-        
-    submodules:
-        nodeDemo: NodeDemo;
-     connections:
-     	in --> {} --> nodeDemo.in;
-     	out <-- {} <-- nodeDemo.out;
-     	
-}
+
+@namespace(inet);
+
 network MobilityShowcase
 {
     parameters:
