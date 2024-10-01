@@ -25,17 +25,6 @@
 
 namespace flora {
 
-/*
-struct Measurement : public cObject {
-    double rssi;
-    double snir;  // If you decide to calculate LQI later
-    simtime_t timestamp;
-
-    Measurement(double rssi, double snir, simtime_t timestamp)
-        : rssi(rssi), snir(snir), timestamp(timestamp) {}
-};
-*/
-
 Define_Module(MobileGatewayLoRaApp);
 
 
@@ -45,7 +34,6 @@ void MobileGatewayLoRaApp::initialize(int stage)
         rssiVector.setName("Mobile Gateway RSSI");
         snirVector.setName("Mobile Gateway SNIR");
         LoRa_GWPacketReceived = registerSignal("LoRa_GWPacketReceived");
-        // measurementSignal = registerSignal("measurementSignal");
         localPort = par("localPort");
         destPort = par("destPort");
     } else if (stage == INITSTAGE_APPLICATION_LAYER) {
@@ -145,18 +133,8 @@ void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
     EV << frame->getTransmitterAddress() << endl;
     //for (std::vector<nodeEntry>::iterator it = knownNodes.begin() ; it != knownNodes.end(); ++it)
 
-    // Log the timestamp, RSSI, and SNIR
-    EV << "GatewayApp: Packet received at: " << simTime() << " | RSSI: " << rssi << " | SNIR: " << snirInd->getMinimumSnir() << endl;
-
-    // Emit the measurement as a vector
-
-    //recordVector("SNIR_RSSI_Timestamp", simTime().inUnit(SIMTIME_NS), snir, rssi);
-    // Measurement *measurement = new Measurement(frame->getRSSI(), snirInd->getMinimumSnir(), simTime());
     rssiVector.record(frame->getRSSI());
     snirVector.record(snirInd->getMinimumSnir());
-
-    // Emit the measurement as a single object
-    // emit(measurementSignal, measurement, nullptr);
 
     // FIXME : Identify network server message is destined for.
     L3Address destAddr = destAddresses[0];

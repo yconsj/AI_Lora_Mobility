@@ -52,7 +52,6 @@ class MobileGatewayLoRaApp : public cSimpleModule, public cListener
     void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
   public:
       simsignal_t LoRa_GWPacketReceived;
-      //simsignal_t measurementSignal;
       int counterOfSentPacketsFromNodes = 0;
       int counterOfReceivedPackets = 0;
 };
