@@ -1,6 +1,10 @@
 FEATURETOOL = opp_featuretool
 FEATURES_H = src/inet/features.h
 
+ONNX_RUNTIME_DIR = ../onnx_runtime  # Add this line to point to your ONNX Runtime directory
+LIBS += -L../../onnx_runtime/lib -lonnxruntime
+
+
 .PHONY: all clean cleanall makefiles makefiles-so makefiles-lib makefiles-exe checkenvir checkmakefiles doxy doc submodule-init
 
 all: checkmakefiles $(FEATURES_H)
@@ -16,7 +20,9 @@ cleanall: checkmakefiles
 
 INET_PROJ = $(shell inet_root)
 
-MAKEMAKE_OPTIONS := -f --deep -o INET -O out -pINET -I.
+# MAKEMAKE_OPTIONS := -f --deep -o INET -O out -pINET -I. # old version
+MAKEMAKE_OPTIONS := -f --deep -o INET -O out -pINET -I. -I$$\(ONNX_RUNTIME_DIR\)/include -L$$\(ONNX_RUNTIME_DIR\)/lib -lonnxruntime
+
 
 makefiles: makefiles-so
 

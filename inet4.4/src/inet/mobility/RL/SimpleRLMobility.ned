@@ -10,6 +10,7 @@
 package inet.mobility.RL;
 
 import inet.mobility.base.MovingMobilityBase;
+import inet.mobility.RL.LearningModel;
 
 //
 // This is a linear mobility model with speed, angle and acceleration parameters.
@@ -18,7 +19,7 @@ import inet.mobility.base.MovingMobilityBase;
 //
 // @author Emin Ilker Cetinbas
 //
-simple SimpleRLMobility extends MovingMobilityBase
+module SimpleRLMobility extends MovingMobilityBase
 {
     parameters:
         double initialX @unit(m) = default(uniform(this.constraintAreaMinX, this.constraintAreaMaxX));
@@ -30,5 +31,9 @@ simple SimpleRLMobility extends MovingMobilityBase
         double initialMovementElevation @unit(deg) = default(0deg);
 		xml configScript;
         @class(SimpleRLMobility);
+        
+    submodules:
+        learningModel: LearningModel;
+    	
 }
 

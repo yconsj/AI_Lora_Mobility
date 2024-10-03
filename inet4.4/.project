@@ -3,6 +3,7 @@
 	<name>inet</name>
 	<comment></comment>
 	<projects>
+		<project>onnx_runtime</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

@@ -87,7 +87,7 @@ module MobileLoRaGW like INetworkNode
         interfaceTable: InterfaceTable {
             @display("p=135.36,69.936005");
         }
-        mobility: StationaryMobility { //SimpleRLMobility {
+        mobility: SimpleRLMobility {
             @display("p=135.36,199.656");
         }
         LoRaGWNic: LoRaGWNic {
