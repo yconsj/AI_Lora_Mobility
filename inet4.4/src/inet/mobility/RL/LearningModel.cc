@@ -14,7 +14,8 @@
 // 
 
 #include "LearningModel.h"
-#include <onnxruntime_cxx_api.h>
+// #include <onnxruntime_cxx_api.h>
+// #include <torch/torch.h>
 
 #include <algorithm>  // std::generate
 #include <cassert>
@@ -24,6 +25,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <omnetpp.h>
 
 
 namespace inet {
@@ -35,14 +37,11 @@ LearningModel::LearningModel()
     // stub
 }
 
-void LearningModel::initialize(int stage)
+void LearningModel::initialize()
 {
+    // torch::Tensor tensor = torch::rand({2, 3});
+    EV_TRACE << "initializing LearningModel " << omnetpp::endl;
 
-    EV_TRACE << "initializing LearningModel stage " << stage << endl;
-    if (stage == INITSTAGE_LOCAL) {
-        // TODO: initialize ONNX model session here
-        EV << "ONNX Runtime version: " << Ort::GetVersionString() << endl;
-    }
 }
 
 double LearningModel::pollModel()

@@ -3,8 +3,7 @@
 	<name>flora</name>
 	<comment></comment>
 	<projects>
-		<project>inet4.4</project>
-		<project>onnx_runtime</project>
+		<project>inet</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

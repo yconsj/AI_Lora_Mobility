@@ -18,12 +18,16 @@
 
 namespace inet {
 
-class LearningModel {
+class LearningModel : public omnetpp::cSimpleModule {
 public:
     LearningModel();
     virtual ~LearningModel();
     double pollModel();
     void Test();
+protected:
+    // The following redefined virtual function holds the algorithm.
+    virtual void initialize() override;
+
 };
 
 } /* namespace inet */

@@ -3,7 +3,7 @@
 	<name>inet</name>
 	<comment></comment>
 	<projects>
-		<project>onnx_runtime</project>
+		<project>libtorch</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
