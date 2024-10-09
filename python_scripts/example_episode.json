@@ -1,0 +1,14 @@
+{
+    "_comment": [
+                "state [posX, posY, time, packets]",
+                "actions [left=0, right=2]",
+                "rewards [amount]"
+            ],
+    "episodes": [
+        {
+            "states": [[1,1,2999,4],[1,2,3000,5]],
+            "actions": [0, 1],
+            "rewards": [4, 5]
+        }
+    ]
+}
