@@ -3,7 +3,6 @@
 	<name>inet</name>
 	<comment></comment>
 	<projects>
-		<project>libtorch</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
