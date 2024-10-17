@@ -15,6 +15,10 @@ limitations under the License.
 #ifndef TENSORFLOW_LITE_MICRO_MICRO_TIME_H_
 #define TENSORFLOW_LITE_MICRO_MICRO_TIME_H_
 
+#ifndef TF_LITE_USE_CTIME
+#define TF_LITE_USE_CTIME 1
+#endif // TF_LITE_USE_CTIME
+
 #include <cstdint>
 
 namespace tflite {

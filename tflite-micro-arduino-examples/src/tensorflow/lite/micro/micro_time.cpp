@@ -27,8 +27,6 @@ limitations under the License.
 
 #include "tensorflow/lite/micro/micro_time.h"
 
-#include "peripherals/utility.h"
-
 #if defined(TF_LITE_USE_CTIME)
 #include <ctime>
 #endif

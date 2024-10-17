@@ -17,11 +17,17 @@ limitations under the License.
 
 #include <limits>
 
+#include <stdio.h>
+
 #include "tensorflow/lite/micro/debug_log.h"
 
+
 #if defined(ARDUINO) && !defined(ARDUINO_ARDUINO_NANO33BLE)
-#define ARDUINO_EXCLUDE_CODE
+
 #endif  // defined(ARDUINO) && !defined(ARDUINO_ARDUINO_NANO33BLE)
+
+
+void DebugLog(const char* s) { printf(s); }
 
 #ifndef ARDUINO_EXCLUDE_CODE
 
