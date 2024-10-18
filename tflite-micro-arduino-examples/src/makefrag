@@ -1,0 +1,2 @@
+# Add preprocessor definitions to CXXFLAGS
+CXXFLAGS += -DARDUINO_EXCLUDE_CODE -DTF_LITE_USE_CTIME -DARDUINO

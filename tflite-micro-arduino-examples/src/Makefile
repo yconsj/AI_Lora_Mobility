@@ -1,34 +1,31 @@
 #
-# OMNeT++/OMNEST Makefile for $(LIB_PREFIX)TFLM
+# OMNeT++/OMNEST Makefile for tflite-micro-arduino-examples
 #
 # This file was generated with the command:
-#  opp_makemake --make-so -f --deep -o TFLM -O out -pTFLM -I. -I../tflite-micro-arduino/src -I../tflite-micro-arduino/src/tensorflow/lite/micro -I../tflite-micro-arduino/src/tensorflow/lite/core/api -I../tflite-micro-arduino/src/tensorflow/lite/kernels -I../tflite-micro-arduino/src/third_party/flatbuffers/include -I../tflite-micro-arduino/src/third_party/cmsis/CMSIS/Core/Include -I../tflite-micro-arduino/src/third_party/cmsis_nn/Include -DARDUINO_EXCLUDE_CODE -DTF_LITE_USE_CTIME -DARDUINO ../tflite-micro-arduino/src/**/*.c)
+#  opp_makemake -f --deep -O out -I. -L../out/$$\(CONFIGNAME\)
 #
 
 # Name of target to be created (-o option)
 TARGET_DIR = .
-TARGET_NAME = $(LIB_PREFIX)TFLM$(D)
-TARGET = $(TARGET_NAME)$(SHARED_LIB_SUFFIX)
+TARGET_NAME = tflite-micro-arduino-examples$(D)
+TARGET = $(TARGET_NAME)$(EXE_SUFFIX)
 TARGET_IMPLIB = $(TARGET_NAME)$(IMPLIB_SUFFIX)
 TARGET_IMPDEF = $(TARGET_NAME)$(IMPDEF_SUFFIX)
 TARGET_FILES = $(TARGET_DIR)/$(TARGET)
 
+# User interface (uncomment one) (-u option)
+USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(QTENV_LIBS) $(CMDENV_LIBS)
+#USERIF_LIBS = $(CMDENV_LIBS)
+#USERIF_LIBS = $(QTENV_LIBS)
+
 # C++ include paths (with -I)
-INCLUDE_PATH = \
-    -I. \
-    -I../tflite-micro-arduino/src \
-    -I../tflite-micro-arduino/src/tensorflow/lite/micro \
-    -I../tflite-micro-arduino/src/tensorflow/lite/core/api \
-    -I../tflite-micro-arduino/src/tensorflow/lite/kernels \
-    -I../tflite-micro-arduino/src/third_party/flatbuffers/include \
-    -I../tflite-micro-arduino/src/third_party/cmsis/CMSIS/Core/Include \
-    -I../tflite-micro-arduino/src/third_party/cmsis_nn/Include
+INCLUDE_PATH = -I.
 
 # Additional object and library files to link with
-EXTRA_OBJS = $(wildcard ../tflite-micro-arduino/src/**/*.c)
+EXTRA_OBJS =
 
 # Additional libraries (-L, -l options)
-LIBS =
+LIBS = $(LDFLAG_LIBPATH)../out/$(CONFIGNAME)
 
 # Output directory
 PROJECT_OUTPUT_DIR = ../out
@@ -207,10 +204,13 @@ endif
 include $(CONFIGFILE)
 
 # Simulation kernel and user interface libraries
-OMNETPP_LIBS = -loppenvir$D $(KERNEL_LIBS) $(SYS_LIBS)
+OMNETPP_LIBS = $(OPPMAIN_LIB) $(USERIF_LIBS) $(KERNEL_LIBS) $(SYS_LIBS)
+ifneq ($(PLATFORM),win32)
+LIBS += -Wl,-rpath,$(abspath ../out/$(CONFIGNAME))
+endif
 
-COPTS = $(CFLAGS) $(IMPORT_DEFINES) -DARDUINO_EXCLUDE_CODE -DTF_LITE_USE_CTIME -DARDUINO -DTFLM_EXPORT $(INCLUDE_PATH) -I$(OMNETPP_INCL_DIR)
-MSGCOPTS = $(INCLUDE_PATH) -PTFLM_API
+COPTS = $(CFLAGS) $(IMPORT_DEFINES)  $(INCLUDE_PATH) -I$(OMNETPP_INCL_DIR)
+MSGCOPTS = $(INCLUDE_PATH)
 SMCOPTS =
 
 # we want to recompile everything if COPTS changes,
@@ -222,22 +222,10 @@ ifneq ("$(COPTS)","$(shell cat $(COPTS_FILE) 2>/dev/null || echo '')")
   $(file >$(COPTS_FILE),$(COPTS))
 endif
 
-# On Windows, the target has additional file(s). An import lib and an optional debug symbol file is created too.
-ifeq ($(PLATFORM),win32)
-  TARGET_FILES+= $(TARGET_DIR)/$(TARGET_IMPLIB)
-  LDFLAGS+= $(LDFLAG_IMPLIB)$O/$(TARGET_IMPLIB)
-  ifeq ($(TOOLCHAIN_NAME),clang-msabi)
-    ifeq ($(MODE),debug)
-      TARGET_FILES+=$(TARGET_DIR)/$(TARGET_NAME).pdb
-    endif
-  else
-    TARGET_FILES+= $(TARGET_DIR)/$(TARGET_IMPDEF)
-    LDFLAGS+= $(LDFLAG_IMPDEF)$O/$(TARGET_IMPDEF)
-  endif
-endif
-
 #------------------------------------------------------------------------------
 # User-supplied makefile fragment(s)
+-include makefrag
+
 #------------------------------------------------------------------------------
 
 # Main target
@@ -252,14 +240,10 @@ ifeq ($(TOOLCHAIN_NAME),clang-msabi)
 $O/$(TARGET_NAME).pdb: $O/$(TARGET)
 endif
 
-$O/$(TARGET) $O/$(TARGET_IMPDEF) $O/$(TARGET_IMPLIB) &: $(OBJS)  $(wildcard $(EXTRA_OBJS)) Makefile $(CONFIGFILE)
+$O/$(TARGET): $(OBJS)  $(wildcard $(EXTRA_OBJS)) Makefile $(CONFIGFILE)
 	@$(MKPATH) $O
-	@echo Creating shared library: $@
-	$(Q)echo >.tmp$$$$ $(OBJS) $(EXTRA_OBJS) && $(SHLIB_LD) -o $O/$(TARGET) @.tmp$$$$ $(AS_NEEDED_OFF) $(WHOLE_ARCHIVE_ON) $(LIBS) $(WHOLE_ARCHIVE_OFF) $(OMNETPP_LIBS) $(LDFLAGS) ; rm .tmp$$$$
-	$(Q)$(SHLIB_POSTPROCESS) $O/$(TARGET)
-ifeq ($(PLATFORM),win32)
-	$(Q)llvm-ar d $O/$(TARGET_IMPLIB) $(TARGET) # WORKAROUND: throw away the first file from the archive to make the LLD generated import lib valid
-endif
+	@echo Creating executable: $@
+	$(Q)echo >.tmp$$$$ $(OBJS) $(EXTRA_OBJS) && $(CXX) -o $O/$(TARGET) @.tmp$$$$ $(AS_NEEDED_OFF) $(WHOLE_ARCHIVE_ON) $(LIBS) $(WHOLE_ARCHIVE_OFF) $(OMNETPP_LIBS) $(LDFLAGS) ; rm .tmp$$$$
 
 .PHONY: all clean cleanall depend msgheaders smheaders
 
