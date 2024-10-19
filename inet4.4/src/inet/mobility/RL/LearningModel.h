@@ -24,6 +24,7 @@ public:
     virtual ~LearningModel();
     double pollModel();
     void Test();
+    void PrintOutput(float x, float y);
 protected:
     // The following redefined virtual function holds the algorithm.
     virtual void initialize() override;

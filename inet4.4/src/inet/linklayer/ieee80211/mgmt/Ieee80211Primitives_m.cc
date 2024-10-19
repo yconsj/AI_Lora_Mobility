@@ -3171,7 +3171,7 @@ unsigned int Ieee80211Prim_DeauthenticateRequestDescriptor::getFieldTypeFlags(in
     }
     static unsigned int fieldTypeFlags[] = {
         0,    // FIELD_address
-        0,    // FIELD_reasonCode
+        FD_ISEDITABLE,    // FIELD_reasonCode
     };
     return (field >= 0 && field < 2) ? fieldTypeFlags[field] : 0;
 }
@@ -3320,6 +3320,7 @@ void Ieee80211Prim_DeauthenticateRequestDescriptor::setFieldValueAsString(omnetp
     }
     Ieee80211Prim_DeauthenticateRequest *pp = omnetpp::fromAnyPtr<Ieee80211Prim_DeauthenticateRequest>(object); (void)pp;
     switch (field) {
+        case FIELD_reasonCode: pp->setReasonCode((inet::ieee80211::Ieee80211ReasonCode)string2enum(value, "inet::ieee80211::Ieee80211ReasonCode")); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'Ieee80211Prim_DeauthenticateRequest'", field);
     }
 }
@@ -3352,6 +3353,7 @@ void Ieee80211Prim_DeauthenticateRequestDescriptor::setFieldValue(omnetpp::any_p
     }
     Ieee80211Prim_DeauthenticateRequest *pp = omnetpp::fromAnyPtr<Ieee80211Prim_DeauthenticateRequest>(object); (void)pp;
     switch (field) {
+        case FIELD_reasonCode: pp->setReasonCode(static_cast<inet::ieee80211::Ieee80211ReasonCode>(value.intValue())); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'Ieee80211Prim_DeauthenticateRequest'", field);
     }
 }
@@ -4915,7 +4917,7 @@ unsigned int Ieee80211Prim_DisassociateRequestDescriptor::getFieldTypeFlags(int 
     }
     static unsigned int fieldTypeFlags[] = {
         0,    // FIELD_address
-        0,    // FIELD_reasonCode
+        FD_ISEDITABLE,    // FIELD_reasonCode
     };
     return (field >= 0 && field < 2) ? fieldTypeFlags[field] : 0;
 }
@@ -5064,6 +5066,7 @@ void Ieee80211Prim_DisassociateRequestDescriptor::setFieldValueAsString(omnetpp:
     }
     Ieee80211Prim_DisassociateRequest *pp = omnetpp::fromAnyPtr<Ieee80211Prim_DisassociateRequest>(object); (void)pp;
     switch (field) {
+        case FIELD_reasonCode: pp->setReasonCode((inet::ieee80211::Ieee80211ReasonCode)string2enum(value, "inet::ieee80211::Ieee80211ReasonCode")); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'Ieee80211Prim_DisassociateRequest'", field);
     }
 }
@@ -5096,6 +5099,7 @@ void Ieee80211Prim_DisassociateRequestDescriptor::setFieldValue(omnetpp::any_ptr
     }
     Ieee80211Prim_DisassociateRequest *pp = omnetpp::fromAnyPtr<Ieee80211Prim_DisassociateRequest>(object); (void)pp;
     switch (field) {
+        case FIELD_reasonCode: pp->setReasonCode(static_cast<inet::ieee80211::Ieee80211ReasonCode>(value.intValue())); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'Ieee80211Prim_DisassociateRequest'", field);
     }
 }

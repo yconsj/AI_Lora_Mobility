@@ -1,31 +1,23 @@
 #
-# OMNeT++/OMNEST Makefile for tflite-micro-arduino-examples
+# OMNeT++/OMNEST Makefile for $(LIB_PREFIX)tflite-micro-arduino-examples
 #
 # This file was generated with the command:
-#  opp_makemake -f --deep -O out -I. -L../out/$$\(CONFIGNAME\)
+#  opp_makemake --make-lib -f --deep -O out -I. -Ithird_party/cmsis/CMSIS/Core/Include -L../out/$$\(CONFIGNAME\)
 #
 
 # Name of target to be created (-o option)
 TARGET_DIR = .
-TARGET_NAME = tflite-micro-arduino-examples$(D)
-TARGET = $(TARGET_NAME)$(EXE_SUFFIX)
+TARGET_NAME = $(LIB_PREFIX)tflite-micro-arduino-examples$(D)
+TARGET = $(TARGET_NAME)$(A_LIB_SUFFIX)
 TARGET_IMPLIB = $(TARGET_NAME)$(IMPLIB_SUFFIX)
 TARGET_IMPDEF = $(TARGET_NAME)$(IMPDEF_SUFFIX)
 TARGET_FILES = $(TARGET_DIR)/$(TARGET)
 
-# User interface (uncomment one) (-u option)
-USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(QTENV_LIBS) $(CMDENV_LIBS)
-#USERIF_LIBS = $(CMDENV_LIBS)
-#USERIF_LIBS = $(QTENV_LIBS)
-
 # C++ include paths (with -I)
-INCLUDE_PATH = -I.
+INCLUDE_PATH = -I. -Ithird_party/cmsis/CMSIS/Core/Include
 
 # Additional object and library files to link with
 EXTRA_OBJS =
-
-# Additional libraries (-L, -l options)
-LIBS = $(LDFLAG_LIBPATH)../out/$(CONFIGNAME)
 
 # Output directory
 PROJECT_OUTPUT_DIR = ../out
@@ -41,7 +33,20 @@ OBJS = \
     $O/tensorflow/lite/core/c/common.o \
     $O/tensorflow/lite/experimental/microfrontend/lib/fft.o \
     $O/tensorflow/lite/experimental/microfrontend/lib/fft_util.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/filterbank.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/filterbank_util.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/frontend.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/frontend_util.o \
     $O/tensorflow/lite/experimental/microfrontend/lib/kiss_fft_int16.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/log_lut.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/log_scale.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/log_scale_util.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/noise_reduction.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/noise_reduction_util.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/pcan_gain_control.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/pcan_gain_control_util.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/window.o \
+    $O/tensorflow/lite/experimental/microfrontend/lib/window_util.o \
     $O/tensorflow/lite/kernels/kernel_util.o \
     $O/tensorflow/lite/kernels/internal/portable_tensor_utils.o \
     $O/tensorflow/lite/kernels/internal/quantization_util.o \
@@ -75,6 +80,7 @@ OBJS = \
     $O/tensorflow/lite/micro/kernels/activations.o \
     $O/tensorflow/lite/micro/kernels/activations_common.o \
     $O/tensorflow/lite/micro/kernels/add_common.o \
+    $O/tensorflow/lite/micro/kernels/addn.o \
     $O/tensorflow/lite/micro/kernels/arg_min_max.o \
     $O/tensorflow/lite/micro/kernels/assign_variable.o \
     $O/tensorflow/lite/micro/kernels/batch_to_space_nd.o \
@@ -178,8 +184,60 @@ OBJS = \
     $O/tensorflow/lite/micro/tflite_bridge/micro_error_reporter.o \
     $O/tensorflow/lite/micro/tflite_bridge/op_resolver_bridge.o \
     $O/tensorflow/lite/schema/schema_utils.o \
-    $O/test_over_serial/base64.o \
-    $O/test_over_serial/test_over_serial.o
+    $O/third_party/cmsis_nn/Source/ActivationFunctions/arm_relu6_s8.o \
+    $O/third_party/cmsis_nn/Source/ActivationFunctions/arm_relu_q15.o \
+    $O/third_party/cmsis_nn/Source/ActivationFunctions/arm_relu_q7.o \
+    $O/third_party/cmsis_nn/Source/BasicMathFunctions/arm_elementwise_add_s16.o \
+    $O/third_party/cmsis_nn/Source/BasicMathFunctions/arm_elementwise_add_s8.o \
+    $O/third_party/cmsis_nn/Source/BasicMathFunctions/arm_elementwise_mul_s16.o \
+    $O/third_party/cmsis_nn/Source/BasicMathFunctions/arm_elementwise_mul_s8.o \
+    $O/third_party/cmsis_nn/Source/ConcatenationFunctions/arm_concatenation_s8_w.o \
+    $O/third_party/cmsis_nn/Source/ConcatenationFunctions/arm_concatenation_s8_x.o \
+    $O/third_party/cmsis_nn/Source/ConcatenationFunctions/arm_concatenation_s8_y.o \
+    $O/third_party/cmsis_nn/Source/ConcatenationFunctions/arm_concatenation_s8_z.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_1_x_n_s8.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_1x1_s8_fast.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_fast_s16.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_s16.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_s8.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_wrapper_s16.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_convolve_wrapper_s8.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_depthwise_conv_3x3_s8.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_depthwise_conv_fast_s16.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_depthwise_conv_s16.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_depthwise_conv_s8.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_depthwise_conv_s8_opt.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_depthwise_conv_wrapper_s16.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_depthwise_conv_wrapper_s8.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_nn_depthwise_conv_s8_core.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_nn_mat_mult_kernel_s8_s16.o \
+    $O/third_party/cmsis_nn/Source/ConvolutionFunctions/arm_nn_mat_mult_s8.o \
+    $O/third_party/cmsis_nn/Source/FullyConnectedFunctions/arm_fully_connected_s16.o \
+    $O/third_party/cmsis_nn/Source/FullyConnectedFunctions/arm_fully_connected_s8.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_depthwise_conv_nt_t_padded_s8.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_depthwise_conv_nt_t_s16.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_depthwise_conv_nt_t_s8.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_mat_mul_core_1x_s8.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_mat_mul_core_4x_s8.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_mat_mul_kernel_s16.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_mat_mult_nt_t_s8.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_vec_mat_mult_t_s16.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_vec_mat_mult_t_s8.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nn_vec_mat_mult_t_svdf_s8.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_nntables.o \
+    $O/third_party/cmsis_nn/Source/NNSupportFunctions/arm_q7_to_q15_with_offset.o \
+    $O/third_party/cmsis_nn/Source/PoolingFunctions/arm_avgpool_s16.o \
+    $O/third_party/cmsis_nn/Source/PoolingFunctions/arm_avgpool_s8.o \
+    $O/third_party/cmsis_nn/Source/PoolingFunctions/arm_max_pool_s16.o \
+    $O/third_party/cmsis_nn/Source/PoolingFunctions/arm_max_pool_s8.o \
+    $O/third_party/cmsis_nn/Source/ReshapeFunctions/arm_reshape_s8.o \
+    $O/third_party/cmsis_nn/Source/SVDFunctions/arm_svdf_s8.o \
+    $O/third_party/cmsis_nn/Source/SVDFunctions/arm_svdf_state_s16_s8.o \
+    $O/third_party/cmsis_nn/Source/SoftmaxFunctions/arm_nn_softmax_common_s8.o \
+    $O/third_party/cmsis_nn/Source/SoftmaxFunctions/arm_softmax_s16.o \
+    $O/third_party/cmsis_nn/Source/SoftmaxFunctions/arm_softmax_s8.o \
+    $O/third_party/cmsis_nn/Source/SoftmaxFunctions/arm_softmax_s8_s16.o \
+    $O/third_party/cmsis_nn/Source/SoftmaxFunctions/arm_softmax_u8.o
 
 # Message files
 MSGFILES =
@@ -202,12 +260,6 @@ $(error Config file '$(CONFIGFILE)' does not exist -- add the OMNeT++ bin direct
 endif
 
 include $(CONFIGFILE)
-
-# Simulation kernel and user interface libraries
-OMNETPP_LIBS = $(OPPMAIN_LIB) $(USERIF_LIBS) $(KERNEL_LIBS) $(SYS_LIBS)
-ifneq ($(PLATFORM),win32)
-LIBS += -Wl,-rpath,$(abspath ../out/$(CONFIGNAME))
-endif
 
 COPTS = $(CFLAGS) $(IMPORT_DEFINES)  $(INCLUDE_PATH) -I$(OMNETPP_INCL_DIR)
 MSGCOPTS = $(INCLUDE_PATH)
@@ -242,8 +294,8 @@ endif
 
 $O/$(TARGET): $(OBJS)  $(wildcard $(EXTRA_OBJS)) Makefile $(CONFIGFILE)
 	@$(MKPATH) $O
-	@echo Creating executable: $@
-	$(Q)echo >.tmp$$$$ $(OBJS) $(EXTRA_OBJS) && $(CXX) -o $O/$(TARGET) @.tmp$$$$ $(AS_NEEDED_OFF) $(WHOLE_ARCHIVE_ON) $(LIBS) $(WHOLE_ARCHIVE_OFF) $(OMNETPP_LIBS) $(LDFLAGS) ; rm .tmp$$$$
+	@echo Creating static library: $@
+	$(Q)echo >.tmp$$$$ $(OBJS) $(EXTRA_OBJS) && $(AR_CR) $O/$(TARGET) @.tmp$$$$ && rm .tmp$$$$
 
 .PHONY: all clean cleanall depend msgheaders smheaders
 

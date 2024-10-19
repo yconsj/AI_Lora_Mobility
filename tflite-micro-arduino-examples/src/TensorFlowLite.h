@@ -19,7 +19,8 @@ limitations under the License.
 // in a .ino sketch forces the Arduino toolchain to build the rest of the
 // library.
 
-
+#ifndef ARDUINO_EXCLUDE_CODE
 #include "peripherals/peripherals.h"
+#endif
 
 #endif  // TENSORFLOW_LITE_MICRO_TOOLS_MAKE_TEMPLATES_TENSORFLOWLITE_H_

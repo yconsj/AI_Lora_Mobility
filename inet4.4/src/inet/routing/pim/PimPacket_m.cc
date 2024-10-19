@@ -3640,7 +3640,7 @@ unsigned int PimPacketDescriptor::getFieldTypeFlags(int field) const
         0,    // FIELD_type
         FD_ISEDITABLE,    // FIELD_reserved
         FD_ISEDITABLE,    // FIELD_crc
-        FD_ISEDITABLE,    // FIELD_crcMode
+        0,    // FIELD_crcMode
     };
     return (field >= 0 && field < 5) ? fieldTypeFlags[field] : 0;
 }
@@ -3811,7 +3811,6 @@ void PimPacketDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int fie
         case FIELD_version: pp->setVersion(string2long(value)); break;
         case FIELD_reserved: pp->setReserved(string2long(value)); break;
         case FIELD_crc: pp->setCrc(string2ulong(value)); break;
-        case FIELD_crcMode: pp->setCrcMode((inet::CrcMode)string2enum(value, "inet::CrcMode")); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'PimPacket'", field);
     }
 }
@@ -3850,7 +3849,6 @@ void PimPacketDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int 
         case FIELD_version: pp->setVersion(omnetpp::checked_int_cast<short>(value.intValue())); break;
         case FIELD_reserved: pp->setReserved(omnetpp::checked_int_cast<short>(value.intValue())); break;
         case FIELD_crc: pp->setCrc(omnetpp::checked_int_cast<uint16_t>(value.intValue())); break;
-        case FIELD_crcMode: pp->setCrcMode(static_cast<inet::CrcMode>(value.intValue())); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'PimPacket'", field);
     }
 }

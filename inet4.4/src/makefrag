@@ -1,10 +1,5 @@
 .DEFAULT_GOAL := all-pch
 
-CFLAGS += -std=c++17
-
-CXXFLAGS += -std=c++17
-LDFLAGS += -L"C:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility/onnxruntime/lib"
-
 #
 # Use the new message compiler introduced in OMNeT++ 5.3
 #

@@ -3,6 +3,7 @@
 	<name>inet</name>
 	<comment></comment>
 	<projects>
+		<project>tflite-micro-arduino-examples</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
@@ -94,4 +95,11 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.omnetpp.main.omnetppnature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>tensorflow</name>
+			<type>2</type>
+			<locationURI>WORKSPACE_LOC/tflite-micro-arduino-examples/src/tensorflow</locationURI>
+		</link>
+	</linkedResources>
 </projectDescription>

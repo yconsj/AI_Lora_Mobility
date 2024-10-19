@@ -10,6 +10,8 @@
 #include "inet/mobility/RL/SimpleRLMobility.h"
 
 #include "inet/common/INETMath.h"
+
+#include "LearningModel.h"
 //#include <stdio.h>
 //#include <string.h>
 
@@ -27,7 +29,7 @@ void SimpleRLMobility::initialize(int stage)
 {
     MovingMobilityBase::initialize(stage);
 
-    EV_TRACE << "initializing SimpleRLMobility stage " << stage << endl;
+    EV << "initializing SimpleRLMobility stage " << stage << endl;
     if (stage == INITSTAGE_LOCAL) {
         speed = par("speed");
         stationary = (speed == 0);
@@ -77,7 +79,18 @@ void SimpleRLMobility::move()
     //char* text = sprintf("%d",newSpeed);
 
     //subjectModule->
-    //    EV_TRACE << "test " <<  endl;
+    EV << "test LM" <<  endl;
+    cModule* submodule = getSubmodule("learningModel");
+    LearningModel *learningModel = check_and_cast<LearningModel*>(submodule);
+
+    // Call a function from LearningModel
+    if (learningModel) {
+        learningModel->Test();
+    } else {
+        EV << "LearningModel submodule not found!" << endl;
+    }
+
+
 
     lastPosition += lastVelocity * elapsedTime;
     // mySpeed *= 1.5;

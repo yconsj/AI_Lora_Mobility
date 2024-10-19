@@ -2,22 +2,19 @@
 # OMNeT++/OMNEST Makefile for $(LIB_PREFIX)tflite-micro-arduino-examples
 #
 # This file was generated with the command:
-#  opp_makemake --make-so -f --deep -O out -I. -d src -X.
+#  opp_makemake --make-lib -f --deep -O out -I. -Isrc/third_party/cmsis/CMSIS/Core/Include -Lout/$$\(CONFIGNAME\)/src -d src -X.
 #
 
 # Name of target to be created (-o option)
 TARGET_DIR = .
 TARGET_NAME = $(LIB_PREFIX)tflite-micro-arduino-examples$(D)
-TARGET = $(TARGET_NAME)$(SHARED_LIB_SUFFIX)
+TARGET = $(TARGET_NAME)$(A_LIB_SUFFIX)
 TARGET_IMPLIB = $(TARGET_NAME)$(IMPLIB_SUFFIX)
 TARGET_IMPDEF = $(TARGET_NAME)$(IMPDEF_SUFFIX)
 TARGET_FILES = $(TARGET_DIR)/$(TARGET)
 
 # Additional object and library files to link with
 EXTRA_OBJS =
-
-# Additional libraries (-L, -l options)
-LIBS =
 
 # Output directory
 PROJECT_OUTPUT_DIR = out
@@ -40,9 +37,6 @@ endif
 
 include $(CONFIGFILE)
 
-# Simulation kernel and user interface libraries
-OMNETPP_LIBS = -loppenvir$D $(KERNEL_LIBS) $(SYS_LIBS)
-
 # we want to recompile everything if COPTS changes,
 # so we store COPTS into $COPTS_FILE (if COPTS has changed since last build)
 # and make the object files depend on it
@@ -50,20 +44,6 @@ COPTS_FILE = $O/.last-copts
 ifneq ("$(COPTS)","$(shell cat $(COPTS_FILE) 2>/dev/null || echo '')")
   $(shell $(MKPATH) "$O")
   $(file >$(COPTS_FILE),$(COPTS))
-endif
-
-# On Windows, the target has additional file(s). An import lib and an optional debug symbol file is created too.
-ifeq ($(PLATFORM),win32)
-  TARGET_FILES+= $(TARGET_DIR)/$(TARGET_IMPLIB)
-  LDFLAGS+= $(LDFLAG_IMPLIB)$O/$(TARGET_IMPLIB)
-  ifeq ($(TOOLCHAIN_NAME),clang-msabi)
-    ifeq ($(MODE),debug)
-      TARGET_FILES+=$(TARGET_DIR)/$(TARGET_NAME).pdb
-    endif
-  else
-    TARGET_FILES+= $(TARGET_DIR)/$(TARGET_IMPDEF)
-    LDFLAGS+= $(LDFLAG_IMPDEF)$O/$(TARGET_IMPDEF)
-  endif
 endif
 
 #------------------------------------------------------------------------------
@@ -84,14 +64,10 @@ ifeq ($(TOOLCHAIN_NAME),clang-msabi)
 $O/$(TARGET_NAME).pdb: $O/$(TARGET)
 endif
 
-$O/$(TARGET) $O/$(TARGET_IMPDEF) $O/$(TARGET_IMPLIB) &:  submakedirs $(wildcard $(EXTRA_OBJS)) Makefile $(CONFIGFILE)
+$O/$(TARGET):  submakedirs $(wildcard $(EXTRA_OBJS)) Makefile $(CONFIGFILE)
 	@$(MKPATH) $O
-	@echo Creating shared library: $@
-	$(Q)$(SHLIB_LD) -o $O/$(TARGET)  $(EXTRA_OBJS) $(AS_NEEDED_OFF) $(WHOLE_ARCHIVE_ON) $(LIBS) $(WHOLE_ARCHIVE_OFF) $(OMNETPP_LIBS) $(LDFLAGS)
-	$(Q)$(SHLIB_POSTPROCESS) $O/$(TARGET)
-ifeq ($(PLATFORM),win32)
-	$(Q)llvm-ar d $O/$(TARGET_IMPLIB) $(TARGET) # WORKAROUND: throw away the first file from the archive to make the LLD generated import lib valid
-endif
+	@echo Creating static library: $@
+	$(Q)$(AR_CR) $O/$(TARGET)  $(EXTRA_OBJS)
 
 submakedirs:  src_dir
 

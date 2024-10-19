@@ -17,5 +17,7 @@ package inet.mobility.RL;
 
 module LearningModel
 {
-
+	parameters :
+		@class(LearningModel);
+        
 }
