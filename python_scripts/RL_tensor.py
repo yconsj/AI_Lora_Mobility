@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
-import gym
-
+from sim_runner import OmnetEnv
+from tf_exporter import tf_export
 class PolicyNetwork(tf.keras.Model):
     def __init__(self, input_dim, output_dim):
         super(PolicyNetwork, self).__init__()
@@ -14,21 +14,28 @@ class PolicyNetwork(tf.keras.Model):
 
 def reinforce(env, policy_net, optimizer, num_episodes):
     for episode in range(num_episodes):
-        state = env.reset()  # Reset the environment
-        done = False
-        states, actions, rewards = [], [], []
+        env.run_simulation()
+        # TODO: get logged state
+        # TODO: get logged ations
+        # TODO: get logged rewards
 
-        while not done:
-            state_tensor = tf.convert_to_tensor(state, dtype=tf.float32)  # Convert state to tensor
-            action_probs = policy_net(tf.expand_dims(state_tensor, axis=0))  # Get action probabilities
-            action = np.random.choice(len(action_probs.numpy().squeeze()), p=action_probs.numpy().squeeze())  # Sample action
-            next_state, reward, done, _ = env.step(action)  # Take action in the environment
+
+
+        # state = -1 # get state
+        # done = False
+        # states, actions, rewards = [], [], []
+
+        # while not done:
+        #     state_tensor = tf.convert_to_tensor(state, dtype=tf.float32)  # Convert state to tensor
+        #     action_probs = policy_net(tf.expand_dims(state_tensor, axis=0))  # Get action probabilities
+        #     action = np.random.choice(len(action_probs.numpy().squeeze()), p=action_probs.numpy().squeeze())  # Sample action
+        #     next_state, reward, done, _ = env.step(action)  # Take action in the environment
             
-            states.append(state)  # Store state
-            actions.append(action)  # Store action
-            rewards.append(reward)  # Store reward
+        #     states.append(state)  # Store state
+        #     actions.append(action)  # Store action
+        #     rewards.append(reward)  # Store reward
             
-            state = next_state  # Transition to the next state
+        #     state = next_state  # Transition to the next state
 
         # Compute the cumulative rewards (returns)
         returns = []
@@ -55,17 +62,20 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         if (episode + 1) % 10 == 0:
             print(f"Episode {episode + 1}/{num_episodes}, Loss: {loss.numpy():.4f}")
 
+        # Export the model
+        tf_export(concrete_func, path)
 
 # Main function to run the training
 def main():
-    env = gym.make('CartPole-v1')  # Change this to your desired environment
-    input_size = env.observation_space.shape[0]  # State size
-    output_size = env.action_space.n  # Number of actions
+    env = OmnetEnv()
+    env.run_simulation()
+    input_size = -1 # State size
+    output_size =  -1 # Number of actions
 
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 1000  # Number of episodes to train
+    num_episodes = 10  # Number of episodes to train
     reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
 
 if __name__ == "__main__":
