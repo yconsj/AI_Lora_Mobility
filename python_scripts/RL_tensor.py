@@ -19,7 +19,13 @@ class PolicyNetwork(tf.keras.Model):
 
     def call(self, x):
         return self.fc2(self.fc1(x))
-    
+    def get_concrete_function(self):
+    # Create a concrete function for the model
+        @tf.function(input_signature=[tf.TensorSpec(shape=[None, None], dtype=tf.float32)])
+        def concrete_function(x):
+            return self.call(x)
+
+        return concrete_function.get_concrete_function()
 def load_config(config_file):
     # Get the directory of the currently running script
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -102,9 +108,12 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         # Print episode statistics
         if (episode + 1) % 10 == 0:
             print(f"Episode {episode + 1}/{num_episodes}, Loss: {loss.numpy():.4f}")
-        return
         # Export the model
-        tf_export(concrete_func, path)
+
+        concrete_func = policy_net.get_concrete_function()
+        tf_export(concrete_func, "simple_ffn_model.tflite")
+
+        return
 
 # Main function to run the training
 def main():
