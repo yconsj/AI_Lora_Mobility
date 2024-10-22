@@ -19,6 +19,7 @@
 #include <omnetpp.h>
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include <vector>
+
 #include "inet/common/INETDefs.h"
 
 
@@ -50,6 +51,9 @@ class MobileGatewayLoRaApp : public cSimpleModule, public cListener
     void setSocketOptions();
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
+
+    void logPacketInfoToModel(double rssi, double snir, simtime_t timestamp);
+
   public:
       simsignal_t LoRa_GWPacketReceived;
       int counterOfSentPacketsFromNodes = 0;

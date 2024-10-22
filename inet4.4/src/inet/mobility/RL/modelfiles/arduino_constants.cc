@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "constants.h"
+#include "../modelfiles/constants.h"
 
 // This is tuned so that a full cycle takes ~6.6 seconds on an
 // Arduino Nano 33 BLE.

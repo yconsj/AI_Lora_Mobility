@@ -14,6 +14,7 @@
 // 
 
 #include "MobileGatewayLoRaApp.h"
+
 //#include "inet/networklayer/ipv4/IPv4Datagram.h"
 //#include "inet/networklayer/contract/ipv4/IPv4ControlInfo.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
@@ -21,7 +22,7 @@
 #include "inet/applications/base/ApplicationPacket_m.h"
 #include "../LoRaPhy/LoRaRadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
-
+#include "inet/mobility/RL/LearningModel.h"
 
 namespace flora {
 
@@ -76,6 +77,8 @@ void MobileGatewayLoRaApp::startUDP()
 }
 
 
+
+
 void MobileGatewayLoRaApp::handleMessage(cMessage *msg)
 {
     EV << msg->getArrivalGate() << endl;
@@ -110,6 +113,29 @@ void MobileGatewayLoRaApp::handleMessage(cMessage *msg)
     }
 }
 
+
+void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, simtime_t timestamp) {
+    // Get the parent module (MobileLoRaGW)
+    EV << "TEST1" << omnetpp::endl;
+    cModule *parentModule = getParentModule();
+    if (!parentModule)
+        throw cRuntimeError("MobileLoRaGatewayApp has no parent module");
+
+    // Fetch the mobility module (SimpleRLMobility)
+    cModule *mobilityModule = getParentModule()->getSubmodule("mobility");
+    if (!mobilityModule)
+        throw cRuntimeError("SimpleRLMobility module not found!");
+
+    // Get the LearningModel submodule from SimpleRLMobility
+    LearningModel *learningModel = check_and_cast<LearningModel*>(mobilityModule->getSubmodule("learningModel"));
+    if (!learningModel)
+        throw cRuntimeError("LearningModel module not found");
+    EV << "TEST2" << omnetpp::endl;
+    // Log the packet information (RSSI, SNIR, and timestamp)
+    learningModel->logPacketInfo(rssi, snir, timestamp);
+    EV << "TEST3" << omnetpp::endl;
+}
+
 void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
 {
     // FIXME: Change based on new implementation of MAC frame.
@@ -133,9 +159,13 @@ void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
     EV << frame->getTransmitterAddress() << endl;
     //for (std::vector<nodeEntry>::iterator it = knownNodes.begin() ; it != knownNodes.end(); ++it)
 
-    rssiVector.record(frame->getRSSI());
-    snirVector.record(snirInd->getMinimumSnir());
 
+    // --- Logging message data --- //
+    //rssiVector.record(frame->getRSSI());
+    //snirVector.record(snirInd->getMinimumSnir());
+    EV << "TEST3" << omnetpp::endl;
+    logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), simTime() );
+    EV << "TEST4" << omnetpp::endl;
     // FIXME : Identify network server message is destined for.
     L3Address destAddr = destAddresses[0];
     if (pk->getControlInfo())

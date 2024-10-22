@@ -16,19 +16,34 @@
 #ifndef INET_MOBILITY_RL_LEARNINGMODEL_H_
 #define INET_MOBILITY_RL_LEARNINGMODEL_H_
 
+#include "inet/common/geometry/common/Coord.h"
+#include "StateLogger.h"
+#include "InputState.h"
+
 namespace inet {
+
 
 class LearningModel : public omnetpp::cSimpleModule {
 public:
+    virtual void logPacketInfo(double rssi, double snir, simtime_t timestamp);
+
     LearningModel();
     virtual ~LearningModel();
-    double pollModel();
+    virtual int pollModel();
     void Test();
     void PrintOutput(float x, float y);
+
 protected:
     // The following redefined virtual function holds the algorithm.
     virtual void initialize() override;
 
+private:
+    void fetchStateLoggerModule();  // Function to fetch the StateLogger module
+    int invokeModel();
+    int getReward();
+    Coord getCoord();
+    StateLogger* stateLogger;
+    InputState currentState;
 };
 
 } /* namespace inet */

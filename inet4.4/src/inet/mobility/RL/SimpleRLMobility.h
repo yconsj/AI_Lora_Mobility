@@ -9,6 +9,7 @@
 #define INET_MOBILITY_SINGLE_SIMPLERLMOBILITY_H_
 
 #include "inet/mobility/base/MovingMobilityBase.h"
+#include "inet/common/geometry/common/Coord.h"
 
 namespace inet {
 
@@ -40,6 +41,7 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
     virtual double getMaxSpeed() const override { return speed; }
     virtual double getSpeedFromXML(cXMLElement *nodes);
     virtual double pollModel();
+    virtual const Coord& getCurrentPosition() override;
     SimpleRLMobility();
 };
 

@@ -15,11 +15,9 @@
 
 package inet.mobility.RL;
 
-module LearningModel
+
+module StateLogger
 {
 	parameters :
-		@class(LearningModel);
-	submodules:
-		stateLogger : StateLogger;	    
-        
+		@class(StateLogger);
 }

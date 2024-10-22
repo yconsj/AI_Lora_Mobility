@@ -10,6 +10,7 @@
 #include "inet/mobility/RL/SimpleRLMobility.h"
 
 #include "inet/common/INETMath.h"
+#include "inet/common/geometry/common/Coord.h"
 
 #include "LearningModel.h"
 //#include <stdio.h>
@@ -85,7 +86,7 @@ void SimpleRLMobility::move()
 
     // Call a function from LearningModel
     if (learningModel) {
-        learningModel->Test();
+        learningModel->pollModel();
     } else {
         EV << "LearningModel submodule not found!" << endl;
     }
@@ -99,6 +100,12 @@ void SimpleRLMobility::move()
     Coord dummyCoord;
     handleIfOutside(REFLECT, dummyCoord, lastVelocity);
 }
+
+const Coord& SimpleRLMobility::getCurrentPosition() {
+    // Assuming `currentPosition` is a member variable of type Coord
+    return lastPosition; // Return a reference to the member variable
+}
+
 
 double SimpleRLMobility::pollModel()
 {

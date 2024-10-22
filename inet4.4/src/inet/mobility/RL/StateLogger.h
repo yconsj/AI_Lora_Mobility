@@ -13,13 +13,32 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package inet.mobility.RL;
+#ifndef INET_RLSTATE_STATELOGGER_H_
+#define INET_RLSTATE_STATELOGGER_H_
 
-module LearningModel
-{
-	parameters :
-		@class(LearningModel);
-	submodules:
-		stateLogger : StateLogger;	    
-        
-}
+#include <vector>
+#include <fstream>
+#include "InputState.h"
+namespace inet {
+
+class StateLogger : public omnetpp::cSimpleModule {
+public:
+    StateLogger();
+    virtual ~StateLogger();
+    virtual void logStep(const InputState& inputState, int choice, double reward);
+
+protected:
+    virtual void finish() override;
+
+private:
+    std::vector<InputState> inputStateArray;
+    std::vector<int> choiceArray;
+    std::vector<double> rewardArray;
+
+    void writeToFile();
+
+};
+
+} /* namespace inet */
+
+#endif /* INET_RLSTATE_STATELOGGER_H_ */

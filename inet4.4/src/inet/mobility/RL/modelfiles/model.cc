@@ -22,7 +22,7 @@ limitations under the License.
 
 // See train/README.md for a full description of the creation process.
 
-#include "model.h"
+#include "../modelfiles/model.h"
 
 // Keep aligned to 16 bytes for CMSIS
 alignas(16) const unsigned char g_model[] = {

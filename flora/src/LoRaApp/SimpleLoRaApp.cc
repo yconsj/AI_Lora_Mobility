@@ -233,6 +233,7 @@ void SimpleLoRaApp::sendJoinRequest()
         }
     }
     emit(LoRa_AppPacketSent, getSF());
+
 }
 
 void SimpleLoRaApp::increaseSFIfPossible()
