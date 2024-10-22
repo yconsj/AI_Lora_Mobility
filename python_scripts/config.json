@@ -1,4 +1,5 @@
 {
     "project_dir": "C:/Users/simon/Desktop/AI_Lora_Mobility",
-    "omnetpp_root": "C:/Users/simon/Documents/omnetpp-6.0.3"
+    "omnetpp_root": "C:/Users/simon/Documents/omnetpp-6.0.3",
+    "logfile_path": "C:/Users/simon/Desktop/AI_Lora_Mobility/python_scripts/test_log.txt"
 }
