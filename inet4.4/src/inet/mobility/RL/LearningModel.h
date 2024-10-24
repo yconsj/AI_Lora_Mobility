@@ -25,7 +25,7 @@ namespace inet {
 
 class LearningModel : public omnetpp::cSimpleModule {
 public:
-    virtual void logPacketInfo(double rssi, double snir, simtime_t timestamp);
+    virtual void logPacketInfo(double rssi, double snir, int nReceivedPackets, simtime_t timestamp);
 
     LearningModel();
     virtual ~LearningModel();

@@ -114,7 +114,7 @@ void MobileGatewayLoRaApp::handleMessage(cMessage *msg)
 }
 
 
-void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, simtime_t timestamp) {
+void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, int nReceivedPackets, simtime_t timestamp) {
     // Get the parent module (MobileLoRaGW)
     EV << "TEST1" << omnetpp::endl;
     cModule *parentModule = getParentModule();
@@ -132,7 +132,7 @@ void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, simtim
         throw cRuntimeError("LearningModel module not found");
     EV << "TEST2" << omnetpp::endl;
     // Log the packet information (RSSI, SNIR, and timestamp)
-    learningModel->logPacketInfo(rssi, snir, timestamp);
+    learningModel->logPacketInfo(rssi, snir, nReceivedPackets, timestamp);
     EV << "TEST3" << omnetpp::endl;
 }
 
@@ -163,9 +163,9 @@ void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
     // --- Logging message data --- //
     //rssiVector.record(frame->getRSSI());
     //snirVector.record(snirInd->getMinimumSnir());
-    EV << "TEST3" << omnetpp::endl;
-    logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), simTime() );
-    EV << "TEST4" << omnetpp::endl;
+    logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), counterOfReceivedPackets, simTime() );
+
+
     // FIXME : Identify network server message is destined for.
     L3Address destAddr = destAddresses[0];
     if (pk->getControlInfo())

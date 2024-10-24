@@ -34,7 +34,7 @@ void StateLogger::logStep(const InputState& inputState, int choice, double rewar
 
 
 void StateLogger::writeToFile() {
-    std::ofstream outFile("log.txt");
+    std::ofstream outFile("logFile.txt");
     if (outFile.is_open()) {
         // Write inputState array
         outFile << "[";  // Start of inputState array
@@ -43,7 +43,8 @@ void StateLogger::writeToFile() {
             outFile << "(" << state.latestPacketRSSI << ", "
                     << state.latestPacketSNIR << ", "
                     << state.latestPacketTimestamp << ", "
-                    << state.currentTimestamp << ", " // Added currentTimestamp
+                    << state.numReceivedPackets << ", "
+                    << state.currentTimestamp << ", "
                     << state.coord << ")";
             if (i < inputStateArray.size() - 1) outFile << ", ";
         }
