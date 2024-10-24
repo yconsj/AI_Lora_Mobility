@@ -10,6 +10,7 @@ import json
 class PolicyNetwork(tf.keras.Model):
     def __init__(self, input_dim, output_dim):
         self.output_dim = output_dim
+        self.input_dim = input_dim
         super(PolicyNetwork, self).__init__()
         self.fc1 = tf.keras.layers.Dense(128, activation='relu', input_shape=(input_dim,))
         self.fc2 = tf.keras.layers.Dense(output_dim, 
@@ -21,7 +22,7 @@ class PolicyNetwork(tf.keras.Model):
         return self.fc2(self.fc1(x))
     def get_concrete_function(self):
     # Create a concrete function for the model
-        @tf.function(input_signature=[tf.TensorSpec(shape=[None, None], dtype=tf.float32)])
+        @tf.function(input_signature=[tf.TensorSpec(shape=[None, self.input_dim], dtype=tf.float32)])
         def concrete_function(x):
             return self.call(x)
 
@@ -49,7 +50,7 @@ def read_log():
     log_actions = lines[1]
     log_rewards = lines[2]
     # Remove 'm' using regex and clean the line
-    log_state = re.sub(r'\s*m', '', log_state.strip())
+    #log_state = re.sub(r'\s*m', '', log_state.strip())
     
     # Convert the string to an actual Python list
     states = ast.literal_eval(log_state)
@@ -64,7 +65,7 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         # TODO: get logged ations
         # TODO: get logged rewards
         states, actions, rewards = read_log()
-        states = [(a, b, c, d, *e) for a, b, c, d, e in states] # flatten states pos
+        #states = [(a, b, c, d, *e) for a, b, c, d, e in states] # flatten states pos
         state_tensor    = tf.convert_to_tensor(states, dtype=tf.float32)
         actions_tensor  = tf.convert_to_tensor(actions, dtype=tf.int32)
         print(state_tensor)
@@ -111,11 +112,12 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         # Export the model
 
         concrete_func = policy_net.get_concrete_function()
-        tf_export(concrete_func, "simple_ffn_model.tflite")
+        tf_export(concrete_func, "path_model.c")
 
         return
 
 # Main function to run the training
+export_model_path = "C:/Users/simon/Desktop/AI_Lora_Mobility/inet4.4/src/inet/mobility/RL/modelfiles/gen_model.cc"
 def main():
 
     env = OmnetEnv()
@@ -126,7 +128,9 @@ def main():
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
     num_episodes = 10  # Number of episodes to train
-    reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
+    concrete_func = policy_net.get_concrete_function()
+    tf_export(concrete_func, export_model_path)
+    #reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
 
 if __name__ == "__main__":
     main()
