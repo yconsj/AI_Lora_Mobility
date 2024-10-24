@@ -33,9 +33,9 @@ void SimpleRLMobility::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         speed = par("speed");
         stationary = (speed == 0);
-        rad heading = deg(fmod(par("initialMovementHeading").doubleValue(), 360));
-        rad elevation = deg(fmod(par("initialMovementElevation").doubleValue(), 360));
-        Coord direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
+        heading = deg(fmod(par("initialMovementHeading").doubleValue(), 360));
+        elevation = deg(fmod(par("initialMovementElevation").doubleValue(), 360));
+        direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
         lastVelocity = direction * speed;
 
     }
@@ -67,10 +67,6 @@ void SimpleRLMobility::move()
     cModule* submodule = getSubmodule("learningModel");
     LearningModel *learningModel = check_and_cast<LearningModel*>(submodule);
 
-    rad heading = deg(360);
-    rad elevation = deg(360);
-    Coord direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
-
     // Call a function from LearningModel
     if (learningModel) {
         int choice = learningModel->pollModel();
@@ -83,7 +79,7 @@ void SimpleRLMobility::move()
     } else {
         EV << "LearningModel submodule not found!" << endl;
     }
-    //lastVelocity = direction * speed;
+    lastVelocity = direction * speed;
     lastPosition += lastVelocity * elapsedTime;
     // mySpeed *= 1.5;
 

@@ -36,6 +36,10 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
     /** @brief Move the host*/
     virtual void move() override;
 
+    rad heading ;
+    rad elevation;
+    Coord direction;
+
 
   public:
     virtual double getMaxSpeed() const override { return speed; }
