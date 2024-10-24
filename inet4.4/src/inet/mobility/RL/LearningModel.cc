@@ -36,12 +36,12 @@
 #include "tensorflow/lite/micro/micro_log.h"
 #include "tensorflow/lite/micro/system_setup.h"
 #include "tensorflow/lite/schema/schema_generated.h"
-#include "modelfiles/model.h"
 #include "inet/common/geometry/common/Coord.h"
 #include "inet/mobility/contract/IMobility.h" // for accessing mobility
 #include "InputState.h"
 #include "StateLogger.h"  // Include the StateLogger header
 #include <random>  // For random sampling
+#include "modelfiles/policy_net_model.h"
 
 
 
@@ -62,9 +62,9 @@ float* model_output_buffer = nullptr;
 
 // Define dimensions
 const int kInputHeight = 1;
-const int kInputWidth = 6; // Change based on your features
+const int kInputWidth = 7; // Change based on your features
 const int kOutputHeight = 1;
-const int kOutputWidth = 3; // Change based on your model output
+const int kOutputWidth = 2; // Change based on your model output
 
 constexpr int kTensorArenaSize = 2000;
 // Keep aligned to 16 bytes for CMSIS
@@ -102,7 +102,7 @@ void LearningModel::initialize()
     interpreter = &static_interpreter;
 
     // TODO: Might need to Validate input tensor dimensions for multi-dimensional input
-    // TODO: And also might need to validate output tensor dimensiosn.
+    // TODO: And also might need to validate output tensor dimensions.
 
     // Allocate memory from the tensor_arena for the model's tensors.
     TfLiteStatus allocate_status = interpreter->AllocateTensors();
@@ -133,7 +133,7 @@ void LearningModel::initialize()
        EV << "wrong output dimensions" << omnetpp::endl;
        //return;
    }
-   model_output_buffer = model_output->data.f; // Pointer to output data
+
 }
 
 void LearningModel::fetchStateLoggerModule() {
@@ -231,18 +231,25 @@ int LearningModel::invokeModel() {
 
     float scale = model_input->params.scale;
     int32_t zero_point = model_input->params.zero_point;
+    EV << "scale: "<< scale << omnetpp::endl;
+    EV << "zero_point" << zero_point << omnetpp::endl;
     // Prepare input data for the model from currentState values
-    model_input_buffer[0] = currentState.latestPacketRSSI / scale + zero_point;  // Quantized RSSI
-    model_input_buffer[1] = currentState.latestPacketSNIR / scale + zero_point; // Quantized SNIR
-    model_input_buffer[2] = currentState.latestPacketTimestamp.dbl() / scale + zero_point; // Quantized timestamp
-    model_input_buffer[3] = currentState.currentTimestamp.dbl() / scale + zero_point; // Quantized current timestamp
-    model_input_buffer[4] = currentState.coord.x / scale + zero_point;  // Quantized x coordinate
-    model_input_buffer[5] = currentState.coord.y / scale + zero_point; // Quantized y coordinate
+    model_input_buffer[0] = currentState.latestPacketRSSI; // / scale + zero_point;  // Quantized RSSI
+    model_input_buffer[1] = currentState.latestPacketSNIR; // / scale + zero_point; // Quantized SNIR
+    model_input_buffer[2] = currentState.latestPacketTimestamp.dbl(); // / scale + zero_point; // Quantized timestamp
+    model_input_buffer[3] = currentState.numReceivedPackets; // / scale + zero_point; // Quantized timestamp
+    model_input_buffer[4] = currentState.currentTimestamp.dbl(); // / scale + zero_point; // Quantized current timestamp
+    model_input_buffer[5] = currentState.coord.x; // / scale + zero_point;  // Quantized x coordinate
+    model_input_buffer[6] = currentState.coord.y; // / scale + zero_point; // Quantized y coordinate
 
-    size_t num_inputs = 6;
+
+
+    size_t num_inputs = 7;
     // Place the quantized input in the model's input tensor
     for (size_t i = 0; i < num_inputs; ++i) { // Adjust based on your actual number of inputs
-        model_input->data.int8[i] = static_cast<int8_t>(model_input_buffer[i]);
+        model_input->data.f[i] = (model_input_buffer[i]);
+        EV << "modelinputbuffer"  << model_input_buffer[i] << omnetpp::endl;
+        EV << "modelinput" << model_input->data.f[i] << omnetpp::endl;
     }
 
     // Run the inference with the model
@@ -272,21 +279,32 @@ int LearningModel::invokeModel() {
 
 
     // Obtain the quantized output from model's output tensor
-    size_t num_outputs = model_output->bytes / sizeof(int8_t); // Adjust based on the number of output elements
+    size_t num_outputs = model_output->bytes / sizeof(float); // Adjust based on the number of output elements
+    EV << "output bytes" <<num_outputs << omnetpp::endl;
+    /*
     std::vector<int8_t> y_quantized(num_outputs);
     std::memcpy(y_quantized.data(), model_output->data.int8, model_output->bytes);
-
+    for (size_t i = 0; i < y_quantized.size(); i++) {
+       // EV <<"yquantized, idx:" << i << ":" << y_quantized[i] << omnetpp::endl;
+    }
     // Dequantize the output
     std::vector<float> output_values(num_outputs);
     for (size_t i = 0; i < num_outputs; ++i) {
         output_values[i] = (y_quantized[i] - zero_point) * scale;
-    }
+        //EV <<"output_values, idx:" << i << ":" << output_values[i] << omnetpp::endl;
+    }*/
+    std::vector<float> output_values(num_outputs);
+    std::memcpy(output_values.data(), model_output->data.f, model_output->bytes);
+
 
     // Implement sampling logic based on output_values
     float total_weight = std::accumulate(output_values.begin(), output_values.end(), 0.0f);
     std::vector<float> weights(output_values.size());
     for (size_t i = 0; i < output_values.size(); ++i) {
-        weights[i] = output_values[i] / total_weight;
+        weights[i] = model_output->data.f[i] / total_weight;
+        //EV <<"model_output, idx:" << i << ":" << model_output->data.f[i] << omnetpp::endl;
+        EV <<"output_values, idx:" << i << ":" << output_values[i] << omnetpp::endl;
+        EV <<"weights, idx:" << i << ":" << weights[i] << omnetpp::endl;
     }
 
     // Sample one output based on the weights

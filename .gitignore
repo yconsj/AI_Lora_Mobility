@@ -8,6 +8,9 @@ inet4.4/out/clang-release/src/inet/
 inet4.4/src/inet/opp_defines.h
 inet4.4/src/Makefile
 inet4.4/.settings/
+ python_scripts/__pycache__/
+python_scripts/.idea/
+*.pyc
 
 # Prerequisites
 *.d
