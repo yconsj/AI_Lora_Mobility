@@ -59,7 +59,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="inet/linklayer/configurator/gatescheduling/z3|inet/common/selfdoc|inet/visualizer/osg|inet/applications/voipstream|inet/transportlayer/tcp_nsc|inet/transportlayer/tcp_lwip|inet/emulation|inet/linklayer/ext|inet/routing/extras|transport/tcp_nsc|transport/tcp_lwip" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
+						<entry excluding="inet/transportlayer/tcp_lwip|transport/tcp_nsc|inet/applications/voipstream|inet/linklayer/configurator/gatescheduling/z3|inet/visualizer/osg|inet/emulation|inet/routing/extras|inet/common/selfdoc|inet/transportlayer/tcp_nsc|transport/tcp_lwip|inet/linklayer/ext" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -142,7 +142,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="inet/linklayer/configurator/gatescheduling/z3|inet/common/selfdoc|inet/applications/voipstream|inet/visualizer/osg|inet/transportlayer/tcp_lwip|inet/emulation" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="src"/>
+						<entry excluding="inet/transportlayer/tcp_lwip|inet/applications/voipstream|inet/linklayer/configurator/gatescheduling/z3|inet/visualizer/osg|inet/emulation|inet/common/selfdoc" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

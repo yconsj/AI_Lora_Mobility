@@ -36,10 +36,7 @@
 #include "tensorflow/lite/micro/micro_log.h"
 #include "tensorflow/lite/micro/system_setup.h"
 #include "tensorflow/lite/schema/schema_generated.h"
-#include "modelfiles/constants.h"
-#include "modelfiles/main_functions.h"
 #include "modelfiles/model.h"
-#include "modelfiles/output_handler.h"
 #include "inet/common/geometry/common/Coord.h"
 #include "inet/mobility/contract/IMobility.h" // for accessing mobility
 #include "InputState.h"
@@ -171,10 +168,11 @@ Coord LearningModel::getCoord() {
 }
 
 
-void LearningModel::logPacketInfo(double rssi, double snir, simtime_t timestamp) {
+void LearningModel::logPacketInfo(double rssi, double snir, int nReceivedPackets, simtime_t timestamp) {
     currentState.latestPacketRSSI = rssi;
     currentState.latestPacketSNIR = snir;
     currentState.latestPacketTimestamp = timestamp;
+    currentState.numReceivedPackets = nReceivedPackets;
 }
 
 int LearningModel::getReward() {
