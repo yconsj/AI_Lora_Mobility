@@ -29,18 +29,17 @@ def tf_export(concrete_func, export_path):
     else:
         # Save the converted model to a .tflite file
         try:
-            with open("simple_ffn_model.tflite", "wb") as f:
+            with open(export_path, "wb") as f:
                 f.write(tflite_model)
             print("Feedforward model successfully converted to .tflite file!")
         except IOError as e:
             print(f"Error saving the TFLite model to file: {e}")
-
     # Define the command you want to run to convert the .tflite file to a C array
-    command = ["wsl", "xxd", "-i", "simple_ffn_model.tflite"]
+    command = ["wsl", "xxd", "-i", export_path]
 
     # Use subprocess to execute the command
     try:
-        with open(export_path, "wb") as c_file:
+        with open("model.c", "wb") as c_file:
             subprocess.run(command, stdout=c_file, check=True)
         print("Feedforward model successfully converted to C array in " + export_path + "!")
     except subprocess.CalledProcessError as e:
