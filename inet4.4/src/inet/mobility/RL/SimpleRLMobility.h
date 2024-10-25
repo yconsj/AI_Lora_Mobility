@@ -24,31 +24,28 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
   public:
     double mySpeed;
     double directionX;
-  protected:
-    double speed;
-    cXMLElement *configScript;
+    virtual double getMaxSpeed() const override { return speed; }
+    virtual const Coord& getCurrentPosition() override;
+    SimpleRLMobility();
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
-
     /** @brief Initializes mobility model parameters.*/
     virtual void initialize(int stage) override;
-
     /** @brief Move the host*/
     virtual void move() override;
 
+    double speed;
+    cMessage *pollModelTimer;
+    simtime_t modelUpdateInterval;
     virtual Coord getLoRaNodePosition(int index);
+    virtual void pollModel();
+    virtual void schedulePollModelUpdate();
+    virtual void handleSelfMessage(cMessage *message) override;
 
     rad heading ;
     rad elevation;
     Coord direction;
 
-
-  public:
-    virtual double getMaxSpeed() const override { return speed; }
-    virtual double getSpeedFromXML(cXMLElement *nodes);
-    virtual double pollModel();
-    virtual const Coord& getCurrentPosition() override;
-    SimpleRLMobility();
 };
 
 } // namespace inet
