@@ -1,23 +1,25 @@
 import numpy as np
 import tensorflow as tf
+import matplotlib
 from sim_runner import OmnetEnv
 from tf_exporter import tf_export
 import ast
 import re
 import os
 import json
-
+import matplotlib.pyplot as plt
 class PolicyNetwork(tf.keras.Model):
     def __init__(self, input_dim, output_dim):
+        super(PolicyNetwork, self).__init__()
         self.output_dim = output_dim
         self.input_dim = input_dim
-        super(PolicyNetwork, self).__init__()
-        self.fc1 = tf.keras.layers.Dense(128, activation='relu', input_shape=(input_dim,))
+        self.fc1 = tf.keras.layers.Dense(128, activation='relu', input_shape=(input_dim,) ,                                   
+                                    kernel_initializer=tf.keras.initializers.GlorotUniform(),  # Initialize weights to zeros
+                                    bias_initializer=tf.keras.initializers.GlorotUniform())    # Initialize biases to zeros)
         self.fc2 = tf.keras.layers.Dense(output_dim, 
-                                    activation='softmax',
-                                    kernel_initializer=tf.keras.initializers.Zeros(),  # Initialize weights to zeros
-                                    bias_initializer=tf.keras.initializers.Zeros())    # Initialize biases to zeros
-
+                                    activation='softmax', 
+                                    kernel_initializer=tf.keras.initializers.GlorotUniform(),  # Initialize weights to zeros
+                                    bias_initializer=tf.keras.initializers.GlorotUniform())    # Initialize biases to zeros
     def call(self, x):
         return self.fc2(self.fc1(x))
     def get_concrete_function(self):
@@ -34,9 +36,24 @@ def load_config(config_file):
     config_path = os.path.join(script_dir, config_file)
     with open(config_path, 'r') as f:
         return json.load(f)
+    
+def plot_rewards(show_result=False, window=10):
+    plt.figure(figsize=(10, 5))
+
+    label = "Episode Rewards"
+    plt.clf()
+    plt.plot(reward_sums, label=label)
+    plt.xlabel("Episode")
+    plt.ylabel("Cumulative Reward")
+    plt.title("Cumulative Reward per Episode")
+    plt.legend()
+
+
+
 
 def read_log():
     # Step 1: Read the file line by line
+    print("reading log")
     config = load_config("config.json")
     log = config['logfile_path']
     with open(log, 'r') as file:
@@ -57,64 +74,43 @@ def read_log():
     actions = ast.literal_eval(log_actions)
     rewards = ast.literal_eval(log_rewards)
     # Append the cleaned list to a combined list
+    print("finished reading log")
     return states, actions, rewards
-def reinforce(env, policy_net, optimizer, num_episodes):
+reward_sums=[]
+def reinforce(env,policy_net, optimizer, num_episodes):
     for episode in range(num_episodes):
-        #env.run_simulation()
-        # TODO: get logged state
-        # TODO: get logged ations
-        # TODO: get logged rewards
+        env.run_simulation()
         states, actions, rewards = read_log()
-        #states = [(a, b, c, d, *e) for a, b, c, d, e in states] # flatten states pos
         state_tensor    = tf.convert_to_tensor(states, dtype=tf.float32)
         actions_tensor  = tf.convert_to_tensor(actions, dtype=tf.int32)
-        print(state_tensor)
-        print(actions_tensor)
-        # state = -1 # get state
-        # done = False
-        # states, actions, rewards = [], [], []
-
-        # while not done:
-        #     state_tensor = tf.convert_to_tensor(state, dtype=tf.float32)  # Convert state to tensor
-        #     action_probs = policy_net(tf.expand_dims(state_tensor, axis=0))  # Get action probabilities
-        #     action = np.random.choice(len(action_probs.numpy().squeeze()), p=action_probs.numpy().squeeze())  # Sample action
-        #     next_state, reward, done, _ = env.step(action)  # Take action in the environment
-            
-        #     states.append(state)  # Store state
-        #     actions.append(action)  # Store action
-        #     rewards.append(reward)  # Store reward
-            
-        #     state = next_state  # Transition to the next state
-
-        # Compute the cumulative rewards (returns)
         returns = []
         cumulative_reward = 0
         for r in rewards[::-1]:  # Reverse to compute returns
             cumulative_reward = r + cumulative_reward * 0.99  # Discount factor
             returns.insert(0, cumulative_reward)  # Insert at the beginning
-
+        print("total rewards: "+ str(sum(rewards)))
+        reward_sums.append(sum(rewards))
+        #plot_rewards(window=10)
         # Convert lists to tensors
         returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
 
         # Compute policy loss
         with tf.GradientTape() as tape:
-            log_probs = tf.math.log(policy_net(tf.convert_to_tensor(states, dtype=tf.float32)))  # Get log probabilities
+            log_probs = tf.math.log(tf.clip_by_value(policy_net(state_tensor), 1e-10, 1.0))  
             selected_log_probs = tf.reduce_sum(log_probs * tf.one_hot(actions_tensor, policy_net.output_dim), axis=1)  # Gather log probabilities
             loss = -tf.reduce_mean(selected_log_probs * returns_tensor)  # REINFORCE loss
 
         # Update the policy
         grads = tape.gradient(loss, policy_net.trainable_variables)
         optimizer.apply_gradients(zip(grads, policy_net.trainable_variables))
+        print(policy_net.fc2.get_weights())
+        
 
-        # Print episode statistics
-        if (episode + 1) % 10 == 0:
-            print(f"Episode {episode + 1}/{num_episodes}, Loss: {loss.numpy():.4f}")
-        # Export the model
-
+        print("exporting model")
         concrete_func = policy_net.get_concrete_function()
-        tf_export(concrete_func, "path_model.c")
-
-        return
+        config = load_config("config.json")
+        gen_model = config['model_path']
+        tf_export(concrete_func, gen_model)
 
 # Main function to run the training
 export_model_path = "C:/Users/simon/Desktop/AI_Lora_Mobility/inet4.4/src/inet/mobility/RL/modelfiles/gen_model.cc"
@@ -127,10 +123,29 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 10  # Number of episodes to train
+    num_episodes = 20  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
-    tf_export(concrete_func, export_model_path)
-    #reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
+    policy_net.summary()
+   
+    tf_export(concrete_func, export_model_path) # initial model
+    reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
+    plot_rewards(show_result=True, window=10)
+    print('Complete')
 
+
+
+    # Example input (make sure it matches the input shape of your model)
+    example_input1 = tf.constant([[0, 0, 0, 0, 0.1, 500, 900]], dtype=tf.float32)  # Example state with 4 features
+    example_input2 = tf.constant([[-133.837, 2.07141, 672.22626462552, 2, 970.3, 458.555, 900]], dtype=tf.float32)  # Example state with 4 features
+
+    # Run the network
+    action_probs1 = policy_net(example_input1)
+    action_probs2 = policy_net(example_input2)
+    # Print the output probabilities
+    print("Action1 probabilities:", action_probs1.numpy())
+    print("Action2 probabilities:", action_probs2.numpy())
+
+    plt.ioff()
+    plt.show()
 if __name__ == "__main__":
     main()
