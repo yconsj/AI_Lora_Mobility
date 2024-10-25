@@ -36,6 +36,8 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
     /** @brief Move the host*/
     virtual void move() override;
 
+    virtual Coord getLoRaNodePosition(int index);
+
     rad heading ;
     rad elevation;
     Coord direction;

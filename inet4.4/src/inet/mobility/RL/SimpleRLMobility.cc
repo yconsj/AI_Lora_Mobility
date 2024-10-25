@@ -8,6 +8,7 @@
 //
 
 #include "inet/mobility/RL/SimpleRLMobility.h"
+#include "inet/mobility/static/StationaryMobility.h"
 
 #include "inet/common/INETMath.h"
 #include "inet/common/geometry/common/Coord.h"
@@ -54,6 +55,29 @@ double SimpleRLMobility::getSpeedFromXML(cXMLElement *nodes) {
             }
 }
 
+Coord SimpleRLMobility::getLoRaNodePosition(int index)
+{
+    // Access the parent network module
+    cModule *network = getParentModule()->getParentModule();
+    cModule *targetNode = network->getSubmodule("loRaNodes", index);
+
+    if (targetNode) {
+        cModule *mobilityModule = targetNode->getSubmodule("mobility");
+        if (mobilityModule) {
+            // Directly cast to StationaryMobility as expected
+            StationaryMobility *stationaryMobility = check_and_cast<StationaryMobility *>(mobilityModule);
+            return stationaryMobility->getCurrentPosition();
+        }
+        else {
+            EV << "Mobility submodule not found for loRaNodes[" << index << "]!" << endl;
+        }
+    } else {
+        EV << "loRaNodes[" << index << "] module not found!" << endl;
+    }
+    // Return an invalid coordinate if the node or mobility submodule is not found
+    return Coord(NAN, NAN, NAN);
+}
+
 void SimpleRLMobility::move()
 {
     double elapsedTime = (simTime() - lastUpdate).dbl();
@@ -70,16 +94,25 @@ void SimpleRLMobility::move()
     // Call a function from LearningModel
     if (learningModel) {
         int choice = learningModel->pollModel();
-        if (choice == 0) {
-            direction.x = 1;
-        }
-        else {
-            direction.x = -1;
+
+        Coord targetPosition = getLoRaNodePosition(choice); // Change 0 to the desired node index if needed
+
+        if (!std::isnan(targetPosition.x)) { // Check if position is valid
+            // Move towards the target node in x-direction only
+            double deltaX = targetPosition.x - lastPosition.x;
+            direction = Coord(deltaX, 0, 0); // Set direction vector only in x-direction
+            direction.normalize();
+            lastVelocity = direction * speed;
+
+            // Optional: Print debug information
+            EV << "Moving towards LoRaNode[" << choice << "] in x-direction at position: " << targetPosition.x << endl;
+        } else {
+            EV << "Invalid target position; LoRaNode[" << choice << "]! may not be reachable." << endl;
         }
     } else {
         EV << "LearningModel submodule not found!" << endl;
     }
-    lastVelocity = direction * speed;
+    //lastVelocity = direction * speed;
     lastPosition += lastVelocity * elapsedTime;
     // mySpeed *= 1.5;
 

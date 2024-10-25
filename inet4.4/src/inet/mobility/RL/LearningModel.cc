@@ -149,7 +149,6 @@ void LearningModel::fetchStateLoggerModule() {
 Coord LearningModel::getCoord() {
     // Fetch the mobility module, which is the parent of LearningModel
     cModule* mobilityModule = getParentModule(); // mobility is the parent of LearningModel
-    EV << "Parent module name: " << mobilityModule->getName() << "\n";
     if (!mobilityModule || strcmp(mobilityModule->getName(), "mobility") != 0) {
         throw cRuntimeError("The parent module is not the expected 'mobility' module.");
     }
@@ -176,7 +175,10 @@ void LearningModel::logPacketInfo(double rssi, double snir, int nReceivedPackets
 }
 
 int LearningModel::getReward() {
-    return 0;
+    static int lastStateNumberOfPackets = 0;
+    int reward = currentState.numReceivedPackets - lastStateNumberOfPackets;
+    lastStateNumberOfPackets = currentState.numReceivedPackets;
+    return reward;
 }
 
 int LearningModel::pollModel()
@@ -204,7 +206,6 @@ void LearningModel::PrintOutput(float x_value, float y_value) {
 }
 
 int LearningModel::invokeModel() {
-    EV << "LearningModel.invokeModel()" << omnetpp::endl;
 
     if (interpreter == nullptr) {
         EV << "Interpreter is not initialized." << omnetpp::endl;
@@ -229,27 +230,20 @@ int LearningModel::invokeModel() {
         return -1;
     }
 
-    float scale = model_input->params.scale;
-    int32_t zero_point = model_input->params.zero_point;
-    EV << "scale: "<< scale << omnetpp::endl;
-    EV << "zero_point" << zero_point << omnetpp::endl;
-    // Prepare input data for the model from currentState values
-    model_input_buffer[0] = currentState.latestPacketRSSI; // / scale + zero_point;  // Quantized RSSI
-    model_input_buffer[1] = currentState.latestPacketSNIR; // / scale + zero_point; // Quantized SNIR
-    model_input_buffer[2] = currentState.latestPacketTimestamp.dbl(); // / scale + zero_point; // Quantized timestamp
-    model_input_buffer[3] = currentState.numReceivedPackets; // / scale + zero_point; // Quantized timestamp
-    model_input_buffer[4] = currentState.currentTimestamp.dbl(); // / scale + zero_point; // Quantized current timestamp
-    model_input_buffer[5] = currentState.coord.x; // / scale + zero_point;  // Quantized x coordinate
-    model_input_buffer[6] = currentState.coord.y; // / scale + zero_point; // Quantized y coordinate
-
-
+    // Insert input data for the model from currentState values
+    model_input->data.f[0] = currentState.latestPacketRSSI;
+    model_input->data.f[1] = currentState.latestPacketSNIR;
+    model_input->data.f[2] = currentState.latestPacketTimestamp.dbl();
+    model_input->data.f[3] = currentState.numReceivedPackets;
+    model_input->data.f[4] = currentState.currentTimestamp.dbl();
+    model_input->data.f[5] = currentState.coord.x;
+    model_input->data.f[6] = currentState.coord.y;
 
     size_t num_inputs = 7;
     // Place the quantized input in the model's input tensor
     for (size_t i = 0; i < num_inputs; ++i) { // Adjust based on your actual number of inputs
         model_input->data.f[i] = (model_input_buffer[i]);
-        EV << "modelinputbuffer"  << model_input_buffer[i] << omnetpp::endl;
-        EV << "modelinput" << model_input->data.f[i] << omnetpp::endl;
+        EV << "model_input->data.f"  << model_input->data.f[i] << omnetpp::endl;
     }
 
     // Run the inference with the model
@@ -258,118 +252,31 @@ int LearningModel::invokeModel() {
         EV << "Invoke failed" << omnetpp::endl;
         return -1;
     }
-    /*
-    size_t float_size = sizeof(float);
-    size_t num_floats = model_output->bytes / float_size;
-    std::vector<float> output_values(num_floats); // Adjust based on output size
-
-    // Check if the number of floats is valid
-    if (model_output->bytes < float_size) {
-        EV << "Error: model_output->bytes is less than sizeof(float). Expected at least "
-           << float_size << " but got " << model_output->bytes << omnetpp::endl;
-        return -1; // Handle the error appropriately
-    }
-
-    EV <<  "data.f " << model_output->data.f << omnetpp::endl;
-    EV <<  "bytes " << model_output->bytes << omnetpp::endl;
-    EV <<  "ratio " << num_floats << omnetpp::endl;
-    std::memcpy(output_values.data(), model_output->data.f, model_output->bytes); // Copy output data to vector
-
-    */
-
 
     // Obtain the quantized output from model's output tensor
     size_t num_outputs = model_output->bytes / sizeof(float); // Adjust based on the number of output elements
-    EV << "output bytes" <<num_outputs << omnetpp::endl;
-    /*
-    std::vector<int8_t> y_quantized(num_outputs);
-    std::memcpy(y_quantized.data(), model_output->data.int8, model_output->bytes);
-    for (size_t i = 0; i < y_quantized.size(); i++) {
-       // EV <<"yquantized, idx:" << i << ":" << y_quantized[i] << omnetpp::endl;
-    }
-    // Dequantize the output
-    std::vector<float> output_values(num_outputs);
-    for (size_t i = 0; i < num_outputs; ++i) {
-        output_values[i] = (y_quantized[i] - zero_point) * scale;
-        //EV <<"output_values, idx:" << i << ":" << output_values[i] << omnetpp::endl;
-    }*/
-    std::vector<float> output_values(num_outputs);
-    std::memcpy(output_values.data(), model_output->data.f, model_output->bytes);
-
-
-    // Implement sampling logic based on output_values
-    float total_weight = std::accumulate(output_values.begin(), output_values.end(), 0.0f);
-    std::vector<float> weights(output_values.size());
-    for (size_t i = 0; i < output_values.size(); ++i) {
-        weights[i] = model_output->data.f[i] / total_weight;
-        //EV <<"model_output, idx:" << i << ":" << model_output->data.f[i] << omnetpp::endl;
-        EV <<"output_values, idx:" << i << ":" << output_values[i] << omnetpp::endl;
-        EV <<"weights, idx:" << i << ":" << weights[i] << omnetpp::endl;
-    }
+    // EV << "output bytes" <<num_outputs << omnetpp::endl;
 
     // Sample one output based on the weights
+    // model uses softmax function on output, so it is already weighted and sums to 1.
     float random_value = static_cast<float>(rand()) / RAND_MAX; // Random value in [0, 1)
     float cumulative_weight = 0.0f;
     int selected_index = 0;
-    for (size_t i = 0; i < weights.size(); ++i) {
-        cumulative_weight += weights[i];
+    for (size_t i = 0; i < num_outputs; ++i) {
+        cumulative_weight += model_output->data.f[i];
         if (random_value < cumulative_weight) {
             selected_index = i;
             break;
         }
     }
-    EV << "Selected output index: " << selected_index << " with weight: " << weights[selected_index] << "\n";
+    EV << "Selected output index: " << selected_index << " with weight: " << model_output->data.f[selected_index] << "\n";
 
     return selected_index; // Return the selected index
 
-    //return -1;
-        /*
-    */
 }
 
 
-void LearningModel::Test() {
-/*
-    EV << "LearningModel.Test()" << omnetpp::endl;
-    // Calculate an x value to feed into the model. We compare the current
-   // inference_count to the number of inferences per cycle to determine
-   // our position within the range of possible x values the model was
-   // trained on, and use this to calculate a value.
 
-    float position = static_cast<float>(inference_count) /
-                    static_cast<float>(kInferencesPerCycle);
-    float x = position * kXrange;
-
-    // Quantize the input from floating-point to integer
-    int8_t x_quantized = x / input->params.scale + input->params.zero_point;
-    // Place the quantized input in the model's input tensor
-    input->data.int8[0] = x_quantized;
-
-
-
-    // Run inference, and report any error
-    TfLiteStatus invoke_status = interpreter->Invoke();
-
-    if (invoke_status != kTfLiteOk) {
-       EV << "Invoke failed on x: " << static_cast<double>(x) << "\n" << omnetpp::endl;
-     return;
-    }
-
-    // Obtain the quantized output from model's output tensor
-    int8_t y_quantized = output->data.int8[0];
-    // Dequantize the output from integer to floating-point
-    float y = (y_quantized - output->params.zero_point) * output->params.scale;
-
-    // Output the results. A custom HandleOutput function can be implemented
-    // for each supported hardware target.
-    PrintOutput(x, y);
-
-    // Increment the inference_counter, and reset it if we have reached
-    // the total number per cycle
-    inference_count += 1;
-    if (inference_count >= kInferencesPerCycle) inference_count = 0;
-*/
-}
 
 
 LearningModel::~LearningModel() {

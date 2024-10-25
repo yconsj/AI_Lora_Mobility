@@ -30,7 +30,6 @@ public:
     LearningModel();
     virtual ~LearningModel();
     virtual int pollModel();
-    void Test();
     void PrintOutput(float x, float y);
 
 protected:
