@@ -23,13 +23,14 @@ Define_Module(SimpleRLMobility);
 
 SimpleRLMobility::SimpleRLMobility()
 {
+    pollModelTimer = nullptr;
+    modelUpdateInterval = 0;
     speed = 10;
 }
 
 void SimpleRLMobility::initialize(int stage)
 {
     MovingMobilityBase::initialize(stage);
-
     EV << "initializing SimpleRLMobility stage " << stage << endl;
     if (stage == INITSTAGE_LOCAL) {
         speed = par("speed");
@@ -39,21 +40,34 @@ void SimpleRLMobility::initialize(int stage)
         direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
         lastVelocity = direction * speed;
 
+        pollModelTimer = new cMessage("pollModel");
+        modelUpdateInterval = par("modelUpdateInterval");
+        schedulePollModelUpdate();
     }
 }
-double SimpleRLMobility::getSpeedFromXML(cXMLElement *nodes) {
-    // Recursively traverse the whole config file, looking for
-            // speed attributes
-            cXMLElementList childs = nodes->getChildren();
-            for (auto& child : childs) {
-                const char *speedAttr = child->getAttribute("speed");
-                if (speedAttr) {
-                    double speed = std::stod(speedAttr);
-                    EV_TRACE << speed << endl;
-                    return speed;
-                }
-            }
+
+
+void SimpleRLMobility::schedulePollModelUpdate()
+{
+   cancelEvent(pollModelTimer);
+   simtime_t nextUpdate = simTime() + modelUpdateInterval;
+   scheduleAt(nextUpdate, pollModelTimer);
 }
+
+void SimpleRLMobility::handleSelfMessage(cMessage *message)
+{
+    if (message == moveTimer) {
+        moveAndUpdate();
+        scheduleUpdate();
+    }
+    else if (message == pollModelTimer) {
+        EV << "pollModel timer" << omnetpp::endl;
+        pollModel();
+        schedulePollModelUpdate();
+    }
+}
+
+
 
 Coord SimpleRLMobility::getLoRaNodePosition(int index)
 {
@@ -78,14 +92,7 @@ Coord SimpleRLMobility::getLoRaNodePosition(int index)
     return Coord(NAN, NAN, NAN);
 }
 
-void SimpleRLMobility::move()
-{
-    double elapsedTime = (simTime() - lastUpdate).dbl();
-    //cModule
-    //double newSpeed = subjectModule->RSSI;
-    //cast_and_check
-    //char* text = sprintf("%d",newSpeed);
-
+void SimpleRLMobility::pollModel() {
     //subjectModule->
     EV << "test LM" <<  endl;
     cModule* submodule = getSubmodule("learningModel");
@@ -109,9 +116,16 @@ void SimpleRLMobility::move()
         } else {
             EV << "Invalid target position; LoRaNode[" << choice << "]! may not be reachable." << endl;
         }
+
     } else {
         EV << "LearningModel submodule not found!" << endl;
     }
+}
+
+void SimpleRLMobility::move()
+{
+    double elapsedTime = (simTime() - lastUpdate).dbl();
+
     //lastVelocity = direction * speed;
     lastPosition += lastVelocity * elapsedTime;
     // mySpeed *= 1.5;
@@ -122,15 +136,9 @@ void SimpleRLMobility::move()
 }
 
 const Coord& SimpleRLMobility::getCurrentPosition() {
-    // Assuming `currentPosition` is a member variable of type Coord
-    return lastPosition; // Return a reference to the member variable
+    return lastPosition;
 }
 
-
-double SimpleRLMobility::pollModel()
-{
-    return uniform(0,1);
-}
 
 } // namespace inet
 

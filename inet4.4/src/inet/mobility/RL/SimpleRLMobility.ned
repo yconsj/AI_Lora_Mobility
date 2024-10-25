@@ -27,9 +27,10 @@ module SimpleRLMobility extends MovingMobilityBase
         double initialZ @unit(m) = default(nanToZero(uniform(this.constraintAreaMinZ, this.constraintAreaMaxZ)));
         bool initFromDisplayString = default(true); // enables one time initialization from the subject module's display string
         double speed @unit(mps) = default(0mps); // speed of the host
-        double initialMovementHeading @unit(deg) = default(uniform(0deg, 360deg));
+        double initialMovementHeading @unit(deg) = default(0deg); //uniform(0deg, 360deg)
         double initialMovementElevation @unit(deg) = default(0deg);
-		xml configScript;
+		//updateInterval = 0.1s;  // parameter how often movement is scheduled. normal default is 0.1 seconds
+	    double modelUpdateInterval @unit(s) = default(10s); // how often we poll the model from the mobility module
         @class(SimpleRLMobility);
         
     submodules:
