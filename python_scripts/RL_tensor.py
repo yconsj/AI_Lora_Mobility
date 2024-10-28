@@ -79,7 +79,7 @@ def read_log():
 reward_sums=[]
 def reinforce(env,policy_net, optimizer, num_episodes):
     for episode in range(num_episodes):
-        env.run_simulation()
+        env.run_simulation(episode)
         states, actions, rewards = read_log()
         state_tensor    = tf.convert_to_tensor(states, dtype=tf.float32)
         actions_tensor  = tf.convert_to_tensor(actions, dtype=tf.int32)
@@ -142,7 +142,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 3  # Number of episodes to train
+    num_episodes = 1  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
    
