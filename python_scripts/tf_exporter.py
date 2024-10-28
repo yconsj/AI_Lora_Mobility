@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import subprocess
 
-def tf_export(concrete_func, export_path):
+def tf_export(concrete_func, export_path, episode_num):
     try:
         converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_func])
         tflite_model = converter.convert()
@@ -21,8 +21,8 @@ def tf_export(concrete_func, export_path):
 
     # Use subprocess to execute the command
     try:
-        with open(export_path, "wb") as c_file:
-            c_file.write(b'#include "policy_net_model.h"\n')
+        with open(export_path, "w") as c_file:
+            c_file.write(f'#include "policy_net_model.h"\n#define EPISODE_NUM {episode_num}\n')
         with open(export_path, "ab") as c_file:
             subprocess.run(command, stdout=c_file, check=True)
         print("Feedforward model successfully converted to C array in " + export_path + "!")

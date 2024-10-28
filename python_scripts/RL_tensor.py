@@ -96,12 +96,29 @@ def reinforce(env,policy_net, optimizer, num_episodes):
 
         # Compute policy loss
         with tf.GradientTape() as tape:
-            log_probs = tf.math.log(tf.clip_by_value(policy_net(state_tensor), 1e-10, 1.0))  
+            # Get the action probabilities
+            action_probs = policy_net(state_tensor)  # Assuming this outputs probabilities for actions
+            log_probs = tf.math.log(tf.clip_by_value(action_probs, 1e-10, 1.0))  # Log probabilities
+            
+            # Gather log probabilities for selected actions
             selected_log_probs = tf.reduce_sum(log_probs * tf.one_hot(actions_tensor, policy_net.output_dim), axis=1)  # Gather log probabilities
-            loss = -tf.reduce_mean(selected_log_probs * returns_tensor)  # REINFORCE loss
+            
+            # REINFORCE loss
+            policy_loss = -tf.reduce_mean(selected_log_probs * returns_tensor)  # REINFORCE loss
 
+            # Calculate entropy
+            entropy = -tf.reduce_sum(action_probs * log_probs, axis=1)  # Entropy calculation
+            # Hyperparameter for entropy regularization
+            beta = 0.01  # Adjust this value based on your needs
+            entropy_loss = beta * tf.reduce_mean(entropy)  # Scale by beta
+
+            # Total loss with entropy regularization
+            total_loss = policy_loss + entropy_loss
+
+
+            
         # Update the policy
-        grads = tape.gradient(loss, policy_net.trainable_variables)
+        grads = tape.gradient(total_loss, policy_net.trainable_variables)
         optimizer.apply_gradients(zip(grads, policy_net.trainable_variables))
         print(policy_net.fc2.get_weights())
         
@@ -110,24 +127,24 @@ def reinforce(env,policy_net, optimizer, num_episodes):
         concrete_func = policy_net.get_concrete_function()
         config = load_config("config.json")
         gen_model = config['model_path']
-        tf_export(concrete_func, gen_model)
+        tf_export(concrete_func, gen_model, episode+1)
 
 # Main function to run the training
 export_model_path = "C:/Users/simon/Desktop/AI_Lora_Mobility/inet4.4/src/inet/mobility/RL/modelfiles/gen_model.cc"
 def main():
 
     env = OmnetEnv()
-    input_size = 7 # State size
+    input_size = 6 # State size
     output_size =  2 # Number of actions
 
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 20  # Number of episodes to train
+    num_episodes = 0  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
    
-    tf_export(concrete_func, export_model_path) # initial model
+    tf_export(concrete_func, export_model_path,0) # initial model
     reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
     plot_rewards(show_result=True, window=10)
     print('Complete')
@@ -135,9 +152,13 @@ def main():
 
 
     # Example input (make sure it matches the input shape of your model)
-    example_input1 = tf.constant([[0, 0, 0, 0, 0.1, 500, 900]], dtype=tf.float32)  # Example state with 4 features
-    example_input2 = tf.constant([[-133.837, 2.07141, 672.22626462552, 2, 970.3, 458.555, 900]], dtype=tf.float32)  # Example state with 4 features
-
+    # rrsi, snir, timestamp__lastpacket, total_packets, time, x,y
+    input1 = [0, 0, 0, 0, 0.1 / 86400, 500 / 3000]
+    input2 = [-133.837 / 255, 2.07141 / 100 , 672.22626462552 / 86400, 2 / 100, 970.3 / 86400, 458.555 /3000]
+    
+    example_input1 = tf.constant([input1], dtype=tf.float32)  # Example state with 4 features
+    example_input2 = tf.constant([input2], dtype=tf.float32)  # Example state with 4 features
+    # Define the mean and std for each input, calculated from past observations
     # Run the network
     action_probs1 = policy_net(example_input1)
     action_probs2 = policy_net(example_input2)
