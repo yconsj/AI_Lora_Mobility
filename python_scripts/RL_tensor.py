@@ -142,7 +142,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 1  # Number of episodes to train
+    num_episodes = 10  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
    
