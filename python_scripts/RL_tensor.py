@@ -81,6 +81,10 @@ def reinforce(env,policy_net, optimizer, num_episodes):
     for episode in range(num_episodes):
         env.run_simulation(episode)
         states, actions, rewards = read_log()
+
+        sum_of_actions = sum(actions)
+        print(f"Episode {episode + 1} - Sum of Actions Taken: {sum_of_actions}")
+
         state_tensor    = tf.convert_to_tensor(states, dtype=tf.float32)
         actions_tensor  = tf.convert_to_tensor(actions, dtype=tf.int32)
         returns = []

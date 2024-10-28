@@ -45,7 +45,6 @@
 #include "modelfiles/policy_net_model.h"
 
 
-
 namespace inet {
 
 Define_Module(LearningModel);
@@ -254,6 +253,7 @@ int LearningModel::invokeModel(InputState state) {
         EV << "Model output size is zero or negative." << omnetpp::endl;
         return -1;
     }
+
 
     // Insert input data for the model from state values
     model_input->data.f[0] = state.latestPacketRSSI;
