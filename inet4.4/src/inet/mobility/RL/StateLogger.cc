@@ -45,8 +45,10 @@ void StateLogger::writeToFile() {
                     << state.latestPacketTimestamp << ", "
                     << state.numReceivedPackets << ", "
                     << state.currentTimestamp << ", "
-                    << state.coord.x << ", "
-                    << state.coord.y << ")";
+                    << state.coord.x <<
+                    // << ", " << state.coord.y <<
+                    ")"
+                    ;
             if (i < inputStateArray.size() - 1) outFile << ", ";
         }
         outFile << "]\n";  // End of inputState array

@@ -25,7 +25,6 @@ SimpleRLMobility::SimpleRLMobility()
 {
     pollModelTimer = nullptr;
     modelUpdateInterval = 0;
-    speed = 10;
 }
 
 void SimpleRLMobility::initialize(int stage)
@@ -35,14 +34,18 @@ void SimpleRLMobility::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         speed = par("speed");
         stationary = (speed == 0);
+        initialPosition = lastPosition;
         heading = deg(fmod(par("initialMovementHeading").doubleValue(), 360));
         elevation = deg(fmod(par("initialMovementElevation").doubleValue(), 360));
         direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
         lastVelocity = direction * speed;
 
+
         pollModelTimer = new cMessage("pollModel");
         modelUpdateInterval = par("modelUpdateInterval");
-        schedulePollModelUpdate();
+        simtime_t firstModelUpdate = 0.0;
+        scheduleAt(firstModelUpdate, pollModelTimer); // schedule a model update for time 0.0;
+        //schedulePollModelUpdate();
     }
 }
 
@@ -68,8 +71,11 @@ void SimpleRLMobility::handleSelfMessage(cMessage *message)
 }
 
 
+const Coord& SimpleRLMobility::getInitialPosition() {
+    return initialPosition;
+}
 
-Coord SimpleRLMobility::getLoRaNodePosition(int index)
+const Coord& SimpleRLMobility::getLoRaNodePosition(int index)
 {
     // Access the parent network module
     cModule *network = getParentModule()->getParentModule();
@@ -137,6 +143,26 @@ void SimpleRLMobility::move()
 
 const Coord& SimpleRLMobility::getCurrentPosition() {
     return lastPosition;
+}
+
+
+int getSign(int num) {
+    return (num > 0) - (num < 0);
+}
+
+bool SimpleRLMobility::isNewGridPosition() {
+
+    int distance = (getCurrentPosition().x - getInitialPosition().x);
+    int sign = getSign(distance);
+    int currentGridSlice = distance % gridSize;
+    for (int i = 0; i < visitedGrids.size(); i++) {
+        if (currentGridSlice == visitedGrids[i]) {
+            return false;
+        }
+    }
+    visitedGrids.push_back(currentGridSlice);
+    return true;
+
 }
 
 

@@ -114,9 +114,8 @@ void MobileGatewayLoRaApp::handleMessage(cMessage *msg)
 }
 
 
-void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, int nReceivedPackets, simtime_t timestamp) {
+void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, double nReceivedPackets, simtime_t timestamp) {
     // Get the parent module (MobileLoRaGW)
-    EV << "TEST1" << omnetpp::endl;
     cModule *parentModule = getParentModule();
     if (!parentModule)
         throw cRuntimeError("MobileLoRaGatewayApp has no parent module");
@@ -130,10 +129,8 @@ void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, int nR
     LearningModel *learningModel = check_and_cast<LearningModel*>(mobilityModule->getSubmodule("learningModel"));
     if (!learningModel)
         throw cRuntimeError("LearningModel module not found");
-    EV << "TEST2" << omnetpp::endl;
     // Log the packet information (RSSI, SNIR, and timestamp)
-    learningModel->logPacketInfo(rssi, snir, nReceivedPackets, timestamp);
-    EV << "TEST3" << omnetpp::endl;
+    learningModel->setPacketInfo(rssi, snir, nReceivedPackets, timestamp);
 }
 
 void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
@@ -163,7 +160,7 @@ void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
     // --- Logging message data --- //
     //rssiVector.record(frame->getRSSI());
     //snirVector.record(snirInd->getMinimumSnir());
-    logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), counterOfReceivedPackets, simTime() );
+    logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), (double)counterOfReceivedPackets, simTime() );
 
 
     // FIXME : Identify network server message is destined for.

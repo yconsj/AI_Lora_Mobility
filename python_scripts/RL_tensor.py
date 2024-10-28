@@ -130,21 +130,23 @@ def reinforce(env,policy_net, optimizer, num_episodes):
         tf_export(concrete_func, gen_model, episode+1)
 
 # Main function to run the training
-export_model_path = "C:/Users/simon/Desktop/AI_Lora_Mobility/inet4.4/src/inet/mobility/RL/modelfiles/gen_model.cc"
+config = load_config("config.json")
+gen_model = config['model_path']
+export_model_path = gen_model
 def main():
 
     env = OmnetEnv()
     input_size = 6 # State size
-    output_size =  2 # Number of actions
+    output_size = 2 # Number of actions
 
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 0  # Number of episodes to train
+    num_episodes = 3  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
    
-    tf_export(concrete_func, export_model_path,0) # initial model
+    tf_export(concrete_func, export_model_path, 0) # initial model
     reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
     plot_rewards(show_result=True, window=10)
     print('Complete')

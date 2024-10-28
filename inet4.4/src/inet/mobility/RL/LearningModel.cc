@@ -38,6 +38,7 @@
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "inet/common/geometry/common/Coord.h"
 #include "inet/mobility/contract/IMobility.h" // for accessing mobility
+#include "SimpleRLMobility.h"
 #include "InputState.h"
 #include "StateLogger.h"  // Include the StateLogger header
 #include <random>  // For random sampling
@@ -62,7 +63,7 @@ float* model_output_buffer = nullptr;
 
 // Define dimensions
 const int kInputHeight = 1;
-const int kInputWidth = 7; // Change based on your features
+const int kInputWidth = 6; // Change based on your features
 const int kOutputHeight = 1;
 const int kOutputWidth = 2; // Change based on your model output
 
@@ -84,7 +85,6 @@ void LearningModel::initialize()
 
     // Map the model into a usable data structure. This doesn't involve any
     // copying or parsing, it's a very lightweight operation.
-
     model = tflite::GetModel(g_model);
 
     if (model->version() != TFLITE_SCHEMA_VERSION) {
@@ -139,35 +139,38 @@ void LearningModel::initialize()
 void LearningModel::fetchStateLoggerModule() {
     // Fetch the StateLogger module as a submodule of LearningModel
     stateLogger = check_and_cast<StateLogger*>(getSubmodule("stateLogger"));
-
     if (stateLogger == nullptr) {
         throw cRuntimeError("StateLogger module not found in LearningModel.");
     }
 }
 
-// Method to get the position (coordinate) from the SimpleRLMobility module
-Coord LearningModel::getCoord() {
+SimpleRLMobility* LearningModel::getMobilityModule() {
     // Fetch the mobility module, which is the parent of LearningModel
     cModule* mobilityModule = getParentModule(); // mobility is the parent of LearningModel
     if (!mobilityModule || strcmp(mobilityModule->getName(), "mobility") != 0) {
         throw cRuntimeError("The parent module is not the expected 'mobility' module.");
     }
 
-    // Verify that the mobility module implements the IMobility interface
-    inet::IMobility* mobility = check_and_cast<inet::IMobility*>(mobilityModule);
+    // Verify that the mobility module is an instance of SimpleRLMobility
+    SimpleRLMobility* mobility = check_and_cast<SimpleRLMobility*>(mobilityModule);
     if (!mobility) {
-        throw cRuntimeError("Failed to cast the mobility module to IMobility.");
+        throw cRuntimeError("Failed to cast the mobility module to SimpleRLMobility.");
     }
-
-    // Return the current position of the mobility module
-    return mobility->getCurrentPosition();
-    /*
-    return Coord(0, 0, 0);
-    */
+    return mobility;
 }
 
 
-void LearningModel::logPacketInfo(double rssi, double snir, int nReceivedPackets, simtime_t timestamp) {
+// Method to get the position (coordinate) from the SimpleRLMobility module
+Coord LearningModel::getCoord() {
+    // Fetch the mobility module, which is the parent of LearningModel
+    SimpleRLMobility* mobility = getMobilityModule();
+    // Return the current position of the mobility module
+    return mobility->getCurrentPosition();
+
+}
+
+
+void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp) {
     currentState.latestPacketRSSI = rssi;
     currentState.latestPacketSNIR = snir;
     currentState.latestPacketTimestamp = timestamp;
@@ -175,14 +178,33 @@ void LearningModel::logPacketInfo(double rssi, double snir, int nReceivedPackets
 }
 
 int LearningModel::getReward() {
-    static int lastStateNumberOfPackets = 0;
-    int reward = currentState.numReceivedPackets - lastStateNumberOfPackets;
+    static double lastStateNumberOfPackets = 0.0;
+    double reward = (currentState.numReceivedPackets - lastStateNumberOfPackets) * 10;
     lastStateNumberOfPackets = currentState.numReceivedPackets;
+
+    if (getMobilityModule()->isNewGridPosition()) {
+        EV << "New grid!" << omnetpp::endl;
+        reward += 1;
+    }
+
     return reward;
 }
 
+InputState LearningModel::normalizeInputState(InputState state) {
+    InputState normalizedState;
+    normalizedState.latestPacketRSSI = state.latestPacketRSSI / 255.0;
+    normalizedState.latestPacketSNIR = state.latestPacketSNIR / 100.0;
+    normalizedState.latestPacketTimestamp = state.latestPacketTimestamp.dbl() / (60 * 60 * 24.0); // one day in seconds
+    normalizedState.numReceivedPackets = (state.numReceivedPackets) / (86400.0 / 500.0) * 2.0; //
+    normalizedState.currentTimestamp = state.currentTimestamp.dbl() / (60 * 60 * 24.0);;
+    normalizedState.coord.x = state.coord.x / 3000.0;
+    return normalizedState;
+}
+
+
 int LearningModel::pollModel()
 {
+
     // get remaining state info:
     currentState.currentTimestamp = simTime();
     currentState.coord = getCoord();
@@ -192,8 +214,11 @@ int LearningModel::pollModel()
     if (!stateLogger) {
         fetchStateLoggerModule();
     }
-    int output = invokeModel();
-    stateLogger->logStep(currentState, output, reward);
+
+    InputState normalizedState = normalizeInputState(currentState);
+
+    int output = invokeModel(normalizedState);
+    stateLogger->logStep(normalizedState, output, reward);
 
     return output;
     /*
@@ -205,7 +230,7 @@ void LearningModel::PrintOutput(float x_value, float y_value) {
     EV_INFO << "x: " << x_value << ", y:" << y_value << omnetpp::endl;
 }
 
-int LearningModel::invokeModel() {
+int LearningModel::invokeModel(InputState state) {
 
     if (interpreter == nullptr) {
         EV << "Interpreter is not initialized." << omnetpp::endl;
@@ -230,16 +255,16 @@ int LearningModel::invokeModel() {
         return -1;
     }
 
-    // Insert input data for the model from currentState values
-    model_input->data.f[0] = currentState.latestPacketRSSI;
-    model_input->data.f[1] = currentState.latestPacketSNIR;
-    model_input->data.f[2] = currentState.latestPacketTimestamp.dbl();
-    model_input->data.f[3] = currentState.numReceivedPackets;
-    model_input->data.f[4] = currentState.currentTimestamp.dbl();
-    model_input->data.f[5] = currentState.coord.x;
-    model_input->data.f[6] = currentState.coord.y;
+    // Insert input data for the model from state values
+    model_input->data.f[0] = state.latestPacketRSSI;
+    model_input->data.f[1] = state.latestPacketSNIR;
+    model_input->data.f[2] = state.latestPacketTimestamp.dbl();
+    model_input->data.f[3] = state.numReceivedPackets;
+    model_input->data.f[4] = state.currentTimestamp.dbl();
+    model_input->data.f[5] = state.coord.x;
+    // model_input->data.f[6] = state.coord.y;
 
-    size_t num_inputs = 7;
+    size_t num_inputs = kInputWidth;
     // Place the quantized input in the model's input tensor
     for (size_t i = 0; i < num_inputs; ++i) { // Adjust based on your actual number of inputs
         model_input->data.f[i] = (model_input_buffer[i]);

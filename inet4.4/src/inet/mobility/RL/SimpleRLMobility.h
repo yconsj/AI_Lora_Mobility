@@ -10,6 +10,7 @@
 
 #include "inet/mobility/base/MovingMobilityBase.h"
 #include "inet/common/geometry/common/Coord.h"
+#include <vector>
 
 namespace inet {
 
@@ -22,10 +23,10 @@ namespace inet {
 class INET_API SimpleRLMobility : public MovingMobilityBase
 {
   public:
-    double mySpeed;
-    double directionX;
     virtual double getMaxSpeed() const override { return speed; }
     virtual const Coord& getCurrentPosition() override;
+    virtual const Coord& getInitialPosition();
+    virtual bool isNewGridPosition();
     SimpleRLMobility();
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -37,7 +38,7 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
     double speed;
     cMessage *pollModelTimer;
     simtime_t modelUpdateInterval;
-    virtual Coord getLoRaNodePosition(int index);
+    virtual const Coord& getLoRaNodePosition(int index);
     virtual void pollModel();
     virtual void schedulePollModelUpdate();
     virtual void handleSelfMessage(cMessage *message) override;
@@ -45,6 +46,10 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
     rad heading ;
     rad elevation;
     Coord direction;
+  private:
+    Coord initialPosition;
+    const int gridSize = 200;
+    std::vector<int> visitedGrids;
 
 };
 

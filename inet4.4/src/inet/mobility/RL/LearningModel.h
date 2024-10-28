@@ -19,13 +19,14 @@
 #include "inet/common/geometry/common/Coord.h"
 #include "StateLogger.h"
 #include "InputState.h"
+#include "SimpleRLMobility.h"
 
 namespace inet {
 
 
 class LearningModel : public omnetpp::cSimpleModule {
 public:
-    virtual void logPacketInfo(double rssi, double snir, int nReceivedPackets, simtime_t timestamp);
+    virtual void setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp);
 
     LearningModel();
     virtual ~LearningModel();
@@ -38,11 +39,16 @@ protected:
 
 private:
     void fetchStateLoggerModule();  // Function to fetch the StateLogger module
-    int invokeModel();
+    int invokeModel(InputState state);
     int getReward();
+    int gridSize;
     Coord getCoord();
     StateLogger* stateLogger;
     InputState currentState;
+    SimpleRLMobility* getMobilityModule();
+    InputState normalizeInputState(InputState state);
+
+
 };
 
 } /* namespace inet */
