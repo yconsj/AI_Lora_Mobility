@@ -1,7 +1,8 @@
 import subprocess
 import os
 import json
-
+import pygetwindow as gw
+import time
 class OmnetEnv:
     def __init__(self, config_file='config.json'):
         self.config = self.load_config(config_file)
@@ -52,18 +53,17 @@ class OmnetEnv:
         # Construct the command to run OMNeT++ simulation
         # Note flora dll after inet dll, in opp_run cmd
         command = (
-            f' "{self.mingwenv_cmd_path}" -mingw64 -c '
+            f'"{self.mingwenv_cmd_path}" -mingw64 -no-start -defterm -c '
             f'"cd {self.sim_path} && '
             f'source {self.setenv_script} && '
             f'opp_run --seed-set={episode_seed} -m -u Cmdenv -n ../../../src:../..:../../../../inet4.4/examples:../../../../inet4.4/showcases:../../../../inet4.4/src:../../../../inet4.4/tests/validation:../../../../inet4.4/tests/networks:../../../../inet4.4/tutorials:../../../../tflite-micro-arduino-examples -x inet.common.selfdoc:inet.linklayer.configurator.gatescheduling.z3:inet.emulation:inet.showcases.visualizer.osg:inet.examples.emulation:inet.showcases.emulation:inet.transportlayer.tcp_lwip:inet.applications.voipstream:inet.visualizer.osg:inet.examples.voipstream --image-path=../../../../inet4.4/images -l ../../../../inet4.4/src/libINET.dll -l ../../../src/libflora.dll omnetpp.ini "'
         )
 
-        print(f'Running command: {command}')
+        print(f'Running Omnet simulation command!')
         
         try:
             result = subprocess.run(command, shell=True, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print("Simulation completed successfully.")
-            print("Output:", result.stdout)
         except subprocess.CalledProcessError as e:
             print(f"Error running simulation: {e}")
             print("Standard Output:", e.stdout)
