@@ -151,18 +151,17 @@ int getSign(int num) {
 }
 
 bool SimpleRLMobility::isNewGridPosition() {
-
-    int distance = (getCurrentPosition().x - getInitialPosition().x);
+    int distance = getCurrentPosition().x - getInitialPosition().x;
     int sign = getSign(distance);
-    int currentGridSlice = distance % gridSize;
+    int currentGridSlice = (distance / gridSize) * sign;  // Incorporate direction with sign
+
     for (int i = 0; i < visitedGrids.size(); i++) {
         if (currentGridSlice == visitedGrids[i]) {
-            return false;
+            return false; // Already visited
         }
     }
-    visitedGrids.push_back(currentGridSlice);
+    visitedGrids.push_back(currentGridSlice);  // Mark as visited
     return true;
-
 }
 
 
