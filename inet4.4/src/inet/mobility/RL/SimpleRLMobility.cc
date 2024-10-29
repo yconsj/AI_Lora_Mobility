@@ -34,7 +34,7 @@ void SimpleRLMobility::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         speed = par("speed");
         stationary = (speed == 0);
-        initialPosition = lastPosition;
+
         heading = deg(fmod(par("initialMovementHeading").doubleValue(), 360));
         elevation = deg(fmod(par("initialMovementElevation").doubleValue(), 360));
         direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
@@ -46,6 +46,9 @@ void SimpleRLMobility::initialize(int stage)
         simtime_t firstModelUpdate = 0.0;
         scheduleAt(firstModelUpdate, pollModelTimer); // schedule a model update for time 0.0;
         //schedulePollModelUpdate();
+    }
+    if (stage == INITSTAGE_SINGLE_MOBILITY) {
+        initialPosition = lastPosition;
     }
 }
 
@@ -151,10 +154,10 @@ int getSign(int num) {
 }
 
 bool SimpleRLMobility::isNewGridPosition() {
-    int distance = getCurrentPosition().x - getInitialPosition().x;
-    int sign = getSign(distance);
-    int currentGridSlice = (distance / gridSize) * sign;  // Incorporate direction with sign
-
+    float distance = getCurrentPosition().x - getInitialPosition().x;
+    int currentGridSlice = (distance / (float)gridSize);  // Incorporate direction with sign
+    EV << "currentX : " << getCurrentPosition().x << ", initialX : " << getInitialPosition().x << omnetpp::endl;
+    EV << "grid: " << currentGridSlice << omnetpp::endl;
     for (int i = 0; i < visitedGrids.size(); i++) {
         if (currentGridSlice == visitedGrids[i]) {
             return false; // Already visited
