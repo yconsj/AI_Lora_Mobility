@@ -1,6 +1,5 @@
 # Custom ignores
 flora/src/libflora.def
-
 inet4.4/out/clang-release/src/libINET.def
 inet4.4/src/libINET.def
 inet4.4/out/clang-release/src/.last-copts
@@ -8,7 +7,16 @@ inet4.4/out/clang-release/src/inet/
 inet4.4/src/inet/opp_defines.h
 inet4.4/src/Makefile
 inet4.4/.settings/
- python_scripts/__pycache__/
+
+# modelfiles and training data:
+flora/simulations/scenarios/basecase/logFile.txt
+python_scripts/g_model
+inet4.4/src/inet/mobility/RL/modelfiles/gen_model.cc
+inet4.4/src/inet/mobility/RL/modelfiles/policy_net_model.h
+
+
+
+python_scripts/__pycache__/
 python_scripts/.idea/
 *.pyc
 
