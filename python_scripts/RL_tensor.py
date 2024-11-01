@@ -1,14 +1,11 @@
 import numpy as np
 import tensorflow as tf
-import matplotlib
 from sim_runner import OmnetEnv
 from tf_exporter import tf_export
 import ast
-import re
 import os
 import json
 import matplotlib.pyplot as plt
-import pandas as pd
 
 
 class PolicyNetwork(tf.keras.Model):
@@ -16,7 +13,11 @@ class PolicyNetwork(tf.keras.Model):
         super(PolicyNetwork, self).__init__()
         self.output_dim = output_dim
         self.input_dim = input_dim
-        self.fc1 = tf.keras.layers.Dense(64, activation='relu', input_shape=(input_dim,),
+
+        # Batch Normalization layer for input
+        self.bn_input = tf.keras.layers.BatchNormalization(input_shape=(input_dim,))
+
+        self.fc1 = tf.keras.layers.Dense(64, activation='relu',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
                                          # Initialize weights to zeros
                                          bias_initializer=tf.keras.initializers.GlorotUniform())  # Initialize biases to zeros)
@@ -31,7 +32,14 @@ class PolicyNetwork(tf.keras.Model):
                                          bias_initializer=tf.keras.initializers.GlorotUniform())  # Initialize biases to zeros
 
     def call(self, x):
-        return self.fc3(self.fc2(self.fc1(x)))
+        # Apply batch normalization to the input
+        x = self.bn_input(x)  # Normalize the input
+
+        # Apply the first dense layer followed by batch normalization and activation
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.fc3(x)
+        return x
 
     def get_concrete_function(self):
         # Create a concrete function for the model
@@ -59,7 +67,11 @@ def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode
     first_episode_positions = [state[-1] for state in log_state[first_episode]]
     last_episode_positions = [state[-1] for state in log_state[last_episode]]
     time_steps_first = list(range(len(first_episode_positions)))
-    time_steps_last = list(range(len(last_episode_positions)))
+
+    # Introduce a horizontal offset for the last episode
+    offset = 0.5  # Adjust this value for more or less offset
+    time_steps_last = [t + offset for t in range(len(last_episode_positions))]
+
 
     ax1.plot(time_steps_first, first_episode_positions, label="X Position (First Episode)", color="blue", alpha=0.7)
     ax1.plot(time_steps_last, last_episode_positions, label="X Position (Last Episode)", color="red", alpha=0.7)
@@ -81,8 +93,8 @@ def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode
     time_steps_first_smoothed = list(range(len(smoothed_first)))
     time_steps_last_smoothed = list(range(len(smoothed_last)))
 
-    ax2.plot(time_steps_first_smoothed, smoothed_first, label="Smoothed Actions (First Episode)", color="cyan", alpha=0.7)
-    ax2.plot(time_steps_last_smoothed, smoothed_last, label="Smoothed Actions (Last Episode)", color="magenta", alpha=0.7)
+    ax2.plot(time_steps_first_smoothed, smoothed_first, label="Smoothed Actions (First Episode)", color="blue", alpha=0.7)
+    ax2.plot(time_steps_last_smoothed, smoothed_last, label="Smoothed Actions (Last Episode)", color="red", alpha=0.7)
     ax2.set_ylim(0, 1)  # Set y-axis limits from 0 to 1
     ax2.set_xlabel("Time Step")
     ax2.set_ylabel("Action Value")
@@ -99,6 +111,9 @@ def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode
     ax3.set_ylabel("Cumulative Reward")
     ax3.set_title("Cumulative Reward Over Episodes")
     ax3.legend()
+
+
+    # TODO: plot packets received over episodes vs stationary
 
     # Show both figures
     plt.show()
@@ -143,9 +158,6 @@ def reinforce(env, policy_net, optimizer, num_episodes):
 
         all_states_per_episode.append(states)
 
-        avg_action = sum(actions) / len(actions)
-        print(f"Episode {episode + 1} - Avg Action Taken: {avg_action}")
-
         state_tensor = tf.convert_to_tensor(states, dtype=tf.float32)
         actions_tensor = tf.convert_to_tensor(actions, dtype=tf.int32)
         returns = []
@@ -189,7 +201,7 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         # Update the policy
         grads = tape.gradient(total_loss, policy_net.trainable_variables)
         optimizer.apply_gradients(zip(grads, policy_net.trainable_variables))
-      
+
         print("exporting model")
         concrete_func = policy_net.get_concrete_function()
         config = load_config("config.json")
@@ -211,7 +223,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 100  # Number of episodes to train
+    num_episodes = 1  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 
