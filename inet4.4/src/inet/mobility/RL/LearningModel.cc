@@ -66,8 +66,9 @@ const int kInputWidth = 6; // Change based on your features
 const int kOutputHeight = 1;
 const int kOutputWidth = 2; // Change based on your model output
 
-constexpr int kTensorArenaSize = 2000;
+constexpr int kTensorArenaSize = const_g_model_length;
 // Keep aligned to 16 bytes for CMSIS
+
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
 

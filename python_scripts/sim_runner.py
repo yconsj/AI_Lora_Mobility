@@ -1,8 +1,6 @@
 import subprocess
 import os
 import json
-import pygetwindow as gw
-import time
 class OmnetEnv:
     def __init__(self, config_file='config.json'):
         self.config = self.load_config(config_file)

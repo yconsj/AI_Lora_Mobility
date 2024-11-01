@@ -8,6 +8,7 @@ import re
 import os
 import json
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 class PolicyNetwork(tf.keras.Model):
@@ -15,18 +16,22 @@ class PolicyNetwork(tf.keras.Model):
         super(PolicyNetwork, self).__init__()
         self.output_dim = output_dim
         self.input_dim = input_dim
-        self.fc1 = tf.keras.layers.Dense(128, activation='relu', input_shape=(input_dim,),
+        self.fc1 = tf.keras.layers.Dense(64, activation='relu', input_shape=(input_dim,),
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
                                          # Initialize weights to zeros
                                          bias_initializer=tf.keras.initializers.GlorotUniform())  # Initialize biases to zeros)
-        self.fc2 = tf.keras.layers.Dense(output_dim,
+        self.fc2 = tf.keras.layers.Dense(128, activation='relu',
+                                         kernel_initializer=tf.keras.initializers.GlorotUniform(),
+                                         # Initialize weights to zeros
+                                         bias_initializer=tf.keras.initializers.GlorotUniform())
+        self.fc3 = tf.keras.layers.Dense(output_dim,
                                          activation='softmax',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
                                          # Initialize weights to zeros
                                          bias_initializer=tf.keras.initializers.GlorotUniform())  # Initialize biases to zeros
 
     def call(self, x):
-        return self.fc2(self.fc1(x))
+        return self.fc3(self.fc2(self.fc1(x)))
 
     def get_concrete_function(self):
         # Create a concrete function for the model
@@ -46,25 +51,56 @@ def load_config(config_file):
         return json.load(f)
 
 
-def plot_rewards(show_result=False, window=10):
-    fig, ax1 = plt.subplots(figsize=(10, 5))
+def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode=0, last_episode=-1, window_size=100):
+    # --- First Figure with Two Subplots ---
+    fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
 
-    # Plot rewards on primary y-axis
-    label = "Episode Rewards"
-    ax1.plot(reward_sums, label=label, color='b')
-    ax1.set_xlabel("Episode")
-    ax1.set_ylabel("Cumulative Reward", color='b')
-    ax1.tick_params(axis='y', labelcolor='b')
+    # Left Subplot: X-Position Over Time for First and Last Episode
+    first_episode_positions = [state[-1] for state in log_state[first_episode]]
+    last_episode_positions = [state[-1] for state in log_state[last_episode]]
+    time_steps_first = list(range(len(first_episode_positions)))
+    time_steps_last = list(range(len(last_episode_positions)))
 
-    # Plot average action on secondary y-axis
-    avg_actions = [sum(episode_actions) / len(episode_actions) for episode_actions in all_actions_per_episode]
-    ax2 = ax1.twinx()
-    ax2.plot(avg_actions, label="Average Action", color='g')
-    ax2.set_ylabel("Average Action", color='g')
-    ax2.tick_params(axis='y', labelcolor='g')
+    ax1.plot(time_steps_first, first_episode_positions, label="X Position (First Episode)", color="blue", alpha=0.7)
+    ax1.plot(time_steps_last, last_episode_positions, label="X Position (Last Episode)", color="red", alpha=0.7)
+    ax1.set_ylim(0, 1)  # Set y-axis limits from 0 to 1
+    ax1.set_xlabel("Time Step")
+    ax1.set_ylabel("X Position")
+    ax1.set_title("X Position Over Time")
+    ax1.legend()
 
-    fig.suptitle("Cumulative Reward and Average Action per Episode")
-    fig.tight_layout()
+    # Right Subplot: Smoothed Actions for First and Last Episode
+    first_episode_actions = all_actions_per_episode[first_episode]
+    last_episode_actions = all_actions_per_episode[last_episode]
+
+    # Compute the moving average (smoothing)
+    smoothed_first = np.convolve(first_episode_actions, np.ones(window_size) / window_size, mode='valid')
+    smoothed_last = np.convolve(last_episode_actions, np.ones(window_size) / window_size, mode='valid')
+
+    # Time steps for smoothed actions
+    time_steps_first_smoothed = list(range(len(smoothed_first)))
+    time_steps_last_smoothed = list(range(len(smoothed_last)))
+
+    ax2.plot(time_steps_first_smoothed, smoothed_first, label="Smoothed Actions (First Episode)", color="cyan", alpha=0.7)
+    ax2.plot(time_steps_last_smoothed, smoothed_last, label="Smoothed Actions (Last Episode)", color="magenta", alpha=0.7)
+    ax2.set_ylim(0, 1)  # Set y-axis limits from 0 to 1
+    ax2.set_xlabel("Time Step")
+    ax2.set_ylabel("Action Value")
+    ax2.set_title("Smoothed Actions Over Time")
+    ax2.legend()
+
+    # Adjust layout
+    fig1.tight_layout()
+
+    # --- Second Figure: Rewards Over Time ---
+    fig2, ax3 = plt.subplots(figsize=(10, 5))
+    ax3.plot(reward_sums, color='b', alpha=0.7, label="Episode Rewards")
+    ax3.set_xlabel("Episode")
+    ax3.set_ylabel("Cumulative Reward")
+    ax3.set_title("Cumulative Reward Over Episodes")
+    ax3.legend()
+
+    # Show both figures
     plt.show()
 
 
@@ -97,6 +133,7 @@ def read_log():
 
 reward_sums = []
 all_actions_per_episode = []
+all_states_per_episode = []
 
 
 def reinforce(env, policy_net, optimizer, num_episodes):
@@ -104,7 +141,9 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         env.run_simulation(episode)
         states, actions, rewards = read_log()
 
-        avg_action = sum(actions) / len(actions)  # Calculate average action for this episode
+        all_states_per_episode.append(states)
+
+        avg_action = sum(actions) / len(actions)
         print(f"Episode {episode + 1} - Avg Action Taken: {avg_action}")
 
         state_tensor = tf.convert_to_tensor(states, dtype=tf.float32)
@@ -118,6 +157,7 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         print("total rewards: " + str(sum(rewards)))
         reward_sums.append(sum(rewards))
         all_actions_per_episode.append(actions)  # Store actions for plotting avg action
+
 
         # plot_rewards(window=10)
 
@@ -149,8 +189,7 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         # Update the policy
         grads = tape.gradient(total_loss, policy_net.trainable_variables)
         optimizer.apply_gradients(zip(grads, policy_net.trainable_variables))
-        print(policy_net.fc2.get_weights())
-
+      
         print("exporting model")
         concrete_func = policy_net.get_concrete_function()
         config = load_config("config.json")
@@ -172,13 +211,12 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 200  # Number of episodes to train
+    num_episodes = 100  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 
     tf_export(concrete_func, export_model_path, 0)  # initial model
     reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
-    plot_rewards(show_result=True, window=10)
     print('Complete')
 
     # Example input (make sure it matches the input shape of your model)
@@ -196,9 +234,10 @@ def main():
     print("Action1 probabilities:", action_probs1.numpy())
     print("Action2 probabilities:", action_probs2.numpy())
 
-    plt.ioff()
-    plt.show()
-
+    plot_training(log_state=all_states_per_episode,
+                  all_actions_per_episode=all_actions_per_episode,
+                  reward_sums=reward_sums,
+                  window_size=100)
 
 if __name__ == "__main__":
     main()
