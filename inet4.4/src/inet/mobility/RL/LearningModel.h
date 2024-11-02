@@ -20,6 +20,7 @@
 #include "StateLogger.h"
 #include "InputState.h"
 #include "SimpleRLMobility.h"
+#include <vector>
 
 namespace inet {
 
@@ -47,7 +48,8 @@ private:
     InputState currentState;
     SimpleRLMobility* getMobilityModule();
     InputState normalizeInputState(InputState state);
-
+    double lastStateNumberOfPackets;
+    //bool ReadModelFromFile(const char* filename, std::vector<uint8_t>& model_data);
 
 };
 

@@ -74,14 +74,16 @@ alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
 LearningModel::LearningModel()
 {
-    // stub
+    lastStateNumberOfPackets = 0.0;
+    StateLogger* stateLogger = nullptr;
+    currentState = InputState();
 }
+
 
 void LearningModel::initialize()
 {
-
     EV_TRACE << "initializing LearningModel " << omnetpp::endl;
-
+    fetchStateLoggerModule();
 
     // Map the model into a usable data structure. This doesn't involve any
     // copying or parsing, it's a very lightweight operation.
@@ -136,6 +138,9 @@ void LearningModel::initialize()
 
 }
 
+
+
+
 void LearningModel::fetchStateLoggerModule() {
     // Fetch the StateLogger module as a submodule of LearningModel
     stateLogger = check_and_cast<StateLogger*>(getSubmodule("stateLogger"));
@@ -177,8 +182,8 @@ void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPack
     currentState.numReceivedPackets = nReceivedPackets;
 }
 
+
 int LearningModel::getReward() {
-    static double lastStateNumberOfPackets = 0.0;
     double reward = (currentState.numReceivedPackets - lastStateNumberOfPackets) * 10;
     lastStateNumberOfPackets = currentState.numReceivedPackets;
 
@@ -186,12 +191,14 @@ int LearningModel::getReward() {
         EV << "New grid!" << omnetpp::endl;
         reward += 1;
     }
-
     return reward;
 }
 
+
 InputState LearningModel::normalizeInputState(InputState state) {
-    InputState normalizedState;
+    // TODO: reevaluate this normalization.
+
+    InputState normalizedState = InputState();
     normalizedState.latestPacketRSSI = state.latestPacketRSSI / 255.0;
     normalizedState.latestPacketSNIR = state.latestPacketSNIR / 100.0;
     normalizedState.latestPacketTimestamp = state.latestPacketTimestamp.dbl() / (60 * 60 * 24.0); // one day in seconds
@@ -204,26 +211,25 @@ InputState LearningModel::normalizeInputState(InputState state) {
 
 int LearningModel::pollModel()
 {
-
     // get remaining state info:
     currentState.currentTimestamp = simTime();
     currentState.coord = getCoord();
 
+
     // Ensure that StateLogger is fetched and initialized
     int reward = getReward();
-    if (!stateLogger) {
-        fetchStateLoggerModule();
-    }
 
     InputState normalizedState = normalizeInputState(currentState);
 
     int output = invokeModel(normalizedState);
-    stateLogger->logStep(normalizedState, output, reward);
+    if (stateLogger != nullptr) {
+        stateLogger->logStep(normalizedState, output, reward);
+    }
+    else {
+        throw cRuntimeError("Failed to fetch StateLogger in LearningModel.");
+    }
 
     return output;
-    /*
-    return 2;
-    */
 }
 
 void LearningModel::PrintOutput(float x_value, float y_value) {
@@ -254,6 +260,9 @@ int LearningModel::invokeModel(InputState state) {
         EV << "Model output size is zero or negative." << omnetpp::endl;
         return -1;
     }
+    return 0;
+
+
 
 
     // Insert input data for the model from state values
@@ -272,12 +281,16 @@ int LearningModel::invokeModel(InputState state) {
         EV << "model_input->data.f"  << model_input->data.f[i] << omnetpp::endl;
     }
 
+
     // Run the inference with the model
+    /*
     TfLiteStatus invoke_status = interpreter->Invoke();
     if (invoke_status != kTfLiteOk) {
         EV << "Invoke failed" << omnetpp::endl;
         return -1;
     }
+     */
+
 
     // Obtain the quantized output from model's output tensor
     size_t num_outputs = model_output->bytes / sizeof(float); // Adjust based on the number of output elements
