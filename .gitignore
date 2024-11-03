@@ -13,6 +13,7 @@ flora/simulations/scenarios/basecase/logFile.txt
 flora/simulations/scenarios/basecase/logFile_*.txt
 python_scripts/g_model
 inet4.4/src/inet/mobility/RL/modelfiles/gen_model.cc
+inet4.4/src/inet/mobility/RL/modelfiles/gen_model.tflite´
 inet4.4/src/inet/mobility/RL/modelfiles/policy_net_model.h
 
 
