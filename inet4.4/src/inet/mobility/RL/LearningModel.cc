@@ -71,27 +71,35 @@ constexpr int kTensorArenaSize = const_g_model_length;
 
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
-
 LearningModel::LearningModel()
 {
     lastStateNumberOfPackets = 0.0;
-    StateLogger* stateLogger = nullptr;
     currentState = InputState();
+    model = nullptr;
+    std::vector<uint8_t> model_data(const_g_model_length, 0);
 }
 
 
 void LearningModel::initialize()
 {
     EV_TRACE << "initializing LearningModel " << omnetpp::endl;
-    fetchStateLoggerModule();
 
-    // Map the model into a usable data structure. This doesn't involve any
-    // copying or parsing, it's a very lightweight operation.
-    model = tflite::GetModel(g_model);
+
+    // Load the model data from a file
+    model_data = ReadModelFromFile(model_file_path);
+
+    model = tflite::GetModel(model_data.data());
+
+    // After loading the model
+    if (model == nullptr) {
+        throw cRuntimeError("LearningModel.cc:Failed to load model.");
+    } else {
+        //EV << "Model loaded successfully. Number of subgraphs: " << model->subgraphs()->size() << omnetpp::endl;
+    }
 
     if (model->version() != TFLITE_SCHEMA_VERSION) {
-      EV << "Model provided is schema version" << model->version() << " not equal to supported version " << TFLITE_SCHEMA_VERSION << omnetpp::endl;
-      return;
+      //EV << "Model provided is schema version" << model->version() << " not equal to supported version " << TFLITE_SCHEMA_VERSION << omnetpp::endl;
+      throw cRuntimeError("LearningModel.cc: Model provided's schema version is not equal to supported version. ");
     }
 
     // This pulls in all the operation implementations we need.
@@ -105,12 +113,10 @@ void LearningModel::initialize()
 
     // TODO: Might need to Validate input tensor dimensions for multi-dimensional input
     // TODO: And also might need to validate output tensor dimensions.
-
     // Allocate memory from the tensor_arena for the model's tensors.
     TfLiteStatus allocate_status = interpreter->AllocateTensors();
     if (allocate_status != kTfLiteOk) {
-      EV << "AllocateTensors() failed" << omnetpp::endl;
-      return;
+      throw cRuntimeError("LearningModel.cc: AllocateTensors() failed");
     }
 
     // Retrieve input tensor
@@ -119,9 +125,7 @@ void LearningModel::initialize()
        (model_input->dims->data[0] != kInputHeight) ||
        (model_input->dims->data[1] != kInputWidth) ||
        (model_input->type != kTfLiteFloat32)) {
-       // Handle incorrect input tensor parameters
-       EV << "wrong input dimensions" << omnetpp::endl;
-       //return;
+       throw cRuntimeError("LearningModel.cc: wrong input dimensions");
    }
    model_input_buffer = model_input->data.f; // Pointer to input data
 
@@ -131,22 +135,19 @@ void LearningModel::initialize()
        (model_output->dims->data[0] != kOutputHeight) ||
        (model_output->dims->data[1] != kOutputWidth) ||
        (model_output->type != kTfLiteFloat32)) {
-       // Handle incorrect output tensor parameters
-       EV << "wrong output dimensions" << omnetpp::endl;
-       //return;
+       throw cRuntimeError("LearningModel.cc: wrong output dimensions");
    }
 
 }
 
 
-
-
-void LearningModel::fetchStateLoggerModule() {
+StateLogger* LearningModel::getStateLoggerModule() {
     // Fetch the StateLogger module as a submodule of LearningModel
-    stateLogger = check_and_cast<StateLogger*>(getSubmodule("stateLogger"));
+    StateLogger* stateLogger = check_and_cast<StateLogger*>(getSubmodule("stateLogger"));
     if (stateLogger == nullptr) {
         throw cRuntimeError("StateLogger module not found in LearningModel.");
     }
+    return stateLogger;
 }
 
 SimpleRLMobility* LearningModel::getMobilityModule() {
@@ -164,7 +165,6 @@ SimpleRLMobility* LearningModel::getMobilityModule() {
     return mobility;
 }
 
-
 // Method to get the position (coordinate) from the SimpleRLMobility module
 Coord LearningModel::getCoord() {
     // Fetch the mobility module, which is the parent of LearningModel
@@ -173,6 +173,37 @@ Coord LearningModel::getCoord() {
     return mobility->getCurrentPosition();
 
 }
+
+// Function to read the model from a file
+std::vector<uint8_t> LearningModel::ReadModelFromFile(const char* filename) {
+    std::vector<uint8_t> model_data;
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        std::cerr << "Error opening model file: " << filename << std::endl;
+        throw cRuntimeError("LearningModel.cc: Error reading the model from file. ");
+    }
+
+    // Read the entire file into the model_data vector
+    file.seekg(0, std::ios::end);
+    size_t file_size = file.tellg();
+    if (file_size == -1) {
+        throw cRuntimeError("LearningModel.cc: Error getting file size.");
+    }
+
+    model_data.resize(file_size);
+    file.seekg(0, std::ios::beg);
+    file.read(reinterpret_cast<char*>(model_data.data()), file_size);
+    // Check if the read was successful
+     if (!file) {
+         std::cerr << "Error reading model data from file: " << filename << std::endl;
+         throw cRuntimeError("LearningModel.cc: Error reading the model data from file.");
+     }
+
+    return model_data;
+}
+
+
+
 
 
 void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp) {
@@ -222,24 +253,20 @@ int LearningModel::pollModel()
     InputState normalizedState = normalizeInputState(currentState);
 
     int output = invokeModel(normalizedState);
-    if (stateLogger != nullptr) {
-        stateLogger->logStep(normalizedState, output, reward);
-    }
-    else {
-        throw cRuntimeError("Failed to fetch StateLogger in LearningModel.");
-    }
+    StateLogger* stateLogger = getStateLoggerModule();
+    stateLogger->logStep(normalizedState, output, reward);
 
     return output;
-}
 
-void LearningModel::PrintOutput(float x_value, float y_value) {
-    EV_INFO << "x: " << x_value << ", y:" << y_value << omnetpp::endl;
 }
 
 int LearningModel::invokeModel(InputState state) {
-
     if (interpreter == nullptr) {
         EV << "Interpreter is not initialized." << omnetpp::endl;
+        return -1;
+    }
+    if (model == nullptr) {
+        EV << "Model is not initialized." << omnetpp::endl;
         return -1;
     }
     if (model_input == nullptr) {
@@ -260,10 +287,13 @@ int LearningModel::invokeModel(InputState state) {
         EV << "Model output size is zero or negative." << omnetpp::endl;
         return -1;
     }
-    return 0;
-
-
-
+    /*
+    unsigned long model_sum = 0;
+    for (int i = 0; i < g_model_len; i++) {
+        model_sum += g_model[i] & 0x0F; // get last 4 bytes.
+    }
+    EV << "debug msg. model_4_bit_per_byte_sum:" << model_sum << omnetpp::endl;
+     */
 
     // Insert input data for the model from state values
     model_input->data.f[0] = state.latestPacketRSSI;
@@ -283,18 +313,16 @@ int LearningModel::invokeModel(InputState state) {
 
 
     // Run the inference with the model
-    /*
+
     TfLiteStatus invoke_status = interpreter->Invoke();
     if (invoke_status != kTfLiteOk) {
         EV << "Invoke failed" << omnetpp::endl;
         return -1;
     }
-     */
 
 
     // Obtain the quantized output from model's output tensor
     size_t num_outputs = model_output->bytes / sizeof(float); // Adjust based on the number of output elements
-    // EV << "output bytes" <<num_outputs << omnetpp::endl;
 
     // Sample one output based on the weights
     // model uses softmax function on output, so it is already weighted and sums to 1.
@@ -311,18 +339,11 @@ int LearningModel::invokeModel(InputState state) {
     EV << "Selected output index: " << selected_index << " with weight: " << model_output->data.f[selected_index] << "\n";
 
     return selected_index; // Return the selected index
-
 }
-
-
-
 
 
 LearningModel::~LearningModel() {
     // TODO Auto-generated destructor stub
 }
-
-
-
 
 } /* namespace inet */

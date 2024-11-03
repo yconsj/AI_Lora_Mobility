@@ -51,7 +51,6 @@ class MobileGatewayLoRaApp : public cSimpleModule, public cListener
     void setSocketOptions();
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
-
     void logPacketInfoToModel(double rssi, double snir, double nReceivedPackets, simtime_t timestamp);
 
   public:

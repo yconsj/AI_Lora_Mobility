@@ -8,14 +8,19 @@ import json
 import matplotlib.pyplot as plt
 
 
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppresses INFO and WARNING logs from TensorFlow
+# TODO: add function to run the final trained model on N seeds.
+
+
 class PolicyNetwork(tf.keras.Model):
     def __init__(self, input_dim, output_dim):
         super(PolicyNetwork, self).__init__()
         self.output_dim = output_dim
         self.input_dim = input_dim
 
+
         # Batch Normalization layer for input
-        self.bn_input = tf.keras.layers.BatchNormalization(input_shape=(input_dim,))
+        self.bn_input = tf.keras.layers.BatchNormalization() #input_shape=(input_dim,)
 
         self.fc1 = tf.keras.layers.Dense(64, activation='relu',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
@@ -31,11 +36,14 @@ class PolicyNetwork(tf.keras.Model):
                                          # Initialize weights to zeros
                                          bias_initializer=tf.keras.initializers.GlorotUniform())  # Initialize biases to zeros
 
-    def call(self, x):
-        # Apply batch normalization to the input
-        x = self.bn_input(x)  # Normalize the input
+        # Build the model with the specified input shape
+        # self.build(input_shape=(None, input_dim))
 
-        # Apply the first dense layer followed by batch normalization and activation
+    def call(self, x ):
+        # Apply Batch Normalization
+        x = self.bn_input(x)
+
+        # Forward pass through the dense layers
         x = self.fc1(x)
         x = self.fc2(x)
         x = self.fc3(x)
@@ -59,7 +67,7 @@ def load_config(config_file):
         return json.load(f)
 
 
-def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode=0, last_episode=-1, window_size=100):
+def plot_training(log_state, mv_actions_per_episode, mv_reward_sums, first_episode=0, last_episode=-1, window_size=100):
     # --- First Figure with Two Subplots ---
     fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
 
@@ -72,7 +80,6 @@ def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode
     offset = 0.5  # Adjust this value for more or less offset
     time_steps_last = [t + offset for t in range(len(last_episode_positions))]
 
-
     ax1.plot(time_steps_first, first_episode_positions, label="X Position (First Episode)", color="blue", alpha=0.7)
     ax1.plot(time_steps_last, last_episode_positions, label="X Position (Last Episode)", color="red", alpha=0.7)
     ax1.set_ylim(0, 1)  # Set y-axis limits from 0 to 1
@@ -82,8 +89,8 @@ def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode
     ax1.legend()
 
     # Right Subplot: Smoothed Actions for First and Last Episode
-    first_episode_actions = all_actions_per_episode[first_episode]
-    last_episode_actions = all_actions_per_episode[last_episode]
+    first_episode_actions = mv_actions_per_episode[first_episode]
+    last_episode_actions = mv_actions_per_episode[last_episode]
 
     # Compute the moving average (smoothing)
     smoothed_first = np.convolve(first_episode_actions, np.ones(window_size) / window_size, mode='valid')
@@ -93,7 +100,8 @@ def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode
     time_steps_first_smoothed = list(range(len(smoothed_first)))
     time_steps_last_smoothed = list(range(len(smoothed_last)))
 
-    ax2.plot(time_steps_first_smoothed, smoothed_first, label="Smoothed Actions (First Episode)", color="blue", alpha=0.7)
+    ax2.plot(time_steps_first_smoothed, smoothed_first, label="Smoothed Actions (First Episode)", color="blue",
+             alpha=0.7)
     ax2.plot(time_steps_last_smoothed, smoothed_last, label="Smoothed Actions (Last Episode)", color="red", alpha=0.7)
     ax2.set_ylim(0, 1)  # Set y-axis limits from 0 to 1
     ax2.set_xlabel("Time Step")
@@ -106,12 +114,11 @@ def plot_training(log_state, all_actions_per_episode, reward_sums, first_episode
 
     # --- Second Figure: Rewards Over Time ---
     fig2, ax3 = plt.subplots(figsize=(10, 5))
-    ax3.plot(reward_sums, color='b', alpha=0.7, label="Episode Rewards")
+    ax3.plot(mv_reward_sums, color='b', alpha=0.7, label="Episode Rewards")
     ax3.set_xlabel("Episode")
     ax3.set_ylabel("Cumulative Reward")
     ax3.set_title("Cumulative Reward Over Episodes")
     ax3.legend()
-
 
     # TODO: plot packets received over episodes vs stationary
 
@@ -170,9 +177,6 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         reward_sums.append(sum(rewards))
         all_actions_per_episode.append(actions)  # Store actions for plotting avg action
 
-
-        # plot_rewards(window=10)
-
         # Convert lists to tensors
         returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
 
@@ -201,9 +205,8 @@ def reinforce(env, policy_net, optimizer, num_episodes):
         # Update the policy
         grads = tape.gradient(total_loss, policy_net.trainable_variables)
         optimizer.apply_gradients(zip(grads, policy_net.trainable_variables))
-
-        print("exporting model")
         concrete_func = policy_net.get_concrete_function()
+        print("exporting model")
         config = load_config("config.json")
         gen_model = config['model_path']
         tf_export(concrete_func, gen_model, episode + 1)
@@ -223,7 +226,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 1  # Number of episodes to train
+    num_episodes = 200 # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 
@@ -233,23 +236,12 @@ def main():
 
     # Example input (make sure it matches the input shape of your model)
     # rrsi, snir, timestamp__lastpacket, total_packets, time, x,y
-    input1 = [0, 0, 0, 0, 0.1 / 86400, 500 / 3000]
-    input2 = [-133.837 / 255, 2.07141 / 100, 672.22626462552 / 86400, 2 / 100, 970.3 / 86400, 458.555 / 3000]
 
-    example_input1 = tf.constant([input1], dtype=tf.float32)  # Example state with 4 features
-    example_input2 = tf.constant([input2], dtype=tf.float32)  # Example state with 4 features
-    # Define the mean and std for each input, calculated from past observations
-    # Run the network
-    action_probs1 = policy_net(example_input1)
-    action_probs2 = policy_net(example_input2)
-    # Print the output probabilities
-    print("Action1 probabilities:", action_probs1.numpy())
-    print("Action2 probabilities:", action_probs2.numpy())
-
-    plot_training(log_state=all_states_per_episode,
-                  all_actions_per_episode=all_actions_per_episode,
-                  reward_sums=reward_sums,
-                  window_size=100)
+    if num_episodes > 0:
+        plot_training(log_state=all_states_per_episode,
+                      mv_actions_per_episode=all_actions_per_episode,
+                      mv_reward_sums=reward_sums,
+                      window_size=100)
 
 if __name__ == "__main__":
     main()

@@ -14,8 +14,6 @@
 #include "inet/common/geometry/common/Coord.h"
 
 #include "LearningModel.h"
-//#include <stdio.h>
-//#include <string.h>
 
 namespace inet {
 
@@ -25,6 +23,7 @@ SimpleRLMobility::SimpleRLMobility()
 {
     pollModelTimer = nullptr;
     modelUpdateInterval = 0;
+    initialPosition = Coord(NAN, NAN, NAN);
 }
 
 void SimpleRLMobility::initialize(int stage)
@@ -135,9 +134,7 @@ void SimpleRLMobility::move()
 {
     double elapsedTime = (simTime() - lastUpdate).dbl();
 
-    //lastVelocity = direction * speed;
     lastPosition += lastVelocity * elapsedTime;
-    // mySpeed *= 1.5;
 
     // do something if we reach the wall
     Coord dummyCoord;

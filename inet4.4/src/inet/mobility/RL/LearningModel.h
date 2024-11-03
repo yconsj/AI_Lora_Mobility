@@ -32,24 +32,22 @@ public:
     LearningModel();
     virtual ~LearningModel();
     virtual int pollModel();
-    void PrintOutput(float x, float y);
 
 protected:
     // The following redefined virtual function holds the algorithm.
     virtual void initialize() override;
 
 private:
-    void fetchStateLoggerModule();  // Function to fetch the StateLogger module
+    StateLogger* getStateLoggerModule();  // Function to fetch the StateLogger module. should not be virtual
     int invokeModel(InputState state);
     int getReward();
-    int gridSize;
+    std::vector<uint8_t> model_data;
     Coord getCoord();
-    StateLogger* stateLogger;
     InputState currentState;
     SimpleRLMobility* getMobilityModule();
     InputState normalizeInputState(InputState state);
     double lastStateNumberOfPackets;
-    //bool ReadModelFromFile(const char* filename, std::vector<uint8_t>& model_data);
+    virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
 
 };
 

@@ -40,7 +40,6 @@ void MobileGatewayLoRaApp::initialize(int stage)
     } else if (stage == INITSTAGE_APPLICATION_LAYER) {
         startUDP();
         getSimulation()->getSystemModule()->subscribe("LoRa_AppPacketSent", this);
-        getSimulation()->getSystemModule()->subscribe("measurementSignal", this);
     }
 
 }

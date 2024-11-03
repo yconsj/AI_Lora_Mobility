@@ -26,15 +26,15 @@ public:
     StateLogger();
     virtual ~StateLogger();
     virtual void logStep(const InputState& inputState, int choice, double reward);
-
 protected:
     virtual void finish() override;
+    virtual void initialize() override;
 
 private:
     std::vector<InputState> inputStateArray;
     std::vector<int> choiceArray;
     std::vector<double> rewardArray;
-
+    int runnumber = -1;
     void writeToFile();
 
 };
