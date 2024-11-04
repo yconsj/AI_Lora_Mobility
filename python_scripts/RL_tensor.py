@@ -160,10 +160,10 @@ all_states_per_episode = []
 
 def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes, batch_size):
     for episode in range(num_episodes):
-        print(f"Running episode {episode} of {num_episodes}.")
+        print(f"Running episode {episode + 1} of {num_episodes}.")
         env.run_simulation(episode, batch_size)
+        accumulated_grads = [tf.zeros_like(var) for var in policy_net.trainable_variables]
 
-        total_loss=0
         for batch in range(batch_size):
             states, actions, rewards = read_log(batch, log_path)
 
@@ -205,11 +205,19 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
 
                 # Total loss with entropy regularization
                 total_loss = policy_loss + entropy_loss
+                grads = tape.gradient(total_loss, policy_net.trainable_variables)
+                # Accumulate gradients if they are not None
+                if grads is not None:
+                    for i in range(len(grads)):
+                        if grads[i] is not None:  # Check if the gradient is not None
+                            accumulated_grads[i] += grads[i]  # Accumulate gradients
+                        else:
+                            print(f"Warning: Gradient for variable {i} is None.")
 
-        # Update the policy
-        total_loss = total_loss / batch_size
-        grads = tape.gradient(total_loss, policy_net.trainable_variables)
-        optimizer.apply_gradients(zip(grads, policy_net.trainable_variables))
+        # Average gradients after processing all batches
+        for i in range(len(accumulated_grads)):
+            accumulated_grads[i] /= batch_size  # Average each accumulated gradient
+        optimizer.apply_gradients(zip(accumulated_grads, policy_net.trainable_variables))
         concrete_func = policy_net.get_concrete_function()
         print("exporting model")
         tf_export(concrete_func, gen_model_path, (episode * batch_size) + 1)
@@ -229,7 +237,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 1# Number of episodes to train
+    num_episodes = 4# Number of episodes to train
     num_batches = 2
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
