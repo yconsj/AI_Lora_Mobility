@@ -116,8 +116,8 @@ def plot_training(log_state, mv_actions_per_episode, mv_reward_sums, first_episo
     fig2, ax3 = plt.subplots(figsize=(10, 5))
     ax3.plot(mv_reward_sums, color='b', alpha=0.7, label="Episode Rewards")
     ax3.set_xlabel("Episode")
-    ax3.set_ylabel("Cumulative Reward")
-    ax3.set_title("Cumulative Reward Over Episodes")
+    ax3.set_ylabel("Sum of Immediate Reward")
+    ax3.set_title("Sums of Immediate Reward Over Episodes")
     ax3.legend()
 
     # TODO: plot packets received over episodes vs stationary
@@ -160,6 +160,7 @@ all_states_per_episode = []
 
 def reinforce(env, policy_net, optimizer, num_episodes):
     for episode in range(num_episodes):
+        print(f"Running episode {episode} of {num_episodes}.")
         env.run_simulation(episode)
         states, actions, rewards = read_log()
 
@@ -226,7 +227,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 200 # Number of episodes to train
+    num_episodes = 100  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 

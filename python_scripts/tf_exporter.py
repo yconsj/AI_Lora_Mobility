@@ -20,7 +20,6 @@ def tf_export(concrete_func, export_path, episode_num):
                 f.write(tflite_model)
             print(f"Model successfully converted and saved to {export_path}")
 
-
             # TODO: This doesn't need to happen everytime the model file is written.
 
             export_dir = os.path.dirname(export_path)
@@ -52,8 +51,8 @@ def tf_export(concrete_func, export_path, episode_num):
 def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length, episode_num):
     # TODO: EPISODE_NUM should be written in some other file, since Header is only parsed at compile-time, meaning EPISODE_NUM won't be updated during training
     header_file_basename = os.path.basename(header_file_path)
-    #model_file_basename = os.path.basename(model_file_path)
-    ifdefguard = "INET_MOBILITY_RL_MODELFILES_" + header_file_basename.replace('.', '_').replace(' ', '_').upper() +"_"
+    # model_file_basename = os.path.basename(model_file_path)
+    ifdefguard = "INET_MOBILITY_RL_MODELFILES_" + header_file_basename.replace('.', '_').replace(' ', '_').upper() + "_"
 
     """Rewrite the policy_net_model.h file with updated constants."""
     content = (
