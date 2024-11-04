@@ -126,11 +126,11 @@ def plot_training(log_state, mv_actions_per_episode, mv_reward_sums, first_episo
     plt.show()
 
 
-def read_log():
+def read_log(batch, log_path):
     # Step 1: Read the file line by line
     print("reading log")
-    config = load_config("config.json")
-    log = config['logfile_path']
+
+    log = log_path + "_" + str(batch) + ".txt"
     with open(log, 'r') as file:
         lines = file.readlines()
 
@@ -158,59 +158,61 @@ all_actions_per_episode = []
 all_states_per_episode = []
 
 
-def reinforce(env, policy_net, optimizer, num_episodes):
+def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes, batch_size):
     for episode in range(num_episodes):
         print(f"Running episode {episode} of {num_episodes}.")
-        env.run_simulation(episode)
-        states, actions, rewards = read_log()
+        env.run_simulation(episode, batch_size)
 
-        all_states_per_episode.append(states)
+        total_loss=0
+        for batch in range(batch_size):
+            states, actions, rewards = read_log(batch, log_path)
 
-        state_tensor = tf.convert_to_tensor(states, dtype=tf.float32)
-        actions_tensor = tf.convert_to_tensor(actions, dtype=tf.int32)
-        returns = []
-        cumulative_reward = 0
-        for r in rewards[::-1]:  # Reverse to compute returns
-            cumulative_reward = r + cumulative_reward * 0.99  # Discount factor
-            returns.insert(0, cumulative_reward)  # Insert at the beginning
+            all_states_per_episode.append(states)
 
-        print("total rewards: " + str(sum(rewards)))
-        reward_sums.append(sum(rewards))
-        all_actions_per_episode.append(actions)  # Store actions for plotting avg action
+            state_tensor = tf.convert_to_tensor(states, dtype=tf.float32)
+            actions_tensor = tf.convert_to_tensor(actions, dtype=tf.int32)
+            returns = []
+            cumulative_reward = 0
+            for r in rewards[::-1]:  # Reverse to compute returns
+                cumulative_reward = r + cumulative_reward * 0.99  # Discount factor
+                returns.insert(0, cumulative_reward)  # Insert at the beginning
 
-        # Convert lists to tensors
-        returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
+            print("total rewards: " + str(sum(rewards)))
+            reward_sums.append(sum(rewards))
+            all_actions_per_episode.append(actions)  # Store actions for plotting avg action
 
-        # Compute policy loss
-        with tf.GradientTape() as tape:
-            # Get the action probabilities
-            action_probs = policy_net(state_tensor)  # Assuming this outputs probabilities for actions
-            log_probs = tf.math.log(tf.clip_by_value(action_probs, 1e-10, 1.0))  # Log probabilities
+            # Convert lists to tensors
+            returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
 
-            # Gather log probabilities for selected actions
-            selected_log_probs = tf.reduce_sum(log_probs * tf.one_hot(actions_tensor, policy_net.output_dim),
-                                               axis=1)  # Gather log probabilities
+            # Compute policy loss
+            with tf.GradientTape() as tape:
+                # Get the action probabilities
+                action_probs = policy_net(state_tensor)  # Assuming this outputs probabilities for actions
+                log_probs = tf.math.log(tf.clip_by_value(action_probs, 1e-10, 1.0))  # Log probabilities
 
-            # REINFORCE loss
-            policy_loss = -tf.reduce_mean(selected_log_probs * returns_tensor)  # REINFORCE loss
+                # Gather log probabilities for selected actions
+                selected_log_probs = tf.reduce_sum(log_probs * tf.one_hot(actions_tensor, policy_net.output_dim),
+                                                axis=1)  # Gather log probabilities
 
-            # Calculate entropy
-            entropy = -tf.reduce_sum(action_probs * log_probs, axis=1)  # Entropy calculation
-            # Hyperparameter for entropy regularization
-            beta = 0.01  # Adjust this value based on your needs
-            entropy_loss = beta * tf.reduce_mean(entropy)  # Scale by beta
+                # REINFORCE loss
+                policy_loss = -tf.reduce_mean(selected_log_probs * returns_tensor)  # REINFORCE loss
 
-            # Total loss with entropy regularization
-            total_loss = policy_loss + entropy_loss
+                # Calculate entropy
+                entropy = -tf.reduce_sum(action_probs * log_probs, axis=1)  # Entropy calculation
+                # Hyperparameter for entropy regularization
+                beta = 0.01  # Adjust this value based on your needs
+                entropy_loss = beta * tf.reduce_mean(entropy)  # Scale by beta
+
+                # Total loss with entropy regularization
+                total_loss = policy_loss + entropy_loss
 
         # Update the policy
+        total_loss = total_loss / batch_size
         grads = tape.gradient(total_loss, policy_net.trainable_variables)
         optimizer.apply_gradients(zip(grads, policy_net.trainable_variables))
         concrete_func = policy_net.get_concrete_function()
         print("exporting model")
-        config = load_config("config.json")
-        gen_model = config['model_path']
-        tf_export(concrete_func, gen_model, episode + 1)
+        tf_export(concrete_func, gen_model_path, (episode * batch_size) + 1)
 
 
 # Main function to run the training
@@ -227,12 +229,16 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 5 # Number of episodes to train
+    num_episodes = 1# Number of episodes to train
+    num_batches = 2
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 
+    config = load_config("config.json")
+    log_path = config['logfile_path']
+    gen_model_path = config['model_path']
     tf_export(concrete_func, export_model_path, 0)  # initial model
-    reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
+    reinforce(env, policy_net, optimizer,gen_model_path, log_path, num_episodes, num_batches)  # Train the agent
     print('Complete')
 
     # Example input (make sure it matches the input shape of your model)
