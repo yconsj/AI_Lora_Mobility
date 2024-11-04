@@ -35,7 +35,7 @@ void StateLogger::initialize() {
 }
 
 
-void StateLogger::logStep(const InputState& inputState, int choice, double reward) {
+void StateLogger::logStep(InputState& inputState, int choice, double reward) {
     inputStateArray.push_back(inputState);
     choiceArray.push_back(choice);
     rewardArray.push_back(reward);

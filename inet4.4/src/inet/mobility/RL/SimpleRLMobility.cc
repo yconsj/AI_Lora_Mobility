@@ -21,9 +21,14 @@ Define_Module(SimpleRLMobility);
 
 SimpleRLMobility::SimpleRLMobility()
 {
+    speed = 0;
     pollModelTimer = nullptr;
     modelUpdateInterval = 0;
     initialPosition = Coord(NAN, NAN, NAN);
+
+    heading = deg(360);
+    elevation = deg(0.0);
+    direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
 }
 
 void SimpleRLMobility::initialize(int stage)
@@ -96,6 +101,7 @@ const Coord& SimpleRLMobility::getLoRaNodePosition(int index)
     } else {
         EV << "loRaNodes[" << index << "] module not found!" << endl;
     }
+    cRuntimeError("node or mobility submodule is not found");
     // Return an invalid coordinate if the node or mobility submodule is not found
     return Coord(NAN, NAN, NAN);
 }

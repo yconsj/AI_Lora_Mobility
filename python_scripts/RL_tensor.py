@@ -27,9 +27,9 @@ class PolicyNetwork(tf.keras.Model):
                                          # Initialize weights to zeros
                                          bias_initializer=tf.keras.initializers.GlorotUniform())  # Initialize biases to zeros)
         self.fc2 = tf.keras.layers.Dense(128, activation='relu',
-                                         kernel_initializer=tf.keras.initializers.GlorotUniform(),
-                                         # Initialize weights to zeros
-                                         bias_initializer=tf.keras.initializers.GlorotUniform())
+                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
+                                          # Initialize weights to zeros
+                                          bias_initializer=tf.keras.initializers.GlorotUniform())
         self.fc3 = tf.keras.layers.Dense(output_dim,
                                          activation='softmax',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
@@ -227,7 +227,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 100  # Number of episodes to train
+    num_episodes = 5 # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 

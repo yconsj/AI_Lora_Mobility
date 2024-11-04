@@ -58,10 +58,8 @@ def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length,
     content = (
         f"#ifndef {ifdefguard}\n"
         f"#define {ifdefguard}\n\n"
-        f"extern unsigned char g_model[];\n"
-        f"extern unsigned int g_model_len;\n"
         f"#define EPISODE_NUM {episode_num}\n"
-        f"constexpr long const_g_model_length = {g_model_length};\n\n"
+        f"constexpr int const_g_model_length = {g_model_length};\n\n"
         f'const char* model_file_path = "{model_file_path}"; // Path to your TFLite model file\n\n'
         f"#endif  // {ifdefguard}\n"
     )

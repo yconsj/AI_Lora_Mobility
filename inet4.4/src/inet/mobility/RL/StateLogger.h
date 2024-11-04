@@ -25,7 +25,7 @@ class StateLogger : public omnetpp::cSimpleModule {
 public:
     StateLogger();
     virtual ~StateLogger();
-    virtual void logStep(const InputState& inputState, int choice, double reward);
+    virtual void logStep(InputState& inputState, int choice, double reward);
 protected:
     virtual void finish() override;
     virtual void initialize() override;

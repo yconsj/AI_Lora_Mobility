@@ -48,10 +48,13 @@
 namespace inet {
 
 Define_Module(LearningModel);
-
 const tflite::Model* model = nullptr;
-tflite::MicroInterpreter* interpreter = nullptr;
 
+
+// This pulls in all the operation implementations we need.
+// NOLINTNEXTLINE(runtime-global-variables)
+tflite::AllOpsResolver resolver;
+tflite::MicroInterpreter* interpreter = nullptr;
 
 TfLiteTensor* model_input = nullptr;
 TfLiteTensor* model_output = nullptr;
@@ -85,10 +88,12 @@ void LearningModel::initialize()
     EV_TRACE << "initializing LearningModel " << omnetpp::endl;
 
 
+
     // Load the model data from a file
     model_data = ReadModelFromFile(model_file_path);
 
     model = tflite::GetModel(model_data.data());
+    interpreter = new tflite::MicroInterpreter(model, resolver, tensor_arena, kTensorArenaSize);
 
     // After loading the model
     if (model == nullptr) {
@@ -102,14 +107,6 @@ void LearningModel::initialize()
       throw cRuntimeError("LearningModel.cc: Model provided's schema version is not equal to supported version. ");
     }
 
-    // This pulls in all the operation implementations we need.
-    // NOLINTNEXTLINE(runtime-global-variables)
-    static tflite::AllOpsResolver resolver;
-
-    // Build an interpreter to run the model with.
-    static tflite::MicroInterpreter static_interpreter(
-        model, resolver, tensor_arena, kTensorArenaSize);
-    interpreter = &static_interpreter;
 
     // TODO: Might need to Validate input tensor dimensions for multi-dimensional input
     // TODO: And also might need to validate output tensor dimensions.
@@ -137,7 +134,8 @@ void LearningModel::initialize()
        (model_output->type != kTfLiteFloat32)) {
        throw cRuntimeError("LearningModel.cc: wrong output dimensions");
    }
-
+   /*
+   */
 }
 
 
@@ -204,8 +202,6 @@ std::vector<uint8_t> LearningModel::ReadModelFromFile(const char* filename) {
 
 
 
-
-
 void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp) {
     currentState.latestPacketRSSI = rssi;
     currentState.latestPacketSNIR = snir;
@@ -246,8 +242,6 @@ int LearningModel::pollModel()
     currentState.currentTimestamp = simTime();
     currentState.coord = getCoord();
 
-
-    // Ensure that StateLogger is fetched and initialized
     int reward = getReward();
 
     InputState normalizedState = normalizeInputState(currentState);
@@ -343,7 +337,22 @@ int LearningModel::invokeModel(InputState state) {
 
 
 LearningModel::~LearningModel() {
-    // TODO Auto-generated destructor stub
+    // Clean up the model interpreter
+    if (interpreter) {
+        delete interpreter; // Assuming interpreter is dynamically allocated
+        interpreter = nullptr; // Avoid dangling pointer
+    }
+
+    // Clean up the input tensor if allocated
+    if (model_input) {
+        model_input = nullptr; // Avoid dangling pointer
+    }
+
+    // Clean up the output tensor if allocated
+    if (model_output) {
+        model_output = nullptr; // Avoid dangling pointer
+    }
+
 }
 
 } /* namespace inet */
