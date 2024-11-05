@@ -31,9 +31,6 @@ void PacketCounter::receiveSignal(omnetpp::cComponent *source, omnetpp::simsigna
                 counterGW2++;
             }
         }
-
-        // Log the source's name for debugging
-        EV << "TEST RECEIVE SIGNAL: " << source->getFullName() << " from parent: " << (parentModule ? parentModule->getFullName() : "No parent") << omnetpp::endl;
     }
 }
 

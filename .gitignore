@@ -15,7 +15,7 @@ python_scripts/g_model
 inet4.4/src/inet/mobility/RL/modelfiles/gen_model.cc
 inet4.4/src/inet/mobility/RL/modelfiles/gen_model.tflite
 inet4.4/src/inet/mobility/RL/modelfiles/policy_net_model.h
-
+flora/simulations/scenarios/basecontrolcase/stationaryPacketLog.json
 
 
 python_scripts/__pycache__/

@@ -16,6 +16,7 @@
 #include "StateLogger.h"
 #include <omnetpp.h>
 #include <iostream>
+#include "modelfiles/policy_net_model.h"
 
 namespace inet {
 
@@ -49,7 +50,7 @@ void StateLogger::writeToFile() {
         cRuntimeError("failed to fetch runnumber");
     }
     // Construct the filename based on the current runnumber
-    std::string filename = "logFile_" + std::to_string(runnumber) + ".txt";
+    std::string filename = std::string(log_file_basename) + "_" + std::to_string(runnumber) + ".txt";
     //std::string filename = "logFile.txt";
     std::ofstream outFile(filename);
 
