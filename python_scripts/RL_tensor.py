@@ -4,8 +4,7 @@ import tensorflow as tf
 from sim_runner import OmnetEnv
 from tf_exporter import tf_export
 import ast
-import os
-import json
+from utilities import load_config
 import matplotlib.pyplot as plt
 
 
@@ -58,13 +57,6 @@ class PolicyNetwork(tf.keras.Model):
         return concrete_function.get_concrete_function()
 
 
-def load_config(config_file):
-    # Get the directory of the currently running script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    # Build the full path to the config file
-    config_path = os.path.join(script_dir, config_file)
-    with open(config_path, 'r') as f:
-        return json.load(f)
 
 
 def plot_training(log_state, mv_actions_per_episode, mv_stationary_data, mv_reward_sums, first_episode=0,
@@ -259,7 +251,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 400  # Number of episodes to train
+    num_episodes = 10  # Number of episodes to train
     num_batches = 5
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
