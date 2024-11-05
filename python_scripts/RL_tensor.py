@@ -1,5 +1,7 @@
 import numpy as np
 import tensorflow as tf
+
+
 from sim_runner import OmnetEnv
 from tf_exporter import tf_export
 import ast
@@ -18,18 +20,17 @@ class PolicyNetwork(tf.keras.Model):
         self.output_dim = output_dim
         self.input_dim = input_dim
 
-
         # Batch Normalization layer for input
-        self.bn_input = tf.keras.layers.BatchNormalization() #input_shape=(input_dim,)
+        self.bn_input = tf.keras.layers.BatchNormalization()  # input_shape=(input_dim,)
 
         self.fc1 = tf.keras.layers.Dense(64, activation='relu',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
                                          # Initialize weights to zeros
                                          bias_initializer=tf.keras.initializers.GlorotUniform())  # Initialize biases to zeros)
         self.fc2 = tf.keras.layers.Dense(128, activation='relu',
-                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
-                                          # Initialize weights to zeros
-                                          bias_initializer=tf.keras.initializers.GlorotUniform())
+                                         kernel_initializer=tf.keras.initializers.GlorotUniform(),
+                                         # Initialize weights to zeros
+                                         bias_initializer=tf.keras.initializers.GlorotUniform())
         self.fc3 = tf.keras.layers.Dense(output_dim,
                                          activation='softmax',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
@@ -39,7 +40,7 @@ class PolicyNetwork(tf.keras.Model):
         # Build the model with the specified input shape
         # self.build(input_shape=(None, input_dim))
 
-    def call(self, x ):
+    def call(self, x):
         # Apply Batch Normalization
         x = self.bn_input(x)
 
@@ -67,7 +68,8 @@ def load_config(config_file):
         return json.load(f)
 
 
-def plot_training(log_state, mv_actions_per_episode, mv_reward_sums, first_episode=0, last_episode=-1, window_size=100):
+def plot_training(log_state, mv_actions_per_episode, mv_stationary_data, mv_reward_sums, first_episode=0,
+                  last_episode=-1, window_size=100):
     # --- First Figure with Two Subplots ---
     fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
 
@@ -113,12 +115,21 @@ def plot_training(log_state, mv_actions_per_episode, mv_reward_sums, first_episo
     fig1.tight_layout()
 
     # --- Second Figure: Rewards Over Time ---
+    # Example of ensuring the lengths match or padding as needed
+    if len(mv_stationary_data) < len(mv_reward_sums):
+        # Padding with zeros or handling missing data
+        mv_stationary_data += [0] * (len(mv_reward_sums) - len(mv_stationary_data))
+    elif len(mv_stationary_data) > len(mv_reward_sums):
+        mv_stationary_data = mv_stationary_data[:len(mv_reward_sums)]
+
     fig2, ax3 = plt.subplots(figsize=(10, 5))
-    ax3.plot(mv_reward_sums, color='b', alpha=0.7, label="Episode Rewards")
+    ax3.plot(mv_reward_sums, color='b', alpha=0.7, label="Episode Rewards", linestyle='-')
     ax3.set_xlabel("Episode")
-    ax3.set_ylabel("Sum of Immediate Reward")
+    ax3.set_ylabel("Sum of Immediate Reward / Packets")
     ax3.set_title("Sums of Immediate Reward Over Episodes")
+    ax3.plot(mv_stationary_data, label='Sum of Packets (Stationary Nodes)', color='orange', linestyle='--')
     ax3.legend()
+    # Plotting the Stationary Data List on the same axes
 
     # TODO: plot packets received over episodes vs stationary
 
@@ -156,11 +167,49 @@ def read_log():
 reward_sums = []
 all_actions_per_episode = []
 all_states_per_episode = []
+stationary_data_list = []  # Global variable to store stationary data
 
 
 def reinforce(env, policy_net, optimizer, num_episodes):
+    from control_sim_runner import load_stationary_data, run_base_control_case # avoid circular dependency
+    global stationary_data_list
+
+    # Load stationary data only once
+    stationary_data_json = load_stationary_data()
+
     for episode in range(num_episodes):
         print(f"Running episode {episode} of {num_episodes}.")
+
+        # Check if the episode data exists in the stationary data JSON
+        if str(episode) in stationary_data_json:  # Ensure to check the keys as strings
+            # Calculate the sum of packets received by loragw[0] and loragw[1]
+            loragw_0_packets = stationary_data_json[str(episode)].get("loragw[0]", 0)
+            loragw_1_packets = stationary_data_json[str(episode)].get("loragw[1]", 0)
+            total_packets = loragw_0_packets + loragw_1_packets
+
+            # Append the total packets to the stationary_data_list
+            stationary_data_list.append(total_packets)
+        else:
+            # Run base control case if not found
+            run_base_control_case(run_number=episode)
+
+            # Reload the stationary data after running the control case
+            stationary_data_json = load_stationary_data()
+
+            # Check again if the episode data exists after running the base control case
+            if str(episode) in stationary_data_json:
+                # Calculate the sum of packets received by loragw[0] and loragw[1]
+                loragw_0_packets = stationary_data_json[str(episode)].get("loragw[0]", 0)
+                loragw_1_packets = stationary_data_json[str(episode)].get("loragw[1]", 0)
+                total_packets = loragw_0_packets + loragw_1_packets
+
+                # Append the total packets to the stationary_data_list
+                stationary_data_list.append(total_packets)
+            else:
+                # If still not found, you might want to append 0 or handle this case differently
+                stationary_data_list.append(0)  # Append 0 if no data was found
+
+
         env.run_simulation(episode)
         states, actions, rewards = read_log()
 
@@ -227,7 +276,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 5 # Number of episodes to train
+    num_episodes = 20  # Number of episodes to train
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 
@@ -239,10 +288,9 @@ def main():
     # rrsi, snir, timestamp__lastpacket, total_packets, time, x,y
 
     if num_episodes > 0:
-        plot_training(log_state=all_states_per_episode,
-                      mv_actions_per_episode=all_actions_per_episode,
-                      mv_reward_sums=reward_sums,
-                      window_size=100)
+        plot_training(log_state=all_states_per_episode, mv_actions_per_episode=all_actions_per_episode,
+                      mv_stationary_data=stationary_data_list, mv_reward_sums=reward_sums, window_size=100)
+
 
 if __name__ == "__main__":
     main()
