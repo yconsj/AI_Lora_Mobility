@@ -198,9 +198,10 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
                 cumulative_reward = r + cumulative_reward * 0.99  # Discount factor
                 returns.insert(0, cumulative_reward)  # Insert at the beginning
 
-            print("total rewards: " + str(sum(rewards)))
-            reward_sums.append(sum(rewards))
-            all_actions_per_episode.append(actions)  # Store actions for plotting avg action
+            if batch == 0:  # only sample the first batch for later plotting.
+                print("total rewards: " + str(sum(rewards)))
+                reward_sums.append(sum(rewards))
+                all_actions_per_episode.append(actions)  # Store actions for plotting avg action
 
             # Convert lists to tensors
             returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
@@ -258,8 +259,8 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 5  # Number of episodes to train
-    num_batches = 2
+    num_episodes = 400  # Number of episodes to train
+    num_batches = 5
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 
