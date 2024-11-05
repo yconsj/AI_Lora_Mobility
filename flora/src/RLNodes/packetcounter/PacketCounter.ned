@@ -16,6 +16,6 @@
 package flora.RLNodes.packetcounter;
 module PacketCounter {
     parameters:
-        string outputFileName = default("packet_counts.txt");
+        string outputFileName = default("stationaryPacketLog.json");
         @class(PacketCounter);
 }
