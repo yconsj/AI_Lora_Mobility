@@ -43,6 +43,8 @@ void StateLogger::logStep(InputState& inputState, int choice, double reward) {
 
 
 void StateLogger::writeToFile() {
+    runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
+
     if (runnumber < 0) {
         cRuntimeError("failed to fetch runnumber");
     }

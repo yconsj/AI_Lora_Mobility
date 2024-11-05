@@ -1,7 +1,6 @@
 import numpy as np
 import tensorflow as tf
 
-
 from sim_runner import OmnetEnv
 from tf_exporter import tf_export
 import ast
@@ -137,11 +136,11 @@ def plot_training(log_state, mv_actions_per_episode, mv_stationary_data, mv_rewa
     plt.show()
 
 
-def read_log():
+def read_log(batch, log_path):
     # Step 1: Read the file line by line
     print("reading log")
-    config = load_config("config.json")
-    log = config['logfile_path']
+
+    log = log_path + "_" + str(batch) + ".txt"
     with open(log, 'r') as file:
         lines = file.readlines()
 
@@ -170,96 +169,79 @@ all_states_per_episode = []
 stationary_data_list = []  # Global variable to store stationary data
 
 
-def reinforce(env, policy_net, optimizer, num_episodes):
-    from control_sim_runner import load_stationary_data, run_base_control_case # avoid circular dependency
+def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes, batch_size):
+    from control_sim_runner import load_stationary_data, update_stationary_data_list  # avoid circular dependency
     global stationary_data_list
 
     # Load stationary data only once
     stationary_data_json = load_stationary_data()
 
     for episode in range(num_episodes):
-        print(f"Running episode {episode} of {num_episodes}.")
+        print(f"Running episode {episode + 1} of {num_episodes}.")
+        env.run_simulation(episode, batch_size)
+        accumulated_grads = [tf.zeros_like(var) for var in policy_net.trainable_variables]
 
-        # Check if the episode data exists in the stationary data JSON
-        if str(episode) in stationary_data_json:  # Ensure to check the keys as strings
-            # Calculate the sum of packets received by loragw[0] and loragw[1]
-            loragw_0_packets = stationary_data_json[str(episode)].get("loragw[0]", 0)
-            loragw_1_packets = stationary_data_json[str(episode)].get("loragw[1]", 0)
-            total_packets = loragw_0_packets + loragw_1_packets
+        # Update the stationary data list for the current episode
+        new_data = update_stationary_data_list(episode, stationary_data_json)
+        stationary_data_list.extend(new_data)  # Append new data to the global list
 
-            # Append the total packets to the stationary_data_list
-            stationary_data_list.append(total_packets)
-        else:
-            # Run base control case if not found
-            run_base_control_case(run_number=episode)
+        for batch in range(batch_size):
+            states, actions, rewards = read_log(batch, log_path)
 
-            # Reload the stationary data after running the control case
-            stationary_data_json = load_stationary_data()
+            all_states_per_episode.append(states)
 
-            # Check again if the episode data exists after running the base control case
-            if str(episode) in stationary_data_json:
-                # Calculate the sum of packets received by loragw[0] and loragw[1]
-                loragw_0_packets = stationary_data_json[str(episode)].get("loragw[0]", 0)
-                loragw_1_packets = stationary_data_json[str(episode)].get("loragw[1]", 0)
-                total_packets = loragw_0_packets + loragw_1_packets
+            state_tensor = tf.convert_to_tensor(states, dtype=tf.float32)
+            actions_tensor = tf.convert_to_tensor(actions, dtype=tf.int32)
+            returns = []
+            cumulative_reward = 0
+            for r in rewards[::-1]:  # Reverse to compute returns
+                cumulative_reward = r + cumulative_reward * 0.99  # Discount factor
+                returns.insert(0, cumulative_reward)  # Insert at the beginning
 
-                # Append the total packets to the stationary_data_list
-                stationary_data_list.append(total_packets)
-            else:
-                # If still not found, you might want to append 0 or handle this case differently
-                stationary_data_list.append(0)  # Append 0 if no data was found
+            print("total rewards: " + str(sum(rewards)))
+            reward_sums.append(sum(rewards))
+            all_actions_per_episode.append(actions)  # Store actions for plotting avg action
 
+            # Convert lists to tensors
+            returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
 
-        env.run_simulation(episode)
-        states, actions, rewards = read_log()
+            # Compute policy loss
+            with tf.GradientTape() as tape:
+                # Get the action probabilities
+                action_probs = policy_net(state_tensor)  # Assuming this outputs probabilities for actions
+                log_probs = tf.math.log(tf.clip_by_value(action_probs, 1e-10, 1.0))  # Log probabilities
 
-        all_states_per_episode.append(states)
+                # Gather log probabilities for selected actions
+                selected_log_probs = tf.reduce_sum(log_probs * tf.one_hot(actions_tensor, policy_net.output_dim),
+                                                   axis=1)  # Gather log probabilities
 
-        state_tensor = tf.convert_to_tensor(states, dtype=tf.float32)
-        actions_tensor = tf.convert_to_tensor(actions, dtype=tf.int32)
-        returns = []
-        cumulative_reward = 0
-        for r in rewards[::-1]:  # Reverse to compute returns
-            cumulative_reward = r + cumulative_reward * 0.99  # Discount factor
-            returns.insert(0, cumulative_reward)  # Insert at the beginning
+                # REINFORCE loss
+                policy_loss = -tf.reduce_mean(selected_log_probs * returns_tensor)  # REINFORCE loss
 
-        print("total rewards: " + str(sum(rewards)))
-        reward_sums.append(sum(rewards))
-        all_actions_per_episode.append(actions)  # Store actions for plotting avg action
+                # Calculate entropy
+                entropy = -tf.reduce_sum(action_probs * log_probs, axis=1)  # Entropy calculation
+                # Hyperparameter for entropy regularization
+                beta = 0.01  # Adjust this value based on your needs
+                entropy_loss = beta * tf.reduce_mean(entropy)  # Scale by beta
 
-        # Convert lists to tensors
-        returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
+                # Total loss with entropy regularization
+                total_loss = policy_loss + entropy_loss
+                grads = tape.gradient(total_loss, policy_net.trainable_variables)
+                # Accumulate gradients if they are not None
+                if grads is not None:
+                    for i in range(len(grads)):
+                        if grads[i] is not None:  # Check if the gradient is not None
+                            accumulated_grads[i] += grads[i]  # Accumulate gradients
+                        else:
+                            print(f"Warning: Gradient for variable {i} is None.")
 
-        # Compute policy loss
-        with tf.GradientTape() as tape:
-            # Get the action probabilities
-            action_probs = policy_net(state_tensor)  # Assuming this outputs probabilities for actions
-            log_probs = tf.math.log(tf.clip_by_value(action_probs, 1e-10, 1.0))  # Log probabilities
-
-            # Gather log probabilities for selected actions
-            selected_log_probs = tf.reduce_sum(log_probs * tf.one_hot(actions_tensor, policy_net.output_dim),
-                                               axis=1)  # Gather log probabilities
-
-            # REINFORCE loss
-            policy_loss = -tf.reduce_mean(selected_log_probs * returns_tensor)  # REINFORCE loss
-
-            # Calculate entropy
-            entropy = -tf.reduce_sum(action_probs * log_probs, axis=1)  # Entropy calculation
-            # Hyperparameter for entropy regularization
-            beta = 0.01  # Adjust this value based on your needs
-            entropy_loss = beta * tf.reduce_mean(entropy)  # Scale by beta
-
-            # Total loss with entropy regularization
-            total_loss = policy_loss + entropy_loss
-
-        # Update the policy
-        grads = tape.gradient(total_loss, policy_net.trainable_variables)
-        optimizer.apply_gradients(zip(grads, policy_net.trainable_variables))
+        # Average gradients after processing all batches
+        for i in range(len(accumulated_grads)):
+            accumulated_grads[i] /= batch_size  # Average each accumulated gradient
+        optimizer.apply_gradients(zip(accumulated_grads, policy_net.trainable_variables))
         concrete_func = policy_net.get_concrete_function()
         print("exporting model")
-        config = load_config("config.json")
-        gen_model = config['model_path']
-        tf_export(concrete_func, gen_model, episode + 1)
+        tf_export(concrete_func, gen_model_path, (episode * batch_size) + 1)
 
 
 # Main function to run the training
@@ -276,12 +258,16 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
 
-    num_episodes = 20  # Number of episodes to train
+    num_episodes = 5  # Number of episodes to train
+    num_batches = 2
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 
+    config = load_config("config.json")
+    log_path = config['logfile_path']
+    gen_model_path = config['model_path']
     tf_export(concrete_func, export_model_path, 0)  # initial model
-    reinforce(env, policy_net, optimizer, num_episodes)  # Train the agent
+    reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes, num_batches)  # Train the agent
     print('Complete')
 
     # Example input (make sure it matches the input shape of your model)

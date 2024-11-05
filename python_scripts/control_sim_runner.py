@@ -3,7 +3,6 @@ import json
 import os
 import subprocess
 
-
 from sim_runner import OmnetEnv
 
 
@@ -16,7 +15,9 @@ class BaseControlCaseEnv(OmnetEnv):
 
     # Override run_simulation to remove the episode_seed
 
-    def run_simulation(self, run_number=0):
+    def run_simulation(self, run_number=0, batch_size=None):
+        if batch_size is not None:
+            raise Exception("Batch_size is not a valid argument for BaseControlCaseEnv ")
         # Construct the command to run OMNeT++ simulation with runnumber
         command = (
                 f'"{self.mingwenv_cmd_path}" -mingw64 -no-start -defterm -c '
@@ -66,6 +67,45 @@ def run_base_control_case(run_number):
     # Run the simulation for the base control case with the given run number
     base_control_case_env.run_simulation(run_number=run_number)
 
+
+def get_total_packets_for_episode(episode, stationary_data_json):
+    """Calculate the total packets for the given episode from stationary data."""
+    # Ensure to check the keys as strings
+    if str(episode) in stationary_data_json:
+        # Calculate the sum of packets received by loragw[0] and loragw[1]
+        loragw_0_packets = stationary_data_json[str(episode)].get("loragw[0]", 0)
+        loragw_1_packets = stationary_data_json[str(episode)].get("loragw[1]", 0)
+        total_packets = loragw_0_packets + loragw_1_packets
+        return total_packets
+    return None  # Return None if the episode is not found
+
+def update_stationary_data_list(episode, stationary_data_json):
+    """Update a new list of stationary data based on the current episode."""
+    new_stationary_data = []  # Create a new list to hold the packet sums
+
+    # Get total packets for the current episode
+    total_packets = get_total_packets_for_episode(episode, stationary_data_json)
+
+    if total_packets is not None:
+        # Append the total packets to the new list
+        new_stationary_data.append(total_packets)
+    else:
+        # Run base control case if not found
+        run_base_control_case(run_number=episode)
+
+        # Reload the stationary data after running the control case
+        stationary_data_json = load_stationary_data()
+
+        # Check again for total packets after running the base control case
+        total_packets = get_total_packets_for_episode(episode, stationary_data_json)
+
+        if total_packets is not None:
+            new_stationary_data.append(total_packets)
+        else:
+            # If still not found, append 0
+            new_stationary_data.append(0)  # Append 0 if no data was found
+
+    return new_stationary_data  # Return the new list
 
 if __name__ == "__main__":
     base_control_sim = BaseControlCaseEnv()  # Create an instance of the BaseControlCaseEnv class
