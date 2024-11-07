@@ -142,6 +142,14 @@ void LearningModel::initialize()
    */
 }
 
+double LearningModel::readJsonValue(const json& jsonData, const std::string& key) {
+    if (jsonData.contains(key)) {
+        return jsonData[key].get<double>(); // Retrieve the value and return it as a double
+    } else {
+        throw cRuntimeError("Missing '%s' in JSON file.", key.c_str());
+    }
+}
+
 void LearningModel::readJsonFile(const std::string& filepath) {
     // Open the JSON file
     std::ifstream inputFile(filepath);
@@ -162,10 +170,26 @@ void LearningModel::readJsonFile(const std::string& filepath) {
         throw cRuntimeError("JSON file %s does not contain required keys 'packet_reward' or 'exploration_reward'.", filepath.c_str());
     }
 
-    // Retrieve values
-    packet_reward = jsonData["packet_reward"].get<double>();
-    exploration_reward = jsonData["exploration_reward"].get<double>();
-    random_choice_probability = jsonData["random_choice_probability"].get<double>();
+    // Retrieve values using the generic readJsonValue function
+    try {
+        packet_reward = readJsonValue(jsonData, "packet_reward");
+        exploration_reward = readJsonValue(jsonData, "exploration_reward");
+        random_choice_probability = readJsonValue(jsonData, "random_choice_probability");
+
+        const json& normalization = jsonData["normalization"];
+
+        // Read normalization factors
+        latest_packet_rssi_norm_factor = readJsonValue(normalization, "latest_packet_rssi");
+        latest_packet_snir_norm_factor = readJsonValue(normalization, "latest_packet_snir");
+        latest_packet_timestamp_norm_factor = readJsonValue(normalization, "latest_packet_timestamp");
+        num_received_packets_norm_factor = readJsonValue(normalization, "num_received_packets");
+        current_timestamp_norm_factor = readJsonValue(normalization, "current_timestamp");
+        coord_x_norm_factor = readJsonValue(normalization, "coord_x");
+
+    } catch (const cRuntimeError& e) {
+        throw cRuntimeError("Error reading JSON values: %s", e.what());
+    }
+
 
     EV << "Packet Reward: " << packet_reward << std::endl;
     EV << "Exploration Reward: " << exploration_reward << std::endl;
@@ -267,14 +291,14 @@ double LearningModel::getReward() {
 
 InputState LearningModel::normalizeInputState(InputState state) {
     // TODO: reevaluate this normalization.
-
     InputState normalizedState = InputState();
-    normalizedState.latestPacketRSSI = state.latestPacketRSSI / 255.0;
-    normalizedState.latestPacketSNIR = state.latestPacketSNIR / 100.0;
-    normalizedState.latestPacketTimestamp = state.latestPacketTimestamp.dbl() / (60 * 60 * 24.0); // one day in seconds
-    normalizedState.numReceivedPackets = (state.numReceivedPackets) / (86400.0 / 500.0) * 2.0; //
-    normalizedState.currentTimestamp = state.currentTimestamp.dbl() / (60 * 60 * 24.0);;
-    normalizedState.coord.x = state.coord.x / 3000.0;
+    // Normalize using the class's normalization factors
+    normalizedState.latestPacketRSSI = state.latestPacketRSSI * latest_packet_rssi_norm_factor;
+    normalizedState.latestPacketSNIR = state.latestPacketSNIR * latest_packet_snir_norm_factor;
+    normalizedState.latestPacketTimestamp = state.latestPacketTimestamp.dbl() * latest_packet_timestamp_norm_factor;
+    normalizedState.numReceivedPackets = state.numReceivedPackets * num_received_packets_norm_factor;
+    normalizedState.currentTimestamp = state.currentTimestamp.dbl() * current_timestamp_norm_factor;
+    normalizedState.coord.x = state.coord.x * coord_x_norm_factor;
     return normalizedState;
 }
 
