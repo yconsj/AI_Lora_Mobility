@@ -7,6 +7,11 @@ inet4.4/out/clang-release/src/inet/
 inet4.4/src/inet/opp_defines.h
 inet4.4/src/Makefile
 inet4.4/.settings/
+*_m.cc
+tflite-micro-arduino-examples/Makefile
+tflite-micro-arduino-examples/src/Makefile
+
+
 
 # modelfiles and training data:
 flora/simulations/scenarios/basecase/logFile.txt
@@ -15,7 +20,7 @@ python_scripts/g_model
 flora/simulations/scenarios/basecontrolcase/stationaryPacketLog.json
 inet4.4/src/inet/mobility/RL/modelfiles/
 
-
+python_scripts/venv/
 python_scripts/__pycache__/
 python_scripts/.idea/
 *.pyc
