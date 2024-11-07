@@ -7,10 +7,12 @@ inet4.4/out/clang-release/src/inet/
 inet4.4/src/inet/opp_defines.h
 inet4.4/src/Makefile
 inet4.4/.settings/
-*_m.cc
+inet4.4/**/*_m.cc
+**/*.vci
+
 tflite-micro-arduino-examples/Makefile
 tflite-micro-arduino-examples/src/Makefile
-
+tflite-micro-arduino-examples/out/
 
 
 # modelfiles and training data:
