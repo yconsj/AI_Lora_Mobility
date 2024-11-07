@@ -43,7 +43,7 @@
 #include "StateLogger.h"  // Include the StateLogger header
 #include <random>  // For random sampling
 #include "modelfiles/policy_net_model.h"
-
+#include "include/json.hpp"
 
 namespace inet {
 
@@ -80,6 +80,8 @@ LearningModel::LearningModel()
     currentState = InputState();
     model = nullptr;
     std::vector<uint8_t> model_data(const_g_model_length, 0);
+    packet_reward = -1.0;
+    exploration_reward = -1.0;
 }
 
 
@@ -87,7 +89,8 @@ void LearningModel::initialize()
 {
     EV_TRACE << "initializing LearningModel " << omnetpp::endl;
 
-
+    // get rewards from training_info_file
+    readJsonFile(training_info_path);
 
     // Load the model data from a file
     model_data = ReadModelFromFile(model_file_path);
@@ -138,6 +141,33 @@ void LearningModel::initialize()
    */
 }
 
+void LearningModel::readJsonFile(const std::string& filepath) {
+    // Open the JSON file
+    std::ifstream inputFile(filepath);
+    if (!inputFile.is_open()) {
+        throw cRuntimeError("Error opening file: %s", filepath.c_str());
+    }
+
+    // Parse the JSON
+    json jsonData;
+    try {
+        inputFile >> jsonData;
+    } catch (json::parse_error& e) {
+        throw cRuntimeError("JSON parsing error in file %s: %s", filepath.c_str(), e.what());
+    }
+
+    // Check and retrieve required keys
+    if (!jsonData.contains("packet_reward") || !jsonData.contains("exploration_reward")) {
+        throw cRuntimeError("JSON file %s does not contain required keys 'packet_reward' or 'exploration_reward'.", filepath.c_str());
+    }
+
+    // Retrieve values
+    packet_reward = jsonData["packet_reward"].get<double>();
+    exploration_reward = jsonData["exploration_reward"].get<double>();
+
+    EV << "Packet Reward: " << packetReward << std::endl;
+    EV << "Exploration Reward: " << explorationReward << std::endl;
+}
 
 StateLogger* LearningModel::getStateLoggerModule() {
     // Fetch the StateLogger module as a submodule of LearningModel
@@ -219,13 +249,15 @@ void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPack
 }
 
 
-int LearningModel::getReward() {
-    double reward = (currentState.numReceivedPackets - lastStateNumberOfPackets) * 10 * rewardModifier;
+double LearningModel::getReward() {
+
+
+    double reward = (currentState.numReceivedPackets - lastStateNumberOfPackets) * packet_reward * rewardModifier;
     lastStateNumberOfPackets = currentState.numReceivedPackets;
 
     if (getMobilityModule()->isNewGridPosition()) {
         EV << "New grid!" << omnetpp::endl;
-        reward += 1;
+        reward += exploration_reward;
     }
     return reward;
 }

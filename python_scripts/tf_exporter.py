@@ -54,17 +54,17 @@ def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length,
 
     header_file_basename = os.path.basename(header_file_path)
     log_file_basename = os.path.basename(config["logfile_path"])
-    # model_file_basename = os.path.basename(model_file_path)
+    training_info_path = config["training_info_path"]
     ifdefguard = "INET_MOBILITY_RL_MODELFILES_" + header_file_basename.replace('.', '_').replace(' ', '_').upper() + "_"
 
     """Rewrite the policy_net_model.h file with updated constants."""
     content = (
         f"#ifndef {ifdefguard}\n"
         f"#define {ifdefguard}\n\n"
-        f"#define EPISODE_NUM {episode_num}\n"
         f"constexpr int const_g_model_length = {g_model_length};\n\n"
         f'const char* model_file_path = "{model_file_path}"; // Path to your TFLite model file\n\n'
         f'const char* log_file_basename = "{log_file_basename}"; // name for log file\n\n'
+        f'const char* training_info_path = "{training_info_path}"; // name for log file\n\n'
         f"#endif  // {ifdefguard}\n"
     )
 

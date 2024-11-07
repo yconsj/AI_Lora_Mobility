@@ -4,7 +4,7 @@ import tensorflow as tf
 from sim_runner import OmnetEnv
 from tf_exporter import tf_export
 import ast
-from utilities import load_config
+from utilities import load_config, export_training_info
 import matplotlib.pyplot as plt
 
 
@@ -38,7 +38,7 @@ class PolicyNetwork(tf.keras.Model):
         # Build the model with the specified input shape
         # self.build(input_shape=(None, input_dim))
 
-    def call(self, x ):
+    def call(self, x):
         # Forward pass through the layers
         x = self.bn_input(x)
         x = self.fc1(x)
@@ -53,8 +53,6 @@ class PolicyNetwork(tf.keras.Model):
             return self.call(x)
 
         return concrete_function.get_concrete_function()
-
-
 
 
 def plot_training(log_state, mv_actions_per_episode, mv_stationary_data, mv_reward_sums, first_episode=0,
@@ -104,6 +102,7 @@ def plot_training(log_state, mv_actions_per_episode, mv_stationary_data, mv_rewa
     fig1.tight_layout()
 
     # --- Second Figure: Rewards Over Time ---
+    # TODO: remove the stationary packets from this plot
     # Example of ensuring the lengths match or padding as needed
     if len(mv_stationary_data) < len(mv_reward_sums):
         # Padding with zeros or handling missing data
@@ -120,7 +119,7 @@ def plot_training(log_state, mv_actions_per_episode, mv_stationary_data, mv_rewa
     ax3.legend()
     # Plotting the Stationary Data List on the same axes
 
-    # TODO: plot packets received over episodes vs stationary
+    # TODO: plot first&last episode model packets vs stationary packets (first&last episode) over time steps (4 lines)
 
     # Show both figures
     plt.show()
@@ -159,15 +158,38 @@ all_states_per_episode = []
 stationary_data_list = []  # Global variable to store stationary data
 
 
+def get_packet_reward(current_episode, max_episode):
+    return 10
+
+
+def get_exploration_reward(current_episode, max_episode):
+    reward = 10 * (1.0 - (current_episode / max_episode))
+    return reward
+
+
+def get_random_choice_probability(current_episode, max_episode):
+    # TODO: read if this has to be handled a certain way, w.r.t. backpropagation ( action probability )
+    return 0.5 * (1 - current_episode / max_episode) ** 0.5
+
+
 def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes, batch_size):
     from control_sim_runner import load_stationary_data, update_stationary_data_list  # avoid circular dependency
     global stationary_data_list
 
-    # Load stationary data only once
+    # Load stationary data first time
     stationary_data_json = load_stationary_data()
+
+    training_info_export_path = config["training_info_path"]
 
     for episode in range(num_episodes):
         print(f"Running episode {episode + 1} of {num_episodes}.")
+
+        packet_reward = get_packet_reward(episode + 1, num_episodes)
+        exploration_reward = get_exploration_reward(episode + 1, num_episodes)
+        random_choice_probability = get_random_choice_probability(episode + 1, num_episodes)
+        export_training_info(training_info_export_path, episode + 1, num_episodes, packet_reward,
+                             exploration_reward, random_choice_probability)
+
         env.run_simulation(episode, batch_size)
         accumulated_grads = [tf.zeros_like(var) for var in policy_net.trainable_variables]
 
@@ -176,10 +198,8 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
         stationary_data_list.extend(new_data)  # Append new data to the global list
         sum_rewards = 0
         for batch in range(batch_size):
-            print(f"Batch {batch +1} of {batch_size}")
+            print(f"Batch {batch + 1} of {batch_size}")
             states, actions, rewards = read_log(batch, log_path)
-
-            all_states_per_episode.append(states)
 
             state_tensor = tf.convert_to_tensor(states, dtype=tf.float32)
             actions_tensor = tf.convert_to_tensor(actions, dtype=tf.int32)
@@ -188,10 +208,13 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
             for r in rewards[::-1]:  # Reverse to compute returns
                 cumulative_reward = r + cumulative_reward * 0.999  # Discount factor
                 returns.insert(0, cumulative_reward)  # Insert at the beginning
-            sum_rewards += sum (rewards)
+            sum_rewards += sum(rewards)
+
             if batch == 0:  # only sample the first batch for later plotting.
+                reward_sums.append(sum_rewards)
                 print("total rewards: " + str(sum(rewards)))
                 all_actions_per_episode.append(actions)  # Store actions for plotting avg action
+                all_states_per_episode.append(states)
 
             # Convert lists to tensors
             returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
@@ -212,7 +235,7 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
                 # Calculate entropy
                 entropy = -tf.reduce_sum(action_probs * log_probs, axis=1)  # Entropy calculation
                 # Hyperparameter for entropy regularization
-                beta = 0.5 * (1- episode/num_episodes)**0.5 # Scale beta down the further in training
+                beta = 0.5 * (1 - episode / num_episodes) ** 0.5  # Scale beta down the further in training
                 entropy_loss = beta * tf.reduce_mean(entropy)  # Scale by beta
                 # Total loss with entropy regularization
                 total_loss = policy_loss + entropy_loss
@@ -225,7 +248,6 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
                         else:
                             print(f"Warning: Gradient for variable {i} is None.")
 
-        reward_sums.append(sum_rewards/batch_size)
         # Average gradients after processing all batches
         for i in range(len(accumulated_grads)):
             accumulated_grads[i] /= batch_size  # Average each accumulated gradient
@@ -249,8 +271,8 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)  # Initialize optimizer
 
-    num_episodes = 10  # Number of episodes to train
-    num_batches = 5
+    num_episodes = 3  # Number of episodes to train
+    num_batches = 2
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 

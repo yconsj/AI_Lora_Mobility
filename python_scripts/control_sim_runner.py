@@ -6,6 +6,7 @@ import subprocess
 from sim_runner import OmnetEnv
 
 
+
 class BaseControlCaseEnv(OmnetEnv):
     def __init__(self, config_file='config.json'):
         super().__init__(config_file)
@@ -80,7 +81,9 @@ def get_total_packets_for_episode(episode, stationary_data_json):
     return None  # Return None if the episode is not found
 
 def update_stationary_data_list(episode, stationary_data_json):
-    """Update a new list of stationary data based on the current episode."""
+    """Update a new list of stationary data based on the current episode.
+        IMPORTANT: the .json file should be deleted every time the basecontrolcase is changed, to regenerate the data.
+    """
     new_stationary_data = []  # Create a new list to hold the packet sums
 
     # Get total packets for the current episode

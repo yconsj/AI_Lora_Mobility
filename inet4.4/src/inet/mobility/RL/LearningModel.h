@@ -46,11 +46,14 @@ private:
     InputState currentState;
     int lastPacketId = -1;
     double rewardModifier = 1.0;
+    double packet_reward = -1.0;
+    double exploration_reward = -1.0;
+
     SimpleRLMobility* getMobilityModule();
     InputState normalizeInputState(InputState state);
     double lastStateNumberOfPackets;
     virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
-
+    void readJsonFile(const std::string& filepath);
 };
 
 } /* namespace inet */

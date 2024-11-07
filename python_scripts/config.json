@@ -1,6 +1,9 @@
 {
-    "project_dir": "C:/Users/simon/Desktop/AI_Lora_Mobility",
-    "omnetpp_root": "C:/Users/simon/Documents/omnetpp-6.0.3",
-    "logfile_path": "C:/Users/simon/Desktop/AI_Lora_Mobility/flora/simulations/scenarios/basecase/logFile",
-    "model_path": "C:/Users/simon/Desktop/AI_Lora_Mobility/inet4.4/src/inet/mobility/RL/modelfiles/gen_model.tflite"
+    "project_dir": "C:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility",
+    "omnetpp_root": "C:/Users/augus/omnetpp-6.0.3",
+    "logfile_path": "C:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility/flora/simulations/scenarios/basecase/logFile",
+    "control_logfile_path" : "C:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility/flora/simulations/scenarios/basecontrolcase/stationaryPacketLog.json",
+    "training_info_path" : "C:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility/inet4.4/src/inet/mobility/RL/modelfiles/training_info.json",
+    "model_path": "C:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility/inet4.4/src/inet/mobility/RL/modelfiles/gen_model.tflite"
+
 }
