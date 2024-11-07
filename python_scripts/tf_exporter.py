@@ -2,7 +2,7 @@ import os
 
 import tensorflow as tf
 import subprocess
-
+from utilities import load_config
 
 def tf_export(concrete_func, export_path, episode_num):
     header_file_name = "policy_net_model.h"
@@ -50,7 +50,10 @@ def tf_export(concrete_func, export_path, episode_num):
 
 def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length, episode_num):
     # TODO: EPISODE_NUM should be written in some other file, since Header is only parsed at compile-time, meaning EPISODE_NUM won't be updated during training
+    config = load_config("config.json")
+
     header_file_basename = os.path.basename(header_file_path)
+    log_file_basename = os.path.basename(config["logfile_path"])
     # model_file_basename = os.path.basename(model_file_path)
     ifdefguard = "INET_MOBILITY_RL_MODELFILES_" + header_file_basename.replace('.', '_').replace(' ', '_').upper() + "_"
 
@@ -61,6 +64,7 @@ def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length,
         f"#define EPISODE_NUM {episode_num}\n"
         f"constexpr int const_g_model_length = {g_model_length};\n\n"
         f'const char* model_file_path = "{model_file_path}"; // Path to your TFLite model file\n\n'
+        f'const char* log_file_basename = "{log_file_basename}"; // name for log file\n\n'
         f"#endif  // {ifdefguard}\n"
     )
 

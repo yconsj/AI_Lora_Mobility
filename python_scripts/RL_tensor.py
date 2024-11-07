@@ -1,10 +1,10 @@
 import numpy as np
 import tensorflow as tf
+
 from sim_runner import OmnetEnv
 from tf_exporter import tf_export
 import ast
-import os
-import json
+from utilities import load_config
 import matplotlib.pyplot as plt
 
 
@@ -18,17 +18,17 @@ class PolicyNetwork(tf.keras.Model):
         self.output_dim = output_dim
         self.input_dim = input_dim
 
-
         # Batch Normalization layer for input
-        self.bn_input = tf.keras.layers.BatchNormalization() #input_shape=(input_dim,)
+        self.bn_input = tf.keras.layers.BatchNormalization()  # input_shape=(input_dim,)
+
         self.fc1 = tf.keras.layers.Dense(64, activation='relu',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
                                          # Initialize weights to zeros
                                          bias_initializer=tf.keras.initializers.GlorotUniform())  # Initialize biases to zeros)
         self.fc2 = tf.keras.layers.Dense(128, activation='relu',
-                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
-                                          # Initialize weights to zeros
-                                          bias_initializer=tf.keras.initializers.GlorotUniform())
+                                         kernel_initializer=tf.keras.initializers.GlorotUniform(),
+                                         # Initialize weights to zeros
+                                         bias_initializer=tf.keras.initializers.GlorotUniform())
         self.fc3 = tf.keras.layers.Dense(output_dim,
                                          activation='softmax',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
@@ -55,16 +55,10 @@ class PolicyNetwork(tf.keras.Model):
         return concrete_function.get_concrete_function()
 
 
-def load_config(config_file):
-    # Get the directory of the currently running script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    # Build the full path to the config file
-    config_path = os.path.join(script_dir, config_file)
-    with open(config_path, 'r') as f:
-        return json.load(f)
 
 
-def plot_training(log_state, mv_actions_per_episode, mv_reward_sums, first_episode=0, last_episode=-1, window_size=100):
+def plot_training(log_state, mv_actions_per_episode, mv_stationary_data, mv_reward_sums, first_episode=0,
+                  last_episode=-1, window_size=100):
     # --- First Figure with Two Subplots ---
     fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
 
@@ -110,12 +104,21 @@ def plot_training(log_state, mv_actions_per_episode, mv_reward_sums, first_episo
     fig1.tight_layout()
 
     # --- Second Figure: Rewards Over Time ---
+    # Example of ensuring the lengths match or padding as needed
+    if len(mv_stationary_data) < len(mv_reward_sums):
+        # Padding with zeros or handling missing data
+        mv_stationary_data += [0] * (len(mv_reward_sums) - len(mv_stationary_data))
+    elif len(mv_stationary_data) > len(mv_reward_sums):
+        mv_stationary_data = mv_stationary_data[:len(mv_reward_sums)]
+
     fig2, ax3 = plt.subplots(figsize=(10, 5))
-    ax3.plot(mv_reward_sums, color='b', alpha=0.7, label="Episode Rewards")
+    ax3.plot(mv_reward_sums, color='b', alpha=0.7, label="Episode Rewards", linestyle='-')
     ax3.set_xlabel("Episode")
-    ax3.set_ylabel("Sum of Immediate Reward")
+    ax3.set_ylabel("Sum of Immediate Reward / Packets")
     ax3.set_title("Sums of Immediate Reward Over Episodes")
+    ax3.plot(mv_stationary_data, label='Sum of Packets (Stationary Nodes)', color='orange', linestyle='--')
     ax3.legend()
+    # Plotting the Stationary Data List on the same axes
 
     # TODO: plot packets received over episodes vs stationary
 
@@ -153,13 +156,24 @@ def read_log(batch, log_path):
 reward_sums = []
 all_actions_per_episode = []
 all_states_per_episode = []
+stationary_data_list = []  # Global variable to store stationary data
 
 
 def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes, batch_size):
+    from control_sim_runner import load_stationary_data, update_stationary_data_list  # avoid circular dependency
+    global stationary_data_list
+
+    # Load stationary data only once
+    stationary_data_json = load_stationary_data()
+
     for episode in range(num_episodes):
         print(f"Running episode {episode + 1} of {num_episodes}.")
         env.run_simulation(episode, batch_size)
         accumulated_grads = [tf.zeros_like(var) for var in policy_net.trainable_variables]
+
+        # Update the stationary data list for the current episode
+        new_data = update_stationary_data_list(episode, stationary_data_json)
+        stationary_data_list.extend(new_data)  # Append new data to the global list
         sum_rewards = 0
         for batch in range(batch_size):
             print(f"Batch {batch +1} of {batch_size}")
@@ -175,8 +189,9 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
                 cumulative_reward = r + cumulative_reward * 0.999  # Discount factor
                 returns.insert(0, cumulative_reward)  # Insert at the beginning
             sum_rewards += sum (rewards)
-            print("total rewards: " + str(sum(rewards)))
-            all_actions_per_episode.append(actions)  # Store actions for plotting avg action
+            if batch == 0:  # only sample the first batch for later plotting.
+                print("total rewards: " + str(sum(rewards)))
+                    all_actions_per_episode.append(actions)  # Store actions for plotting avg action
 
             # Convert lists to tensors
             returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
@@ -189,7 +204,7 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
 
                 # Gather log probabilities for selected actions
                 selected_log_probs = tf.reduce_sum(log_probs * tf.one_hot(actions_tensor, policy_net.output_dim),
-                                                axis=1)  # Gather log probabilities
+                                                   axis=1)  # Gather log probabilities
 
                 # REINFORCE loss
                 policy_loss = -tf.reduce_mean(selected_log_probs * returns_tensor)  # REINFORCE loss
@@ -234,8 +249,8 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)  # Initialize optimizer
 
-    num_episodes = 100# Number of episodes to train
-    num_batches = 10
+    num_episodes = 10  # Number of episodes to train
+    num_batches = 5
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 
@@ -243,17 +258,16 @@ def main():
     log_path = config['logfile_path']
     gen_model_path = config['model_path']
     tf_export(concrete_func, export_model_path, 0)  # initial model
-    reinforce(env, policy_net, optimizer,gen_model_path, log_path, num_episodes, num_batches)  # Train the agent
+    reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes, num_batches)  # Train the agent
     print('Complete')
 
     # Example input (make sure it matches the input shape of your model)
     # rrsi, snir, timestamp__lastpacket, total_packets, time, x,y
 
     if num_episodes > 0:
-        plot_training(log_state=all_states_per_episode,
-                      mv_actions_per_episode=all_actions_per_episode,
-                      mv_reward_sums=reward_sums,
-                      window_size=100)
+        plot_training(log_state=all_states_per_episode, mv_actions_per_episode=all_actions_per_episode,
+                      mv_stationary_data=stationary_data_list, mv_reward_sums=reward_sums, window_size=100)
+
 
 if __name__ == "__main__":
     main()
