@@ -32,7 +32,7 @@ def denormalize_input_state(noramlized_state: tuple[float, float, float, float, 
 
 
 def export_training_info(export_path, current_episode_num, max_episode_num, packet_reward, exploration_reward,
-                         random_choice_probability, normalization_factors: dict[InputMembers, int]):
+                         random_choice_probability, normalization_factors: dict[int, float]):
     """ normalization_factors must have a floating point value for each member of the input state"""
     latest_packet_rssi_norm_factor = normalization_factors[InputMembers.LATEST_PACKET_RSSI.value]
     latest_packet_snir_norm_factor = normalization_factors[InputMembers.LATEST_PACKET_SNIR.value]

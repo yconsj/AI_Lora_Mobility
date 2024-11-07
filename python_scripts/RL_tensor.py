@@ -60,11 +60,13 @@ reward_sums = []
 all_actions_per_episode = []
 all_states_per_episode = []
 stationary_data_list = []  # Global variable to store stationary data
+sim_time_duration = (60 * 60 * 12.0)
 norm_factors = {InputMembers.LATEST_PACKET_RSSI.value: 1.0 / 255.0,
                 InputMembers.LATEST_PACKET_SNIR.value: 1.0 / 100.0,
-                InputMembers.LATEST_PACKET_TIMESTAMP.value: 1.0 / (60 * 60 * 24.0),
-                InputMembers.NUM_RECEIVED_PACKETS.value: 1.0 / (86400.0 / 2.0 / 500.0) * 2.0,
-                InputMembers.CURRENT_TIMESTAMP.value: 1.0 / (60 * 60 * 24.0),
+                InputMembers.LATEST_PACKET_TIMESTAMP.value: 1.0 / sim_time_duration,
+                # max received packets: half a day in seconds, 500 seconds between each transmission, 2 nodes
+                InputMembers.NUM_RECEIVED_PACKETS.value: 1.0 / (sim_time_duration / 500.0) * 2.0,
+                InputMembers.CURRENT_TIMESTAMP.value: 1.0 / sim_time_duration,
                 InputMembers.COORD_X.value: 1.0 / 3000.0,
                 }
 
@@ -234,8 +236,8 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
             sum_rewards += sum(rewards)
 
             if batch == 0:  # only sample the first batch for later plotting.
-                reward_sums.append(sum_rewards)
                 print("total rewards: " + str(sum(rewards)))
+                reward_sums.append(sum_rewards)
                 all_actions_per_episode.append(actions)  # Store actions for plotting avg action
                 all_states_per_episode.append(states)
 
@@ -297,7 +299,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)  # Initialize optimizer
 
-    num_episodes = 4  # Number of episodes to train
+    num_episodes = 100  # Number of episodes to train
     num_batches = 4
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
