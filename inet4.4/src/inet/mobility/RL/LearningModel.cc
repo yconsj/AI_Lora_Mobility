@@ -202,16 +202,25 @@ std::vector<uint8_t> LearningModel::ReadModelFromFile(const char* filename) {
 
 
 
-void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp) {
+void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id) {
     currentState.latestPacketRSSI = rssi;
     currentState.latestPacketSNIR = snir;
     currentState.latestPacketTimestamp = timestamp;
     currentState.numReceivedPackets = nReceivedPackets;
+
+
+    if (lastPacketId == id){
+        rewardModifier *= 0.5;
+    } else {
+        lastPacketId = id;
+        rewardModifier = 1.0;
+    }
+
 }
 
 
 int LearningModel::getReward() {
-    double reward = (currentState.numReceivedPackets - lastStateNumberOfPackets) * 10;
+    double reward = (currentState.numReceivedPackets - lastStateNumberOfPackets) * 10 * rewardModifier;
     lastStateNumberOfPackets = currentState.numReceivedPackets;
 
     if (getMobilityModule()->isNewGridPosition()) {

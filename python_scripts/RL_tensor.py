@@ -21,7 +21,6 @@ class PolicyNetwork(tf.keras.Model):
 
         # Batch Normalization layer for input
         self.bn_input = tf.keras.layers.BatchNormalization() #input_shape=(input_dim,)
-
         self.fc1 = tf.keras.layers.Dense(64, activation='relu',
                                          kernel_initializer=tf.keras.initializers.GlorotUniform(),
                                          # Initialize weights to zeros
@@ -40,10 +39,8 @@ class PolicyNetwork(tf.keras.Model):
         # self.build(input_shape=(None, input_dim))
 
     def call(self, x ):
-        # Apply Batch Normalization
+        # Forward pass through the layers
         x = self.bn_input(x)
-
-        # Forward pass through the dense layers
         x = self.fc1(x)
         x = self.fc2(x)
         x = self.fc3(x)
@@ -163,8 +160,9 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
         print(f"Running episode {episode + 1} of {num_episodes}.")
         env.run_simulation(episode, batch_size)
         accumulated_grads = [tf.zeros_like(var) for var in policy_net.trainable_variables]
-
+        sum_rewards = 0
         for batch in range(batch_size):
+            print(f"Batch {batch +1} of {batch_size}")
             states, actions, rewards = read_log(batch, log_path)
 
             all_states_per_episode.append(states)
@@ -174,11 +172,10 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
             returns = []
             cumulative_reward = 0
             for r in rewards[::-1]:  # Reverse to compute returns
-                cumulative_reward = r + cumulative_reward * 0.99  # Discount factor
+                cumulative_reward = r + cumulative_reward * 0.999  # Discount factor
                 returns.insert(0, cumulative_reward)  # Insert at the beginning
-
+            sum_rewards += sum (rewards)
             print("total rewards: " + str(sum(rewards)))
-            reward_sums.append(sum(rewards))
             all_actions_per_episode.append(actions)  # Store actions for plotting avg action
 
             # Convert lists to tensors
@@ -200,9 +197,8 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
                 # Calculate entropy
                 entropy = -tf.reduce_sum(action_probs * log_probs, axis=1)  # Entropy calculation
                 # Hyperparameter for entropy regularization
-                beta = 0.01  # Adjust this value based on your needs
+                beta = 0.5 * (1- episode/num_episodes)**0.5 # Scale beta down the further in training
                 entropy_loss = beta * tf.reduce_mean(entropy)  # Scale by beta
-
                 # Total loss with entropy regularization
                 total_loss = policy_loss + entropy_loss
                 grads = tape.gradient(total_loss, policy_net.trainable_variables)
@@ -214,6 +210,7 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
                         else:
                             print(f"Warning: Gradient for variable {i} is None.")
 
+        reward_sums.append(sum_rewards/batch_size)
         # Average gradients after processing all batches
         for i in range(len(accumulated_grads)):
             accumulated_grads[i] /= batch_size  # Average each accumulated gradient
@@ -235,10 +232,10 @@ def main():
     output_size = 2  # Number of actions
 
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)  # Initialize optimizer
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)  # Initialize optimizer
 
-    num_episodes = 4# Number of episodes to train
-    num_batches = 2
+    num_episodes = 100# Number of episodes to train
+    num_batches = 10
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
 

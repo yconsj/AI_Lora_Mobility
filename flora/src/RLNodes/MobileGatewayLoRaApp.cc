@@ -113,7 +113,7 @@ void MobileGatewayLoRaApp::handleMessage(cMessage *msg)
 }
 
 
-void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, double nReceivedPackets, simtime_t timestamp) {
+void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id) {
     // Get the parent module (MobileLoRaGW)
     cModule *parentModule = getParentModule();
     if (!parentModule)
@@ -129,7 +129,7 @@ void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, double
     if (!learningModel)
         throw cRuntimeError("LearningModel module not found");
     // Log the packet information (RSSI, SNIR, and timestamp)
-    learningModel->setPacketInfo(rssi, snir, nReceivedPackets, timestamp);
+    learningModel->setPacketInfo(rssi, snir, nReceivedPackets, timestamp, id);
 }
 
 void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
@@ -150,16 +150,15 @@ void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
     frame->setRSSI(math::mW2dBmW(rssi));
     frame->setSNIR(snirInd->getMinimumSnir());
     pk->insertAtFront(frame);
-
     //bool exist = false;
-    EV << frame->getTransmitterAddress() << endl;
+    EV << "transmit address " << frame->getTransmitterAddress() << endl;
     //for (std::vector<nodeEntry>::iterator it = knownNodes.begin() ; it != knownNodes.end(); ++it)
-
 
     // --- Logging message data --- //
     //rssiVector.record(frame->getRSSI());
     //snirVector.record(snirInd->getMinimumSnir());
-    logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), (double)counterOfReceivedPackets, simTime() );
+    int id = pk->getSenderModuleId();
+    logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), (double)counterOfReceivedPackets, simTime(), id );
 
 
     // FIXME : Identify network server message is destined for.

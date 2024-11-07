@@ -27,7 +27,7 @@ namespace inet {
 
 class LearningModel : public omnetpp::cSimpleModule {
 public:
-    virtual void setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp);
+    virtual void setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id);
 
     LearningModel();
     virtual ~LearningModel();
@@ -44,6 +44,8 @@ private:
     std::vector<uint8_t> model_data;
     Coord getCoord();
     InputState currentState;
+    int lastPacketId = -1;
+    double rewardModifier = 1.0;
     SimpleRLMobility* getMobilityModule();
     InputState normalizeInputState(InputState state);
     double lastStateNumberOfPackets;
