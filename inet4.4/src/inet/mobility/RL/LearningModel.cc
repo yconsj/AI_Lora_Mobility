@@ -43,7 +43,7 @@
 #include "StateLogger.h"  // Include the StateLogger header
 #include <random>  // For random sampling
 #include "modelfiles/policy_net_model.h"
-#include "include/json.hpp"
+
 
 namespace inet {
 
@@ -82,6 +82,7 @@ LearningModel::LearningModel()
     std::vector<uint8_t> model_data(const_g_model_length, 0);
     packet_reward = -1.0;
     exploration_reward = -1.0;
+    random_choice_probability = 0.0;
 }
 
 
@@ -164,9 +165,10 @@ void LearningModel::readJsonFile(const std::string& filepath) {
     // Retrieve values
     packet_reward = jsonData["packet_reward"].get<double>();
     exploration_reward = jsonData["exploration_reward"].get<double>();
+    random_choice_probability = jsonData["random_choice_probability"].get<double>();
 
-    EV << "Packet Reward: " << packetReward << std::endl;
-    EV << "Exploration Reward: " << explorationReward << std::endl;
+    EV << "Packet Reward: " << packet_reward << std::endl;
+    EV << "Exploration Reward: " << exploration_reward << std::endl;
 }
 
 StateLogger* LearningModel::getStateLoggerModule() {
@@ -359,21 +361,34 @@ int LearningModel::invokeModel(InputState state) {
     // Obtain the quantized output from model's output tensor
     size_t num_outputs = model_output->bytes / sizeof(float); // Adjust based on the number of output elements
 
-    // Sample one output based on the weights
-    // model uses softmax function on output, so it is already weighted and sums to 1.
-    float random_value = static_cast<float>(rand()) / RAND_MAX; // Random value in [0, 1)
-    float cumulative_weight = 0.0f;
-    int selected_index = 0;
-    for (size_t i = 0; i < num_outputs; ++i) {
-        cumulative_weight += model_output->data.f[i];
-        if (random_value < cumulative_weight) {
-            selected_index = i;
-            break;
-        }
-    }
-    EV << "Selected output index: " << selected_index << " with weight: " << model_output->data.f[selected_index] << "\n";
 
-    return selected_index; // Return the selected index
+
+
+    int selected_index = 0;
+
+    float random_value = static_cast<float>(rand()) / RAND_MAX; // Random value in [0, 1)
+    if (random_choice_probability > random_value) {
+        // Choose a random integer from 0 to num_outputs - 1
+        selected_index = rand() % num_outputs;
+        EV << "By random choice, selected output index: " << selected_index << " with weight: " << model_output->data.f[selected_index] << "\n";
+        return selected_index;
+    }
+    else {
+        random_value = static_cast<float>(rand()) / RAND_MAX; // take a new random value in [0, 1)
+        // Sample one output based on the weights
+        // model uses softmax function on output, so it is already weighted and sums to 1.
+        float cumulative_weight = 0.0f;
+        for (size_t i = 0; i < num_outputs; ++i) {
+            cumulative_weight += model_output->data.f[i];
+            if (random_value < cumulative_weight) {
+                selected_index = i;
+                break;
+            }
+        }
+        EV << "Selected output index: " << selected_index << " with weight: " << model_output->data.f[selected_index] << "\n";
+
+        return selected_index; // Return the selected index
+    }
 }
 
 

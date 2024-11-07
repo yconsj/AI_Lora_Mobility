@@ -21,6 +21,8 @@
 #include "InputState.h"
 #include "SimpleRLMobility.h"
 #include <vector>
+#include "include/json.hpp"
+using json = nlohmann::json;
 
 namespace inet {
 
@@ -40,7 +42,7 @@ protected:
 private:
     StateLogger* getStateLoggerModule();  // Function to fetch the StateLogger module. should not be virtual
     int invokeModel(InputState state);
-    int getReward();
+    double getReward();
     std::vector<uint8_t> model_data;
     Coord getCoord();
     InputState currentState;
@@ -48,6 +50,7 @@ private:
     double rewardModifier = 1.0;
     double packet_reward = -1.0;
     double exploration_reward = -1.0;
+    double random_choice_probability = 0.0;
 
     SimpleRLMobility* getMobilityModule();
     InputState normalizeInputState(InputState state);

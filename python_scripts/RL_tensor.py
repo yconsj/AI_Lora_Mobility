@@ -169,7 +169,7 @@ def get_exploration_reward(current_episode, max_episode):
 
 def get_random_choice_probability(current_episode, max_episode):
     # TODO: read if this has to be handled a certain way, w.r.t. backpropagation ( action probability )
-    return 0.5 * (1 - current_episode / max_episode) ** 0.5
+    return 0.5 * (1 - current_episode / (max_episode/2)) ** 2
 
 
 def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes, batch_size):
@@ -271,7 +271,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)  # Initialize optimizer
 
-    num_episodes = 3  # Number of episodes to train
+    num_episodes = 10  # Number of episodes to train
     num_batches = 2
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()

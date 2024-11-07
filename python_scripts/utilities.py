@@ -11,13 +11,14 @@ def load_config(config_file):
         return json.load(f)
 
 
-def export_training_info(export_path, current_episode_num, max_episode_num, packet_reward, exploration_reward, random_choice_probability):
+def export_training_info(export_path, current_episode_num, max_episode_num, packet_reward, exploration_reward,
+                         random_choice_probability):
     content = {
         "current_episode_num": current_episode_num,
-        "max_episode_num" : max_episode_num,
-        "packet_reward" : packet_reward,
-        "exploration_reward" : exploration_reward,
-        "random_choice_probability" : random_choice_probability
+        "max_episode_num": max_episode_num,
+        "packet_reward": packet_reward,
+        "exploration_reward": exploration_reward,
+        "random_choice_probability": random_choice_probability
     }
     json_obj = json.dumps(content, indent=4)
 
