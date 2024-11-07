@@ -191,7 +191,7 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
             sum_rewards += sum (rewards)
             if batch == 0:  # only sample the first batch for later plotting.
                 print("total rewards: " + str(sum(rewards)))
-                    all_actions_per_episode.append(actions)  # Store actions for plotting avg action
+                all_actions_per_episode.append(actions)  # Store actions for plotting avg action
 
             # Convert lists to tensors
             returns_tensor = tf.convert_to_tensor(returns, dtype=tf.float32)  # Convert returns to tensor
