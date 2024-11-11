@@ -2,7 +2,7 @@ from simple_env import SimpleBaseEnv
 from stable_baselines3.common.env_checker import check_env
 
 env = SimpleBaseEnv()
-episodes = 2
+episodes = 1
 check_env(env, warn=True)
 
 for episode in range(episodes):
