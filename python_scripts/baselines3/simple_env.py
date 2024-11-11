@@ -214,22 +214,35 @@ class RewardPlottingCallback(BaseCallback):
     def __init__(self, verbose=0):
         super(RewardPlottingCallback, self).__init__(verbose)
         self.episode_rewards = []
-        self.episode_counts = []
+        self.episode_reward = 0
+        # Initialize the plot
+        plt.ion()  # Interactive mode for real-time plotting
+        self.figure, self.ax = plt.subplots()
+        self.line, = self.ax.plot([], [])
+        self.ax.set_xlabel("Episode")
+        self.ax.set_ylabel("Total Reward")
 
     def _on_step(self) -> bool:
-        if self.locals.get("dones")[0]:  # Check if an episode has finished
-            reward_sum = self.locals.get("infos")[0]["episode"]["r"]
-            self.episode_rewards.append(reward_sum)
-            self.episode_counts.append(len(self.episode_rewards))
-            
-            plt.plot(self.episode_counts, self.episode_rewards)
-            plt.xlabel("Episode")
-            plt.ylabel("Total Reward")
-            plt.pause(0.2)  # Update plot in real-time
+        self.episode_reward += sum(self.locals["rewards"])
+        if self.locals["dones"][0]:
+            # Append total episode reward
+            self.episode_rewards.append(self.episode_reward)
+            # Reset the episode reward counter
+            # Reset episode reward
+            self.episode_reward = 0
+
+            # Update the plot data
+            self.line.set_xdata(range(len(self.episode_rewards)))
+            self.line.set_ydata(self.episode_rewards)
+            self.ax.relim()
+            self.ax.autoscale_view()
+
+            plt.draw()
+            plt.pause(0.001)  # Small pause for updating the plot in real-time
         return True
     def _on_training_end(self) -> None:
-            plt.plot(self.episode_counts, self.episode_rewards)
-            plt.xlabel("Episode")
-            plt.ylabel("Total Reward")
+            print("Training plot done.")
+            plt.ioff()  # Turn off interactive mode
             plt.show()
+        
             pass
