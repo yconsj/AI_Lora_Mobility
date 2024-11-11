@@ -67,14 +67,10 @@ class SimpleBaseEnv(gym.Env):
 
         reward = 0
         if action == 0:
-            if self.pos == 0:
-                self.pos = 0
-            else:
+            if self.pos > 0:
                 self.pos -= 1  # Action -1
         elif action == 1:
-            if self.pos == 100:
-                self.pos = 100
-            else:
+            if self.pos < self.max_distance:
                 self.pos += 1  # Action +1
 
         # Update step count and check if episode is done
@@ -136,14 +132,18 @@ class SignalModel:
         self.snir_max = snir_max
 
     def generate_rssi(self, distance):
-        if distance <= 0:
+        if distance < 0:
             raise ValueError("Distance must be greater than 0.")
+        distance = max(distance, 0.00001)  # avoid log of 0
         rssi = self.rssi_ref - 10 * self.path_loss_exponent * np.log10(distance)
         # Scale RSSI between 0 and 1
         rssi_scaled = (rssi - self.rssi_min) / (self.rssi_max - self.rssi_min)
         return np.clip(rssi_scaled, 0, 1)  # Ensure it’s within [0, 1]
 
     def generate_snir(self, distance):
+        if distance < 0:
+            raise ValueError("Distance must be greater than 0.")
+        distance = max(distance, 0.00001)  # avoid log of 0
         rssi_linear = 10 ** ((self.rssi_ref - 10 * self.path_loss_exponent * np.log10(distance)) / 10)
         noise_linear = 10 ** (self.noise_floor / 10)
         snir = 10 * np.log10(rssi_linear / noise_linear)
@@ -162,7 +162,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_distance = 60
+        self.max_transmission_distance = 80
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
@@ -175,7 +175,7 @@ class node():
         # a and b are calculated to truncate around the mean interval with some range
         a, b = (self.lower_bound_send_time - self.send_interval) / self.send_std, (
                 self.upper_bound_send_time - self.send_interval) / self.send_std
-        interval = truncnorm.rvs(a, b, loc=self.send_interval, scale=self.send_interval)
+        interval = truncnorm.rvs(a, b, loc=self.send_interval, scale=self.send_std)
         return interval
 
     def generate_RSSI(self, distance):
@@ -185,10 +185,10 @@ class node():
         snir_scaled = self.transmission_model.generate_snir(distance)
 
     def transmission(self, gpos):
-        ploss_scale = 100
+        ploss_scale = 150
         distance = abs(self.pos - gpos)
         if distance < self.max_transmission_distance:
-            ploss_probability = 1 - np.exp(- distance / ploss_scale)
+            ploss_probability = np.exp(distance / ploss_scale)
             ploss_choice = np.random.rand() < ploss_probability
             if ploss_choice:
                 rssi_scaled = self.transmission_model.generate_rssi(distance)
@@ -202,9 +202,11 @@ class node():
         if time > self.time_of_next_packet:
             self.last_packet_time = time
             self.time_of_next_packet = time + self.generate_next_interval()
-            received, rssi, snir = self.transmission(gpos)
-            if received:
-                return received, rssi, snir
+            #f"time of next packet: {self.time_of_next_packet}" )
+            is_received, rssi, snir = self.transmission(gpos)
+            if is_received:
+                #print(f"packet is_received ")
+                return is_received, rssi, snir
         return False, 0, 0
         
 
