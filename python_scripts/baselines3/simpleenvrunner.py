@@ -11,5 +11,6 @@ check_env(env, warn=True)
 
 vec_env = make_vec_env(SimpleBaseEnv, n_envs=1, env_kwargs=dict())
 model = PPO("MlpPolicy", env).learn(3, callback=RewardPlottingCallback())
+
 model.save("stable-model")
 
