@@ -6,7 +6,7 @@ from gymnasium import spaces
 import matplotlib.pyplot as plt
 from scipy.stats import truncnorm
 import cv2
-
+from enum import Enum
 
 class SimpleBaseEnv(gym.Env):
     def __init__(self, render_mode="cv2"):
@@ -18,18 +18,19 @@ class SimpleBaseEnv(gym.Env):
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
-        self.max_steps = 500  # Maximum steps per episode
+        self.max_steps = 5000  # Maximum steps per episode
         # Observation_space = pos, time, rssi1, snir1, timestamp1, rssi2, snir2, timestamp2
         self.observation_space = spaces.Box(low=np.array([0, 0, 0, 0, 0, 0,0,0]), high=np.array([1, 1,1,1,1,1,1,1]), dtype=np.float32)
         # Environment state
+        self.last_packet = 0
         speed = 20  # meter per second
         max_distance = 3000 # meters
         self.max_distance = int(max_distance / speed)  # scaled by speed
         self.pos = self.max_distance / 2
         self.target = 5  # The target value we want to reach
         self.steps = 0
-        self.node_1x = node(0, time_to_first_packet=5, send_interval=10)
-        self.node_2x = node(self.max_distance, time_to_first_packet=10, send_interval=10)
+        self.node_1x = node(0, time_to_first_packet=50, send_interval=100)
+        self.node_2x = node(self.max_distance, time_to_first_packet=100, send_interval=100)
         self.total_reward = 0
         self.pos = int(self.max_distance / 2)  # Start in the middle
         self.rssi1 = 0
@@ -38,7 +39,7 @@ class SimpleBaseEnv(gym.Env):
         self.snir2 = 0
         self.timestamp1 = 0
         self.timestamp2 = 0
-
+        self.total_misses = 0
         self.width, self.height = 200, 20  # Size of the window
         self.point_radius = 1
         self.point_color = (0, 0, 255)  # Red color
@@ -48,6 +49,8 @@ class SimpleBaseEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
+        self.last_packet = 0
+        self.total_misses = 0
         self.pos = int(self.max_distance/2)
         self.node_1x.reset()
         self.node_2x.reset()
@@ -76,22 +79,35 @@ class SimpleBaseEnv(gym.Env):
         # Update step count and check if episode is done
         self.steps += 1
         recieved1, rssi1, snir1 = self.node_1x.send(self.steps, self.pos)
-        recieved2, rssi2, snir2 = self.node_1x.send(self.steps, self.pos)
-        if recieved1:
-            reward+= 10
+        recieved2, rssi2, snir2 = self.node_2x.send(self.steps, self.pos)
+        if recieved1 == PACKET_STATUS.RECIEVED:
+            if self.last_packet == 1:
+                reward+= 5
+            else:
+                reward += 10
             self.rssi1 = rssi1
             self.snir1 = snir1
             self.timestamp1 = self.steps
-        if recieved2:
-            reward+= 10
+            self.last_packet = 1
+        if recieved2 == PACKET_STATUS.RECIEVED:
+            if self.last_packet == 2:
+                reward+= 5
+            else:
+                reward += 10
             self.rssi2 = rssi2
             self.snir2 = snir2
             self.timestamp2 = self.steps
-
+            self.last_packet = 2
+        if recieved1 == PACKET_STATUS.LOST:
+            self.total_misses += 1
+            reward -= 5
+        if recieved2 == PACKET_STATUS.LOST:
+            self.total_misses += 1
+            reward -= 5
         done = self.steps >= self.max_steps
         self.total_reward += reward
         return np.array([self.pos / self.max_distance, self.steps / self.max_steps, self.rssi1, self.snir1,
-                        self.timestamp1, self.rssi2, self.snir2, self.timestamp2], dtype=np.float32), reward, done, False, {}
+                        self.timestamp1 / self.max_steps, self.rssi2, self.snir2, self.timestamp2 / self.max_steps], dtype=np.float32), reward, done, False, {}
 
     def render(self):
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
@@ -111,10 +127,10 @@ class SimpleBaseEnv(gym.Env):
         # Display the frame
         enlarged_image = cv2.resize(frame, (0, 0), fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
         # Draw score
-        cv2.putText(enlarged_image, "Total score: " + str(self.total_reward), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
+        cv2.putText(enlarged_image, "Total score: " + str(self.total_reward) + "| Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
 
         cv2.imshow(self.window_name, enlarged_image)
-        cv2.waitKey(30)  # Wait a short time to create the animation effect
+        cv2.waitKey(5)  # Wait a short time to create the animation effect
 
     def close(self):
         cv2.destroyAllWindows()
@@ -150,7 +166,10 @@ class SignalModel:
         # Scale SNIR between 0 and 1, inverted scale
         snir_scaled = 1 - (snir - self.snir_min) / (self.snir_max - self.snir_min)
         return np.clip(snir_scaled, 0, 1)  # Ensure it’s within [0, 1]
-
+class PACKET_STATUS(Enum):
+    RECIEVED = 1
+    LOST = 2
+    NOT_SENT = 3
 class node():
     def __init__(self, pos=10, time_to_first_packet=10, send_interval=10, send_std=2):
         self.pos = pos
@@ -206,8 +225,10 @@ class node():
             is_received, rssi, snir = self.transmission(gpos)
             if is_received:
                 #print(f"packet is_received ")
-                return is_received, rssi, snir
-        return False, 0, 0
+                return PACKET_STATUS.RECIEVED, rssi, snir
+            else:
+                return PACKET_STATUS.LOST, 0 ,0
+        return PACKET_STATUS.NOT_SENT, 0, 0
         
 
 class RewardPlottingCallback(BaseCallback):
