@@ -18,19 +18,22 @@ class SimpleBaseEnv(gym.Env):
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
-        self.max_steps = 5000  # Maximum steps per episode
+        self.max_steps = 10000  # Maximum steps per episode
+        self.max_misses = 10
         # Observation_space = pos, time, rssi1, snir1, timestamp1, rssi2, snir2, timestamp2
-        self.observation_space = spaces.Box(low=np.array([0, 0, 0, 0, 0, 0,0,0]), high=np.array([1, 1,1,1,1,1,1,1]), dtype=np.float32)
+        self.observation_space = spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0]),
+                                            high=np.array([1, 1, 1, 1, 1, 1, 1, 1]), dtype=np.float32)
         # Environment state
         self.last_packet = 0
         speed = 20  # meter per second
-        max_distance = 3000 # meters
+        max_distance = 3000  # meters
         self.max_distance = int(max_distance / speed)  # scaled by speed
         self.pos = self.max_distance / 2
         self.target = 5  # The target value we want to reach
         self.steps = 0
-        self.node_1x = node(0, time_to_first_packet=50, send_interval=100)
-        self.node_2x = node(self.max_distance, time_to_first_packet=100, send_interval=100)
+
+        self.node_1x = node(0, time_to_first_packet=0, send_interval=300)
+        self.node_2x = node(self.max_distance, time_to_first_packet=150, send_interval=300)
         self.total_reward = 0
         self.pos = int(self.max_distance / 2)  # Start in the middle
         self.rssi1 = 0
@@ -52,6 +55,7 @@ class SimpleBaseEnv(gym.Env):
         self.last_packet = 0
         self.total_misses = 0
         self.pos = int(self.max_distance/2)
+
         self.node_1x.reset()
         self.node_2x.reset()
         self.steps = 0
@@ -63,10 +67,10 @@ class SimpleBaseEnv(gym.Env):
         self.timestamp1 = 0
         self.timestamp2 = 0
         return np.array([self.pos / self.max_distance, self.steps / self.max_steps, self.rssi1, self.snir1,
-                        self.timestamp1, self.rssi2, self.snir2, self.timestamp2], dtype=np.float32), {}
+                         self.timestamp1, self.rssi2, self.snir2, self.timestamp2], dtype=np.float32), {}
 
     def step(self, action):
-       # Update the environment pos over 10 stamps
+        # Update the environment pos over 10 stamps
 
         reward = 0
         if action == 0:
@@ -104,7 +108,7 @@ class SimpleBaseEnv(gym.Env):
         if recieved2 == PACKET_STATUS.LOST:
             self.total_misses += 1
             reward -= 5
-        done = self.steps >= self.max_steps
+        done = self.steps >= self.max_steps # or self.total_misses >= self.max_misses
         self.total_reward += reward
         return np.array([self.pos / self.max_distance, self.steps / self.max_steps, self.rssi1, self.snir1,
                         self.timestamp1 / self.max_steps, self.rssi2, self.snir2, self.timestamp2 / self.max_steps], dtype=np.float32), reward, done, False, {}
@@ -114,16 +118,18 @@ class SimpleBaseEnv(gym.Env):
         x = int(self.pos)
         y = 5
         # Create a new black image
-        offset = int( (self.width - self.max_distance)/2 )
+        offset = int((self.width - self.max_distance) / 2)
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
         # Draw the line and moving point
-        cv2.line(frame,pt1=(offset, y), pt2=(offset + self.max_distance,y), color=self.line_color)
-        cv2.rectangle(frame,pt1= (offset + x-2, y-2), pt2= (offset + x+2, y+2), color=self.point_color)
+        cv2.line(frame, pt1=(offset, y), pt2=(offset + self.max_distance, y), color=self.line_color)
+        cv2.rectangle(frame, pt1=(offset + x - 2, y - 2), pt2=(offset + x + 2, y + 2), color=self.point_color)
 
         # Draw nodes
-        cv2.rectangle(frame,pt1= (offset + self.node_1x.pos-2, y-2), pt2= (offset + self.node_1x.pos+2, y+2), color=self.point_color)
-        cv2.rectangle(frame,pt1= (offset + self.node_2x.pos-2, y-2), pt2= (offset + self.node_2x.pos+2, y+2), color=self.point_color)
+        cv2.rectangle(frame, pt1=(offset + self.node_1x.pos - 2, y - 2), pt2=(offset + self.node_1x.pos + 2, y + 2),
+                      color=self.point_color)
+        cv2.rectangle(frame, pt1=(offset + self.node_2x.pos - 2, y - 2), pt2=(offset + self.node_2x.pos + 2, y + 2),
+                      color=self.point_color)
         # Display the frame
         enlarged_image = cv2.resize(frame, (0, 0), fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
         # Draw score
@@ -170,6 +176,7 @@ class PACKET_STATUS(Enum):
     RECIEVED = 1
     LOST = 2
     NOT_SENT = 3
+
 class node():
     def __init__(self, pos=10, time_to_first_packet=10, send_interval=10, send_std=2):
         self.pos = pos
@@ -204,24 +211,23 @@ class node():
         snir_scaled = self.transmission_model.generate_snir(distance)
 
     def transmission(self, gpos):
-        ploss_scale = 150
+        ploss_scale = 25
         distance = abs(self.pos - gpos)
-        if distance < self.max_transmission_distance:
-            ploss_probability = np.exp(distance / ploss_scale)
-            ploss_choice = np.random.rand() < ploss_probability
-            if ploss_choice:
-                rssi_scaled = self.transmission_model.generate_rssi(distance)
-                snir_scaled = self.transmission_model.generate_snir(distance)
-                return True, rssi_scaled, snir_scaled
+        ploss_probability = np.exp(distance / ploss_scale)
+        ploss_choice = (np.random.rand() < ploss_probability) and (distance < self.max_transmission_distance)
+        if ploss_choice:
+            rssi_scaled = self.transmission_model.generate_rssi(distance)
+            snir_scaled = self.transmission_model.generate_snir(distance)
+            return True, rssi_scaled, snir_scaled
         return False, 0, 0
 
     def send(self, time, gpos):
         # Decides whether a packet should be send and if it gets lost
         # Pobability of success is based of last time send and distance
-        if time > self.time_of_next_packet:
+        if time >= self.time_of_next_packet:
             self.last_packet_time = time
             self.time_of_next_packet = time + self.generate_next_interval()
-            #f"time of next packet: {self.time_of_next_packet}" )
+            # f"time of next packet: {self.time_of_next_packet}" )
             is_received, rssi, snir = self.transmission(gpos)
             if is_received:
                 #print(f"packet is_received ")
@@ -261,9 +267,11 @@ class RewardPlottingCallback(BaseCallback):
             plt.draw()
             plt.pause(0.001)  # Small pause for updating the plot in real-time
         return True
+
     def _on_training_end(self) -> None:
             print("Training plot done.")
             plt.ioff()  # Turn off interactive mode
             plt.show()
         
             pass
+
