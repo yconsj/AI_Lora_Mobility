@@ -8,7 +8,7 @@ check_env(env, warn=True)
 vec_env = make_vec_env(SimpleBaseEnv, n_envs=1, env_kwargs=dict())
 model = PPO("MlpPolicy", vec_env)
 
-model.load("stable-model", print_system_info=True)
+model.load("stable-model-best/best_model", print_system_info=True)
 print(model.policy)
 obs = vec_env.reset()
 

@@ -47,7 +47,7 @@ class SimpleBaseEnv(gym.Env):
         self.point_color = (0, 0, 255)  # Red color
         self.line_color = (255, 0, 0)  # Blue color
         self.window_name = "RL Animation"
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+
         self.visited_pos = []
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
@@ -105,16 +105,17 @@ class SimpleBaseEnv(gym.Env):
             self.last_packet = 2
         if self.recieved1 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward -= 0
+            reward -= 5
         if self.recieved2 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward -= 0
-        done = self.steps >= self.max_steps or self.total_misses >= 1
+            reward -= 5
+        done = self.steps >= self.max_steps or self.total_misses >= 3
         self.total_reward += reward
         return np.array([abs(self.pos - self.node_1x.pos) / self.max_distance, (abs(self.pos - self.node_2x.pos) / self.max_distance), self.steps / self.max_steps, self.rssi1, self.snir1,
                         self.timestamp1 / self.max_steps, self.rssi2, self.snir2, self.timestamp2 / self.max_steps], dtype=np.float32), reward, done, False, {}
 
     def render(self):
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
         x = int(self.pos)
         y = 5
@@ -124,6 +125,7 @@ class SimpleBaseEnv(gym.Env):
 
         # Draw the line and moving point
         cv2.line(frame,pt1=(offset, y), pt2=(offset + self.max_distance,y), color=self.line_color)
+        cv2.line(frame,pt1=(int(self.width / 2), y+1), pt2=(int(self.width / 2),y-1), color=self.line_color)
         cv2.rectangle(frame,pt1= (offset + x-2, y-2), pt2= (offset + x+2, y+2), color=self.point_color)
 
         # Draw nodes
@@ -196,7 +198,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_distance = 80
+        self.max_transmission_distance = 60
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
@@ -274,7 +276,7 @@ class RewardPlottingCallback(BaseCallback):
             self.ax.autoscale_view()
 
             plt.draw()
-            plt.pause(0.001)  # Small pause for updating the plot in real-time
+            plt.pause(0.005)  # Small pause for updating the plot in real-time
         return True
     def _on_training_end(self) -> None:
             print("Training plot done.")
