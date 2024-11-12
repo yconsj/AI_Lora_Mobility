@@ -9,7 +9,7 @@ import cv2
 from enum import Enum
 
 class SimpleBaseEnv(gym.Env):
-    def __init__(self, render_mode="cv2"):
+    def __init__(self, render_mode="none"):
         super(SimpleBaseEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
@@ -56,6 +56,8 @@ class SimpleBaseEnv(gym.Env):
         self.visited_pos = []
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
+        if self.render_mode == "cv2":
+            self.render()
         self.visited_pos = []
         self.last_packet = 0
         self.total_misses = 0
@@ -98,31 +100,32 @@ class SimpleBaseEnv(gym.Env):
         self.timestamp2+=1
         if self.recieved1 == PACKET_STATUS.RECIEVED:
             if self.last_packet == 1:
-                reward+= 5
+                reward+= 5*self.rssi1
             else:
-                reward += 10
+                reward += 10*self.rssi1
             self.p_recieved1 = self.pos
             self.rssi1 = rssi1
             self.snir1 = snir1
-            self.timestamp1 = self.steps
+            self.timestamp1 = 0
             self.last_packet = 1
         if self.recieved2 == PACKET_STATUS.RECIEVED:
             if self.last_packet == 2:
-                reward+= 5
+                reward+= 5*self.rssi2
             else:
-                reward += 10 
+                reward += 10*self.rssi2
             self.p_recieved2 = self.pos
             self.rssi2 = rssi2
             self.snir2 = snir2
-            self.timestamp2 = self.steps
+            self.timestamp2 = 0
             self.last_packet = 2
         if self.recieved1 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward -= 4
+            reward -= 2
         if self.recieved2 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward -= 4
-        done = self.steps >= self.max_steps or self.total_misses >= 4
+            reward -= 2
+        done = self.steps >= self.max_steps or self.total_misses >= 10
+        reward = round(reward, 1)
         self.total_reward += reward
 
         state = [ self.pos / self.max_distance,
@@ -164,7 +167,7 @@ class SimpleBaseEnv(gym.Env):
         cv2.putText(enlarged_image, "Total score: " + str(self.total_reward) + "| Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
 
         cv2.imshow(self.window_name, enlarged_image)
-        cv2.waitKey(60)  # Wait a short time to create the animation effect
+        cv2.waitKey(5)  # Wait a short time to create the animation effect
 
     def close(self):
         cv2.destroyAllWindows()
@@ -215,7 +218,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_distance = 60
+        self.max_transmission_distance = 90
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
