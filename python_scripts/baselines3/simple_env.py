@@ -18,12 +18,13 @@ class SimpleBaseEnv(gym.Env):
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
-        self.max_steps = 10000  # Maximum steps per episode
-        self.max_misses = 10
+
+        self.max_steps = 50000  # Maximum steps per episode
         # Observation_space = pos, time, rssi1, snir1, timestamp1, rssi2, snir2, timestamp2
-        self.observation_space = spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0]),
-                                            high=np.array([1, 1, 1, 1, 1, 1, 1, 1]), dtype=np.float32)
+        self.observation_space = spaces.Box(low=np.array([0,0, 0, 0, 0, 0, 0,0,0]), high=np.array([1,1, 1,1,1,1,1,1,1]), dtype=np.float32)
         # Environment state
+        self.recieved1 = 0
+        self.recieved2 = 0
         self.last_packet = 0
         speed = 20  # meter per second
         max_distance = 3000  # meters
@@ -31,9 +32,9 @@ class SimpleBaseEnv(gym.Env):
         self.pos = self.max_distance / 2
         self.target = 5  # The target value we want to reach
         self.steps = 0
-
         self.node_1x = node(0, time_to_first_packet=0, send_interval=300)
         self.node_2x = node(self.max_distance, time_to_first_packet=150, send_interval=300)
+
         self.total_reward = 0
         self.pos = int(self.max_distance / 2)  # Start in the middle
         self.rssi1 = 0
@@ -49,9 +50,10 @@ class SimpleBaseEnv(gym.Env):
         self.line_color = (255, 0, 0)  # Blue color
         self.window_name = "RL Animation"
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-
+        self.visited_pos = []
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
+        self.visited_pos = []
         self.last_packet = 0
         self.total_misses = 0
         self.pos = int(self.max_distance/2)
@@ -66,25 +68,27 @@ class SimpleBaseEnv(gym.Env):
         self.snir2 = 0
         self.timestamp1 = 0
         self.timestamp2 = 0
-        return np.array([self.pos / self.max_distance, self.steps / self.max_steps, self.rssi1, self.snir1,
-                         self.timestamp1, self.rssi2, self.snir2, self.timestamp2], dtype=np.float32), {}
+        return np.array([abs(self.pos - self.node_1x.pos) / self.max_distance, (abs(self.pos - self.node_2x.pos) / self.max_distance),
+                        self.steps / self.max_steps, self.rssi1, self.snir1,
+                        self.timestamp1, self.rssi2, self.snir2, self.timestamp2], dtype=np.float32), {}
 
     def step(self, action):
-        # Update the environment pos over 10 stamps
-
         reward = 0
+        if self.pos not in self.visited_pos:
+            self.visited_pos.append(self.pos)
+            # reward +=1
+        
         if action == 0:
             if self.pos > 0:
                 self.pos -= 1  # Action -1
         elif action == 1:
             if self.pos < self.max_distance:
                 self.pos += 1  # Action +1
-
         # Update step count and check if episode is done
         self.steps += 1
-        recieved1, rssi1, snir1 = self.node_1x.send(self.steps, self.pos)
-        recieved2, rssi2, snir2 = self.node_2x.send(self.steps, self.pos)
-        if recieved1 == PACKET_STATUS.RECIEVED:
+        self.recieved1, rssi1, snir1 = self.node_1x.send(self.steps, self.pos)
+        self.recieved2, rssi2, snir2 = self.node_2x.send(self.steps, self.pos)
+        if self.recieved1 == PACKET_STATUS.RECIEVED:
             if self.last_packet == 1:
                 reward+= 5
             else:
@@ -93,24 +97,24 @@ class SimpleBaseEnv(gym.Env):
             self.snir1 = snir1
             self.timestamp1 = self.steps
             self.last_packet = 1
-        if recieved2 == PACKET_STATUS.RECIEVED:
+        if self.recieved2 == PACKET_STATUS.RECIEVED:
             if self.last_packet == 2:
                 reward+= 5
             else:
-                reward += 10
+                reward += 10 
             self.rssi2 = rssi2
             self.snir2 = snir2
             self.timestamp2 = self.steps
             self.last_packet = 2
-        if recieved1 == PACKET_STATUS.LOST:
+        if self.recieved1 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward -= 5
-        if recieved2 == PACKET_STATUS.LOST:
+            reward -= 0
+        if self.recieved2 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward -= 5
-        done = self.steps >= self.max_steps # or self.total_misses >= self.max_misses
+            reward -= 0
+        done = self.steps >= self.max_steps or self.total_misses >= 1
         self.total_reward += reward
-        return np.array([self.pos / self.max_distance, self.steps / self.max_steps, self.rssi1, self.snir1,
+        return np.array([abs(self.pos - self.node_1x.pos) / self.max_distance, (abs(self.pos - self.node_2x.pos) / self.max_distance), self.steps / self.max_steps, self.rssi1, self.snir1,
                         self.timestamp1 / self.max_steps, self.rssi2, self.snir2, self.timestamp2 / self.max_steps], dtype=np.float32), reward, done, False, {}
 
     def render(self):
@@ -126,17 +130,25 @@ class SimpleBaseEnv(gym.Env):
         cv2.rectangle(frame, pt1=(offset + x - 2, y - 2), pt2=(offset + x + 2, y + 2), color=self.point_color)
 
         # Draw nodes
-        cv2.rectangle(frame, pt1=(offset + self.node_1x.pos - 2, y - 2), pt2=(offset + self.node_1x.pos + 2, y + 2),
-                      color=self.point_color)
-        cv2.rectangle(frame, pt1=(offset + self.node_2x.pos - 2, y - 2), pt2=(offset + self.node_2x.pos + 2, y + 2),
-                      color=self.point_color)
+        if self.recieved1 != PACKET_STATUS.NOT_SENT:
+            cv2.rectangle(frame,pt1= (offset + self.node_1x.pos-2, y-2), pt2= (offset + self.node_1x.pos+2, y+2), color=(0,128,0))
+        else:
+            cv2.rectangle(frame,pt1= (offset + self.node_1x.pos-2, y-2), pt2= (offset + self.node_1x.pos+2, y+2), color=self.point_color)
+
+        if self.recieved2 != PACKET_STATUS.NOT_SENT:
+            cv2.rectangle(frame,pt1= (offset + self.node_2x.pos-2, y-2), pt2= (offset + self.node_2x.pos+2, y+2), color=(0,128,0))
+        else:
+            cv2.rectangle(frame,pt1= (offset + self.node_2x.pos-2, y-2), pt2= (offset + self.node_2x.pos+2, y+2), color=self.point_color)
+
+        # cv2.rectangle(frame,pt1= (offset + self.node_1x.pos-2, y-2), pt2= (offset + self.node_1x.pos+2, y+2), color=self.point_color)
+        # cv2.rectangle(frame,pt1= (offset + self.node_2x.pos-2, y-2), pt2= (offset + self.node_2x.pos+2, y+2), color=self.point_color)
         # Display the frame
         enlarged_image = cv2.resize(frame, (0, 0), fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
         # Draw score
         cv2.putText(enlarged_image, "Total score: " + str(self.total_reward) + "| Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
 
         cv2.imshow(self.window_name, enlarged_image)
-        cv2.waitKey(5)  # Wait a short time to create the animation effect
+        cv2.waitKey(60)  # Wait a short time to create the animation effect
 
     def close(self):
         cv2.destroyAllWindows()
