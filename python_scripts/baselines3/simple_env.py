@@ -34,8 +34,8 @@ class SimpleBaseEnv(gym.Env):
         self.steps = 0
         pos1 = 0
         pos2 = self.max_distance
-        self.node1 = node(pos1, time_to_first_packet=100, send_interval=200)
-        self.node2 = node(pos2, time_to_first_packet=200, send_interval=200)
+        self.node1 = node(pos1, time_to_first_packet=100, send_interval=300)
+        self.node2 = node(pos2, time_to_first_packet=200, send_interval=300)
         self.p_recieved1 = pos1
         self.p_recieved2 = pos2
         self.total_reward = 0
@@ -83,14 +83,21 @@ class SimpleBaseEnv(gym.Env):
         reward = 0
         if self.pos not in self.visited_pos:
             self.visited_pos.append(self.pos)
-            # reward +=1
-        
+            #reward += 0.1
+
         if action == 0:
             if self.pos > 0:
-                self.pos -= 1  # Action -1
+                self.pos -= 1  # Action left
         elif action == 1:
             if self.pos < self.max_distance:
-                self.pos += 1  # Action +1
+                self.pos += 1  # Action right
+
+        # Reward actions going to correcd direction
+        if self.node1.time_of_next_packet < self.node2.time_of_next_packet and action == 0:
+            reward += 1
+        if self.node2.time_of_next_packet < self.node1.time_of_next_packet and action == 1:
+            reward += 1
+        
         # Update step count and check if episode is done
         self.steps += 1
         self.recieved1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
@@ -100,7 +107,7 @@ class SimpleBaseEnv(gym.Env):
         self.timestamp2+=1
         if self.recieved1 == PACKET_STATUS.RECIEVED:
             if self.last_packet == 1:
-                reward+= 5*self.rssi1
+                reward+= 5*self.rssi2
             else:
                 reward += 10*self.rssi1
             self.p_recieved1 = self.pos
@@ -125,7 +132,7 @@ class SimpleBaseEnv(gym.Env):
             self.total_misses += 1
             reward -= 2
         done = self.steps >= self.max_steps or self.total_misses >= 10
-        reward = round(reward, 1)
+        reward = round(reward, 2)
         self.total_reward += reward
 
         state = [ self.pos / self.max_distance,

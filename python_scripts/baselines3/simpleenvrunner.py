@@ -15,7 +15,7 @@ def main():
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1, best_model_save_path="stable-model-best")
-    model = PPO("MlpPolicy", env, ent_coef=0.001, tensorboard_log="./tensorboard/").learn(2000000, callback=[eval_callback])
+    model = PPO("MlpPolicy", env, tensorboard_log="./tensorboard/").learn(2000000, callback=[eval_callback])
 
     model.save("stable-model")
 
