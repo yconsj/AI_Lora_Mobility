@@ -38,7 +38,7 @@ class SimpleBaseEnv(gym.Env):
         self.steps = 0
         self.max_steps = 50000  # Maximum steps per episode
         # Observation_space = pos, current_pos1, current_pos2, pos1, rssi1, snir1, timestamp1, pos2,rssi2, snir2, timestamp2
-        # Pos is the position when packet was recieved, timestamp is the time SINCE packet recieved
+        # Pos is the position when packet was received, timestamp is the time SINCE packet received
         self.observation_space = spaces.Box(low=np.array([0,0,0 , 0,0, 0 ,0, 0, 0]), high=np.array([1,1,1, 1,1, 1,1,1,1]), dtype=np.float32)
         # Environment state
         self.received1 = 0
@@ -61,8 +61,8 @@ class SimpleBaseEnv(gym.Env):
         pos2 = self.max_distance
         self.node1 = node(pos1, time_to_first_packet=250, send_interval=500)
         self.node2 = node(pos2, time_to_first_packet=500, send_interval=500)
-        self.p_recieved1 = pos1
-        self.p_recieved2 = pos2
+        self.p_received1 = pos1
+        self.p_received2 = pos2
         self.total_reward = 0
         self.pos = int(self.max_distance / 2)  # Start in the middle
         self.rssi1 = 0
@@ -71,7 +71,7 @@ class SimpleBaseEnv(gym.Env):
         self.snir2 = 0
         self.timestamp1 = 0
         self.timestamp2 = 0
-        self.p_dist1 = 0 # distance to node when recieved
+        self.p_dist1 = 0 # distance to node when received
         self.p_dist2 = 0
         self.total_misses = 0
         self.total_received = 0
@@ -166,39 +166,41 @@ class SimpleBaseEnv(gym.Env):
             reward = self.get_pos_reward(self.pos, self.node1.pos, self.node1.time_of_next_packet)
         if self.node2.time_of_next_packet < self.node1.time_of_next_packet and action == 1:
             reward = self.get_pos_reward(self.pos, self.node2.pos, self.node2.time_of_next_packet)
+        if action == 2:
+            reward = self.get_pos_reward(self.pos, self.node1.pos, self.node1.time_of_next_packet)
 
         #penalty
         if self.node1.time_of_next_packet < self.node2.time_of_next_packet and action ==1:
             reward = self.get_pos_penalty(self.pos, self.node1.pos, self.node1.time_of_next_packet)
         if self.node2.time_of_next_packet < self.node1.time_of_next_packet and action ==0:
             reward = self.get_pos_penalty(self.pos, self.node2.pos, self.node2.time_of_next_packet)
-        self.recieved1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
-        self.recieved2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
+        self.received1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
+        self.received2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
         self.timestamp1 = min(self.max_steps,self.timestamp1+1)
         self.timestamp2 = min(self.max_steps,self.timestamp2+1)
-        if self.recieved1 == PACKET_STATUS.RECIEVED:
+        if self.received1 == PACKET_STATUS.RECEIVED:
             reward = self.packet_reward_max
             if self.last_packet == 1:
                 reward = 0
-            self.p_recieved1 = self.pos
+            self.p_received1 = self.pos
             self.rssi1 = rssi1
             self.snir1 = snir1
             self.timestamp1 = 0
             self.last_packet = 1
-            self.total_recieved += 1
+            self.total_received += 1
             self.p_dist1 = abs(self.pos - self.node1.pos)
-        if self.recieved2 == PACKET_STATUS.RECIEVED:
+        if self.received2 == PACKET_STATUS.RECEIVED:
             reward = self.packet_reward_max
             if self.last_packet == 2:
                 reward = 0
-            self.p_recieved2 = self.pos
+            self.p_received2 = self.pos
             self.rssi2 = rssi2
             self.snir2 = snir2
             self.timestamp2 = 0
             self.last_packet = 2
-            self.total_recieved += 1
+            self.total_received += 1
             self.p_dist2 = abs(self.pos-self.node2.pos)
-        if self.recieved1 == PACKET_STATUS.LOST:
+        if self.received1 == PACKET_STATUS.LOST:
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node1.pos)
         if self.received2 == PACKET_STATUS.LOST:
@@ -208,12 +210,11 @@ class SimpleBaseEnv(gym.Env):
         self.total_reward += reward
 
         state = [self.pos / self.max_distance, abs(self.pos - self.node1.pos) / self.max_distance, abs(self.pos - self.node2.pos) / self.max_distance,
-                self.p_dist1 / self.max_distance, self.p_recieved1 / self.max_distance, self.timestamp1 / self.max_steps,
-                self.p_dist2 / self.max_distance, self.p_recieved2 / self.max_distance,  self.timestamp2 / self.max_steps]
+                self.p_dist1 / self.max_distance, self.p_received1 / self.max_distance, self.timestamp1 / self.max_steps,
+                self.p_dist2 / self.max_distance, self.p_received2 / self.max_distance,  self.timestamp2 / self.max_steps]
 
-        return np.array(state, dtype=np.float32), reward, done, False, info
-
-
+        return np.array(state, dtype=np.float32), reward, done, False, {}
+    
     def render(self):
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
@@ -284,7 +285,7 @@ class SignalModel:
         snir_scaled = 1 - (snir - self.snir_min) / (self.snir_max - self.snir_min)
         return np.clip(snir_scaled, 0, 1)  # Ensure it’s within [0, 1]
 class PACKET_STATUS(Enum):
-    received = 1
+    RECEIVED = 1
     LOST = 2
     NOT_SENT = 3
 class node():
@@ -342,7 +343,7 @@ class node():
             is_received, rssi, snir = self.transmission(gpos)
             if is_received:
                 #print(f"packet is_received ")
-                return PACKET_STATUS.received, rssi, snir
+                return PACKET_STATUS.RECEIVED, rssi, snir
             else:
                 return PACKET_STATUS.LOST, 0 ,0
         return PACKET_STATUS.NOT_SENT, 0, 0
