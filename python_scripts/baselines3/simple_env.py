@@ -212,8 +212,9 @@ class SimpleBaseEnv(gym.Env):
         state = [self.pos / self.max_distance, abs(self.pos - self.node1.pos) / self.max_distance, abs(self.pos - self.node2.pos) / self.max_distance,
                 self.p_dist1 / self.max_distance, self.p_received1 / self.max_distance, self.timestamp1 / self.max_steps,
                 self.p_dist2 / self.max_distance, self.p_received2 / self.max_distance,  self.timestamp2 / self.max_steps]
-
-        return np.array(state, dtype=np.float32), reward, done, False, {}
+        info = {'total_received': self.total_received,
+                'total_misses': self.total_misses}
+        return np.array(state, dtype=np.float32), reward, done, False, info
     
     def render(self):
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
