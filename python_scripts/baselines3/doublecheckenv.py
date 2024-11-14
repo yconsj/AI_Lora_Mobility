@@ -12,4 +12,4 @@ for episode in range(episodes):
         env.render()
         random_action = env.action_space.sample()
         obs, reward, done, truncated, info= env.step(random_action)
-
+        print(reward)
