@@ -8,8 +8,9 @@ from scipy.stats import truncnorm
 import cv2
 from enum import Enum
 
+
 class SimpleBaseEnv(gym.Env):
-    def __init__(self, render_mode="cv2"):
+    def __init__(self, render_mode="none"):
         super(SimpleBaseEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
@@ -19,22 +20,31 @@ class SimpleBaseEnv(gym.Env):
         # Environment.pos
         self.steps = 0
 
-        self.max_steps = 10000  # Maximum steps per episode
-        # Observation_space = pos, time, rssi1, snir1, timestamp1, rssi2, snir2, timestamp2
-        self.observation_space = spaces.Box(low=np.array([0,0, 0, 0, 0, 0, 0,0,0]), high=np.array([1,1, 1,1,1,1,1,1,1]), dtype=np.float32)
+        self.max_steps = 50000  # Maximum steps per episode
+        # Observation_space = current_pos, pos1, rssi1, snir1, timestamp1, pos2,rssi2, snir2, timestamp2
+        # Pos is the position when packet was recieved, timestamp is the time SINCE packet recieved
+        self.observation_space = spaces.Box(low=np.array([0, 0 ,0, 0, 0, 0, 0, 0,0]), high=np.array([1, 1,1, 1,1,1,1,1,1]), dtype=np.float32)
         # Environment state
         self.recieved1 = 0
         self.recieved2 = 0
         self.last_packet = 0
+        self.pos_reward_max = 2
+        self.pos_reward_min = 0
+        self.miss_penalty_max = 10
+        self.miss_penalty_min = 0
+        self.packet_reward_max = 100
         speed = 20  # meter per second
         max_distance = 3000  # meters
         self.max_distance = int(max_distance / speed)  # scaled by speed
         self.pos = self.max_distance / 2
         self.target = 5  # The target value we want to reach
         self.steps = 0
-        self.node_1x = node(0, time_to_first_packet=0, send_interval=300)
-        self.node_2x = node(self.max_distance, time_to_first_packet=150, send_interval=300)
-
+        pos1 = 0
+        pos2 = self.max_distance
+        self.node1 = node(pos1, time_to_first_packet=100, send_interval=200)
+        self.node2 = node(pos2, time_to_first_packet=200, send_interval=200)
+        self.p_recieved1 = pos1
+        self.p_recieved2 = pos2
         self.total_reward = 0
         self.pos = int(self.max_distance / 2)  # Start in the middle
         self.rssi1 = 0
@@ -44,6 +54,7 @@ class SimpleBaseEnv(gym.Env):
         self.timestamp1 = 0
         self.timestamp2 = 0
         self.total_misses = 0
+        self.total_recieved = 0
         self.width, self.height = 200, 20  # Size of the window
         self.point_radius = 1
         self.point_color = (0, 0, 255)  # Red color
@@ -53,13 +64,14 @@ class SimpleBaseEnv(gym.Env):
         self.visited_pos = []
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
+        if self.render_mode == "cv2":
+            self.render()
         self.visited_pos = []
         self.last_packet = 0
         self.total_misses = 0
         self.pos = int(self.max_distance/2)
-
-        self.node_1x.reset()
-        self.node_2x.reset()
+        self.node1.reset()
+        self.node2.reset()
         self.steps = 0
         self.total_reward = 0
         self.rssi1 = 0
@@ -68,54 +80,91 @@ class SimpleBaseEnv(gym.Env):
         self.snir2 = 0
         self.timestamp1 = 0
         self.timestamp2 = 0
-        return np.array([abs(self.pos - self.node_1x.pos) / self.max_distance, (abs(self.pos - self.node_2x.pos) / self.max_distance),
-                        self.steps / self.max_steps, self.rssi1, self.snir1,
-                        self.timestamp1, self.rssi2, self.snir2, self.timestamp2], dtype=np.float32), {}
+        self.total_recieved = 0
+
+
+        state = [ self.pos / self.max_distance,
+                self.node1.pos / self.max_distance, self.rssi1, self.snir1, self.timestamp1 / self.max_steps,
+                self.node2.pos / self.max_distance, self.rssi2, self.snir2, self.timestamp2 / self.max_steps]
+        return np.array(state, dtype=np.float32), {}
+
+
+    def get_pos_reward(self, pos1, pos2):
+        distance = abs(pos1 - pos2)
+        scaled_distance = distance / self.max_distance
+        # Return reward based on scaled distance between a min and max reward
+        reward = self.pos_reward_max - scaled_distance * (self.pos_reward_max - self.pos_reward_min)
+
+        # Ensure reward is within bounds in case of rounding errors
+        reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
+        return reward
+    def get_miss_penalty(self, pos1, pos2):
+        distance = abs(pos1 - pos2)
+        scaled_distance = distance / self.max_distance
+        # Return reward based on scaled distance between a min and max reward
+        penalty = scaled_distance * (self.miss_penalty_max - self.miss_penalty_min)
+
+        # Ensure reward is within bounds in case of rounding errors
+        penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
+        return -penalty
+
 
     def step(self, action):
         reward = 0
         if self.pos not in self.visited_pos:
             self.visited_pos.append(self.pos)
-            # reward +=1
-        
+            #reward += 0.1
+
         if action == 0:
             if self.pos > 0:
-                self.pos -= 1  # Action -1
+                self.pos -= 1  # Action left
         elif action == 1:
             if self.pos < self.max_distance:
-                self.pos += 1  # Action +1
+                self.pos += 1  # Action right
+
+        # Reward actions going to correcd direction
+        if self.node1.time_of_next_packet < self.node2.time_of_next_packet and action == 0:
+            reward = self.get_pos_reward(self.pos, self.node1.pos)
+        if self.node2.time_of_next_packet < self.node1.time_of_next_packet and action == 1:
+            reward = self.get_pos_reward(self.pos, self.node2.pos)
+
+        
         # Update step count and check if episode is done
         self.steps += 1
-        self.recieved1, rssi1, snir1 = self.node_1x.send(self.steps, self.pos)
-        self.recieved2, rssi2, snir2 = self.node_2x.send(self.steps, self.pos)
+        self.recieved1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
+        self.recieved2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
+
+        self.timestamp1+=1
+        self.timestamp2+=1
         if self.recieved1 == PACKET_STATUS.RECIEVED:
-            if self.last_packet == 1:
-                reward+= 5
-            else:
-                reward += 10
+            reward = self.packet_reward_max
+            self.p_recieved1 = self.pos
             self.rssi1 = rssi1
             self.snir1 = snir1
-            self.timestamp1 = self.steps
+            self.timestamp1 = 0
             self.last_packet = 1
         if self.recieved2 == PACKET_STATUS.RECIEVED:
-            if self.last_packet == 2:
-                reward+= 5
-            else:
-                reward += 10 
+            reward = self.packet_reward_max
+            self.p_recieved2 = self.pos
             self.rssi2 = rssi2
             self.snir2 = snir2
-            self.timestamp2 = self.steps
+            self.timestamp2 = 0
             self.last_packet = 2
         if self.recieved1 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward -= 0
+            reward = self.get_miss_penalty(self.pos, self.node1.pos)
         if self.recieved2 == PACKET_STATUS.LOST:
-            self.total_misses += 1
-            reward -= 0
-        done = self.steps >= self.max_steps or self.total_misses >= 1
+            reward = self.get_miss_penalty(self.pos, self.node2.pos)  
+            reward = -2
+        done = self.steps >= self.max_steps or self.total_misses >= 4
         self.total_reward += reward
-        return np.array([abs(self.pos - self.node_1x.pos) / self.max_distance, (abs(self.pos - self.node_2x.pos) / self.max_distance), self.steps / self.max_steps, self.rssi1, self.snir1,
-                        self.timestamp1 / self.max_steps, self.rssi2, self.snir2, self.timestamp2 / self.max_steps], dtype=np.float32), reward, done, False, {}
+
+        state = [ self.pos / self.max_distance,
+                self.p_recieved1 / self.max_distance, self.rssi1, self.snir1, self.timestamp1 / self.max_steps,
+                self.p_recieved2 / self.max_distance, self.rssi2, self.snir2, self.timestamp2 / self.max_steps]
+
+        return np.array(state, dtype=np.float32), reward, done, False, {}
+
 
     def render(self):
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
@@ -127,29 +176,30 @@ class SimpleBaseEnv(gym.Env):
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
         # Draw the line and moving point
-        cv2.line(frame, pt1=(offset, y), pt2=(offset + self.max_distance, y), color=self.line_color)
-        cv2.rectangle(frame, pt1=(offset + x - 2, y - 2), pt2=(offset + x + 2, y + 2), color=self.point_color)
+        cv2.line(frame,pt1=(offset, y), pt2=(offset + self.max_distance,y), color=self.line_color)
+        cv2.line(frame,pt1=(int(self.width / 2), y+1), pt2=(int(self.width / 2),y-1), color=self.line_color)
+        cv2.rectangle(frame,pt1= (offset + x-2, y-2), pt2= (offset + x+2, y+2), color=self.point_color)
 
         # Draw nodes
         if self.recieved1 != PACKET_STATUS.NOT_SENT:
-            cv2.rectangle(frame,pt1= (offset + self.node_1x.pos-2, y-2), pt2= (offset + self.node_1x.pos+2, y+2), color=(0,128,0))
+            cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=(0,128,0))
         else:
-            cv2.rectangle(frame,pt1= (offset + self.node_1x.pos-2, y-2), pt2= (offset + self.node_1x.pos+2, y+2), color=self.point_color)
+            cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
 
         if self.recieved2 != PACKET_STATUS.NOT_SENT:
-            cv2.rectangle(frame,pt1= (offset + self.node_2x.pos-2, y-2), pt2= (offset + self.node_2x.pos+2, y+2), color=(0,128,0))
+            cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=(0,128,0))
         else:
-            cv2.rectangle(frame,pt1= (offset + self.node_2x.pos-2, y-2), pt2= (offset + self.node_2x.pos+2, y+2), color=self.point_color)
+            cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
 
-        # cv2.rectangle(frame,pt1= (offset + self.node_1x.pos-2, y-2), pt2= (offset + self.node_1x.pos+2, y+2), color=self.point_color)
-        # cv2.rectangle(frame,pt1= (offset + self.node_2x.pos-2, y-2), pt2= (offset + self.node_2x.pos+2, y+2), color=self.point_color)
+        # cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
+        # cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
         # Display the frame
         enlarged_image = cv2.resize(frame, (0, 0), fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
         # Draw score
-        cv2.putText(enlarged_image, "Total score: " + str(self.total_reward) + "| Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
+        cv2.putText(enlarged_image, "Total recieved: " + str(self.total_recieved) + " | Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
 
         cv2.imshow(self.window_name, enlarged_image)
-        cv2.waitKey(60)  # Wait a short time to create the animation effect
+        cv2.waitKey(5)  # Wait a short time to create the animation effect
 
     def close(self):
         cv2.destroyAllWindows()
@@ -201,7 +251,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_distance = 80
+        self.max_transmission_distance = 90
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
@@ -215,7 +265,7 @@ class node():
         a, b = (self.lower_bound_send_time - self.send_interval) / self.send_std, (
                 self.upper_bound_send_time - self.send_interval) / self.send_std
         interval = truncnorm.rvs(a, b, loc=self.send_interval, scale=self.send_std)
-        return interval
+        return self.send_interval
 
     def generate_RSSI(self, distance):
         rssi_scaled = self.transmission_model.generate_rssi(distance)
@@ -278,7 +328,7 @@ class RewardPlottingCallback(BaseCallback):
             self.ax.autoscale_view()
 
             plt.draw()
-            plt.pause(0.001)  # Small pause for updating the plot in real-time
+            plt.pause(0.005)  # Small pause for updating the plot in real-time
         return True
 
     def _on_training_end(self) -> None:
