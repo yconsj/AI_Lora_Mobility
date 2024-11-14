@@ -19,7 +19,6 @@ class SimpleBaseEnv(gym.Env):
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
-
         self.max_steps = 50000  # Maximum steps per episode
         # Observation_space = current_pos, pos1, rssi1, snir1, timestamp1, pos2,rssi2, snir2, timestamp2
         # Pos is the position when packet was recieved, timestamp is the time SINCE packet recieved
@@ -34,7 +33,7 @@ class SimpleBaseEnv(gym.Env):
         self.miss_penalty_min = 0
         self.packet_reward_max = 100
         speed = 20  # meter per second
-        max_distance = 3000  # meters
+        max_distance = 3000 # meters
         self.max_distance = int(max_distance / speed)  # scaled by speed
         self.pos = self.max_distance / 2
         self.target = 5  # The target value we want to reach
@@ -172,7 +171,7 @@ class SimpleBaseEnv(gym.Env):
         x = int(self.pos)
         y = 5
         # Create a new black image
-        offset = int((self.width - self.max_distance) / 2)
+        offset = int( (self.width - self.max_distance)/2 )
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
         # Draw the line and moving point
@@ -239,7 +238,6 @@ class PACKET_STATUS(Enum):
     RECIEVED = 1
     LOST = 2
     NOT_SENT = 3
-
 class node():
     def __init__(self, pos=10, time_to_first_packet=10, send_interval=10, send_std=2):
         self.pos = pos
@@ -274,23 +272,24 @@ class node():
         snir_scaled = self.transmission_model.generate_snir(distance)
 
     def transmission(self, gpos):
-        ploss_scale = 25
+        ploss_scale = 150
         distance = abs(self.pos - gpos)
-        ploss_probability = np.exp(distance / ploss_scale)
-        ploss_choice = (np.random.rand() < ploss_probability) and (distance < self.max_transmission_distance)
-        if ploss_choice:
-            rssi_scaled = self.transmission_model.generate_rssi(distance)
-            snir_scaled = self.transmission_model.generate_snir(distance)
-            return True, rssi_scaled, snir_scaled
+        if distance < self.max_transmission_distance:
+            ploss_probability = np.exp(distance / ploss_scale)
+            ploss_choice = np.random.rand() < ploss_probability
+            if ploss_choice:
+                rssi_scaled = self.transmission_model.generate_rssi(distance)
+                snir_scaled = self.transmission_model.generate_snir(distance)
+                return True, rssi_scaled, snir_scaled
         return False, 0, 0
 
     def send(self, time, gpos):
         # Decides whether a packet should be send and if it gets lost
         # Pobability of success is based of last time send and distance
-        if time >= self.time_of_next_packet:
+        if time > self.time_of_next_packet:
             self.last_packet_time = time
             self.time_of_next_packet = time + self.generate_next_interval()
-            # f"time of next packet: {self.time_of_next_packet}" )
+            #f"time of next packet: {self.time_of_next_packet}" )
             is_received, rssi, snir = self.transmission(gpos)
             if is_received:
                 #print(f"packet is_received ")
@@ -330,11 +329,9 @@ class RewardPlottingCallback(BaseCallback):
             plt.draw()
             plt.pause(0.005)  # Small pause for updating the plot in real-time
         return True
-
     def _on_training_end(self) -> None:
             print("Training plot done.")
             plt.ioff()  # Turn off interactive mode
             plt.show()
         
             pass
-

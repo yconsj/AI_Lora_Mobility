@@ -1,5 +1,4 @@
 from stable_baselines3 import DQN, PPO
-from stable_baselines3.common.callbacks import EvalCallback
 from simple_env import SimpleBaseEnv
 from simple_env import RewardPlottingCallback
 from stable_baselines3.common.env_checker import check_env
@@ -7,7 +6,6 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.atari_wrappers import MaxAndSkipEnv
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
-
 
 import multiprocessing
 ## tensorboard --logdir ./tensorboard/;./tensorboard/  ##
