@@ -19,7 +19,7 @@ class SimpleBaseEnv(gym.Env):
         # Environment.pos
         self.steps = 0
 
-        self.max_steps = 50000  # Maximum steps per episode
+        self.max_steps = 10000  # Maximum steps per episode
         # Observation_space = pos, time, rssi1, snir1, timestamp1, rssi2, snir2, timestamp2
         self.observation_space = spaces.Box(low=np.array([0,0, 0, 0, 0, 0, 0,0,0]), high=np.array([1,1, 1,1,1,1,1,1,1]), dtype=np.float32)
         # Environment state
@@ -49,7 +49,7 @@ class SimpleBaseEnv(gym.Env):
         self.point_color = (0, 0, 255)  # Red color
         self.line_color = (255, 0, 0)  # Blue color
         self.window_name = "RL Animation"
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+
         self.visited_pos = []
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
@@ -118,6 +118,7 @@ class SimpleBaseEnv(gym.Env):
                         self.timestamp1 / self.max_steps, self.rssi2, self.snir2, self.timestamp2 / self.max_steps], dtype=np.float32), reward, done, False, {}
 
     def render(self):
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
         x = int(self.pos)
         y = 5

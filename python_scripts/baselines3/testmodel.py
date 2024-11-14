@@ -13,7 +13,6 @@ print(model.policy)
 obs = vec_env.reset()
 
 # test trained model
-
 done = False
 vec_env.render()
 
