@@ -153,8 +153,8 @@ class SimpleBaseEnv(gym.Env):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node1.pos)
         if self.recieved2 == PACKET_STATUS.LOST:
+            self.total_misses += 1 
             reward = self.get_miss_penalty(self.pos, self.node2.pos)  
-            reward = -2
         done = self.steps >= self.max_steps or self.total_misses >= 4
         self.total_reward += reward
 
