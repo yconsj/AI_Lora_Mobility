@@ -41,8 +41,8 @@ class SimpleBaseEnv(gym.Env):
         # Pos is the position when packet was recieved, timestamp is the time SINCE packet recieved
         self.observation_space = spaces.Box(low=np.array([0,0,0 , 0,0, 0 ,0, 0, 0]), high=np.array([1,1,1, 1,1, 1,1,1,1]), dtype=np.float32)
         # Environment state
-        self.recieved1 = 0
-        self.recieved2 = 0
+        self.received1 = 0
+        self.received2 = 0
         self.last_packet = 0
         self.pos_reward_max = 3
         self.pos_reward_min = 0
@@ -74,7 +74,7 @@ class SimpleBaseEnv(gym.Env):
         self.p_dist1 = 0 # distance to node when recieved
         self.p_dist2 = 0
         self.total_misses = 0
-        self.total_recieved = 0
+        self.total_received = 0
         self.width, self.height = 200, 20  # Size of the window
         self.point_radius = 1
         self.point_color = (0, 0, 255)  # Red color
@@ -99,7 +99,7 @@ class SimpleBaseEnv(gym.Env):
         self.snir2 = 0
         self.timestamp1 = self.max_steps
         self.timestamp2 = 0
-        self.total_recieved = 0
+        self.total_received = 0
 
 
         state = [self.pos / self.max_distance, abs(self.pos - self.node1.pos) / self.max_distance, abs(self.pos - self.node2.pos) / self.max_distance,
@@ -201,8 +201,8 @@ class SimpleBaseEnv(gym.Env):
         if self.recieved1 == PACKET_STATUS.LOST:
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node1.pos)
-        if self.recieved2 == PACKET_STATUS.LOST:
-            self.total_misses += 1 
+        if self.received2 == PACKET_STATUS.LOST:
+            self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node2.pos)  
         done = self.steps >= self.max_steps or self.total_misses >= 10
         self.total_reward += reward
@@ -211,7 +211,7 @@ class SimpleBaseEnv(gym.Env):
                 self.p_dist1 / self.max_distance, self.p_recieved1 / self.max_distance, self.timestamp1 / self.max_steps,
                 self.p_dist2 / self.max_distance, self.p_recieved2 / self.max_distance,  self.timestamp2 / self.max_steps]
 
-        return np.array(state, dtype=np.float32), reward, done, False, {}
+        return np.array(state, dtype=np.float32), reward, done, False, info
 
 
     def render(self):
@@ -229,12 +229,12 @@ class SimpleBaseEnv(gym.Env):
         cv2.rectangle(frame,pt1= (offset + x-2, y-2), pt2= (offset + x+2, y+2), color=self.point_color)
 
         # Draw nodes
-        if self.recieved1 != PACKET_STATUS.NOT_SENT:
+        if self.received1 != PACKET_STATUS.NOT_SENT:
             cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=(0,128,0))
         else:
             cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
 
-        if self.recieved2 != PACKET_STATUS.NOT_SENT:
+        if self.received2 != PACKET_STATUS.NOT_SENT:
             cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=(0,128,0))
         else:
             cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
@@ -244,7 +244,7 @@ class SimpleBaseEnv(gym.Env):
         # Display the frame
         enlarged_image = cv2.resize(frame, (0, 0), fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
         # Draw score
-        cv2.putText(enlarged_image, "Total recieved: " + str(self.total_recieved) + " | Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
+        cv2.putText(enlarged_image, "Total received: " + str(self.total_received) + " | Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
 
         cv2.imshow(self.window_name, enlarged_image)
         cv2.waitKey(15)  # Wait a short time to create the animation effect
@@ -284,7 +284,7 @@ class SignalModel:
         snir_scaled = 1 - (snir - self.snir_min) / (self.snir_max - self.snir_min)
         return np.clip(snir_scaled, 0, 1)  # Ensure it’s within [0, 1]
 class PACKET_STATUS(Enum):
-    RECIEVED = 1
+    received = 1
     LOST = 2
     NOT_SENT = 3
 class node():
@@ -342,7 +342,7 @@ class node():
             is_received, rssi, snir = self.transmission(gpos)
             if is_received:
                 #print(f"packet is_received ")
-                return PACKET_STATUS.RECIEVED, rssi, snir
+                return PACKET_STATUS.received, rssi, snir
             else:
                 return PACKET_STATUS.LOST, 0 ,0
         return PACKET_STATUS.NOT_SENT, 0, 0
