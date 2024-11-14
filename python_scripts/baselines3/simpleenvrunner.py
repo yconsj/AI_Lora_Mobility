@@ -24,13 +24,13 @@ class TensorboardCallback(BaseCallback):
     def _on_step(self) -> bool:
         # Access total_recieved from the 'infos' list
         infos = self.locals['infos']
-        total_received_values = [info.get('total_received', 0) for info in infos]
-        total_misses_values = [info.get('total_misses', 0) for info in infos]
-        # Log the average (or sum) across environments, if needed
-        avg_total_received = sum(total_received_values) / len(total_received_values)
-        avg_total_misses = sum(total_misses_values) / len(total_misses_values)
-        self.logger.record("total_received", avg_total_received)
-        self.logger.record("total_misses", avg_total_received)
+        dones = self.locals["dones"]
+        for i, done in enumerate(dones):
+            if done:
+                total_received_values = infos[i].get("total_received", 0)
+                total_misses_values = infos[i].get('total_misses', 0)
+                self.logger.record("total_received", total_received_values)
+                self.logger.record("total_misses", total_misses_values)
         return True
 
 
