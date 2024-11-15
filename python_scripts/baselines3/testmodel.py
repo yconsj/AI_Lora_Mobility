@@ -8,9 +8,8 @@ def make_skipped_env():
     return env
 
 vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
-model = PPO("MlpPolicy", vec_env)
+model = PPO.load("stable-model-best/best_model", print_system_info=True)
 
-model.load("stable-model-best/best_model", print_system_info=True)
 print(model.policy)
 obs = vec_env.reset()
 
