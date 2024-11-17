@@ -18,7 +18,7 @@ obs = vec_env.reset()
 done = False
 
 while not done:
-    action, _ = model.predict(obs)
+    action, _ = model.predict(obs, deterministic=True)
     obs, reward, done, info = vec_env.step(action)
     if done:
         # Note that the VecEnv resets automatically

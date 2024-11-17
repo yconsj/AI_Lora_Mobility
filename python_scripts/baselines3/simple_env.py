@@ -36,21 +36,21 @@ class SimpleBaseEnv(gym.Env):
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
-        self.max_steps = 50000  # Maximum steps per episode
+        self.max_steps = 10000  # Maximum steps per episode
         # Observation_space = pos, current_pos1, current_pos2, pos1, rssi1, snir1, timestamp1, pos2,rssi2, snir2, timestamp2
         # Pos is the position when packet was received, timestamp is the time SINCE packet received
-        self.observation_space = spaces.Box(low=np.array([0,0, 0, 0]), high=np.array([1,1,1,1]), dtype=np.float32)
+        self.observation_space = spaces.Box(low=np.array([0 ,-1,-1, 0, 0]), high=np.array([1,1,1,1,1]), dtype=np.float32)
         # Environment state
         self.received1 = 0
         self.received2 = 0
         self.last_packet = 0
-        self.pos_reward_max = 0.01
+        self.pos_reward_max = 0.001                         
         self.pos_reward_min = 0
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
-        self.miss_penalty_max = 2
-        self.miss_penalty_min = 1
-        self.packet_reward_max = 1
+        self.miss_penalty_max = 10
+        self.miss_penalty_min = 5
+        self.packet_reward_max = 10
         speed = 20  # meter per second
         max_distance = 3000 # meters
         self.max_distance = int(max_distance / speed)  # scaled by speed
@@ -59,10 +59,13 @@ class SimpleBaseEnv(gym.Env):
         self.steps = 0
         pos1 = 0
         pos2 = self.max_distance
-        self.node1 = node(pos1, time_to_first_packet=0, send_interval=200)
-        self.node2 = node(pos2, time_to_first_packet=100, send_interval=200)
+        self.node1 = node(pos1, time_to_first_packet=50, send_interval=300)
+        self.node2 = node(pos2, time_to_first_packet=125, send_interval=300)
         self.p_received1 = pos1
         self.p_received2 = pos2
+
+        self.p1_stamp = -1
+        self.p2_stamp = -1
         self.total_reward = 0
         self.pos = int(self.max_distance / 2)  # Start in the middle
         self.rssi1 = 0
@@ -88,21 +91,22 @@ class SimpleBaseEnv(gym.Env):
         self.visited_pos = []
         self.last_packet = 0
         self.total_misses = 0
-        self.pos = int(self.max_distance/4)
+        self.pos = int(self.max_distance/2)
         self.node1.reset()
         self.node2.reset()
         self.steps = 0
         self.total_reward = 0
-        self.rssi1 = 1
+        self.rssi1 = 0
         self.rssi2 = 0
         self.snir1 = 0
         self.snir2 = 0
         self.timestamp1 = self.max_steps
-        self.timestamp2 = 0
+        self.timestamp2 = self.max_steps
         self.total_received = 0
 
-
-        state = [abs(self.pos - self.node1.pos) / self.max_distance, abs(self.pos - self.node2.pos) / self.max_distance,
+        self.p1_stamp = -1
+        self.p2_stamp = -1
+        state = [self.pos/ self.max_distance, self.p1_stamp, self.p2_stamp,
                 self.timestamp1 / self.max_steps,
                 self.timestamp2 / self.max_steps]
         return np.array(state, dtype=np.float32), {}
@@ -112,7 +116,7 @@ class SimpleBaseEnv(gym.Env):
         time = (time - self.steps) # time to packet
         scaled_time = (time / self.max_steps)
         distance = abs(pos1 - pos2)
-        scaled_distance = distance / self.max_distance
+        scaled_distance = 1- distance / self.max_distance
         scaled_distance_time = scaled_distance * scaled_time
         # Return reward based on scaled distance between a min and max reward
         reward = self.pos_reward_max - scaled_distance_time * (self.pos_reward_max - self.pos_reward_min)
@@ -152,7 +156,7 @@ class SimpleBaseEnv(gym.Env):
         self.steps += 1
         if self.pos not in self.visited_pos:
             self.visited_pos.append(self.pos)
-            #reward += 0.1
+            reward += 0.001
         if action == 0:
             if self.pos > 0:
                 self.pos -= 1  # Action left
@@ -178,6 +182,7 @@ class SimpleBaseEnv(gym.Env):
             self.last_packet = 1
             self.total_received += 1
             self.p_dist1 = abs(self.pos - self.node1.pos)
+            self.p1_stamp = self.pos / self.max_distance
         elif self.received2 == PACKET_STATUS.RECEIVED:
             reward = self.packet_reward_max
             if self.last_packet == 1:
@@ -189,23 +194,23 @@ class SimpleBaseEnv(gym.Env):
             self.last_packet = 2
             self.total_received += 1
             self.p_dist2 = abs(self.pos-self.node2.pos)
+            self.p2_stamp = self.pos / self.max_distance
         elif self.received1 == PACKET_STATUS.LOST:
-            self.timestamp1 = 0
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node1.pos)
         elif self.received2 == PACKET_STATUS.LOST:
-            self.timestamp2 = 0
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node2.pos)  
 
-        elif self.node1.time_of_next_packet < self.node2.time_of_next_packet:
+        elif self.timestamp1 > self.timestamp2:
             reward = self.get_pos_reward(self.pos, self.node1.pos, self.timestamp1)
-        elif self.node2.time_of_next_packet < self.node1.time_of_next_packet:
+        elif self.timestamp1 <= self.timestamp2:
             reward = self.get_pos_reward(self.pos, self.node2.pos, self.timestamp2)
+
         done = self.steps >= self.max_steps or self.total_misses >= 20
         self.total_reward += reward
 
-        state = [abs(self.pos - self.node1.pos) / self.max_distance, abs(self.pos - self.node2.pos) / self.max_distance,
+        state = [self.pos/ self.max_distance, self.p1_stamp, self.p2_stamp,
                 self.timestamp1 / self.max_steps,
                 self.timestamp2 / self.max_steps]
         info = {'total_received': self.total_received,
@@ -245,7 +250,7 @@ class SimpleBaseEnv(gym.Env):
         cv2.putText(enlarged_image, "Total received: " + str(self.total_received) + " | Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
 
         cv2.imshow(self.window_name, enlarged_image)
-        cv2.waitKey(30)  # Wait a short time to create the animation effect
+        cv2.waitKey(5)  # Wait a short time to create the animation effect
 
     def close(self):
         cv2.destroyAllWindows()
@@ -310,8 +315,7 @@ class node():
         a, b = (self.lower_bound_send_time - self.send_interval) / self.send_std, (
                 self.upper_bound_send_time - self.send_interval) / self.send_std
         interval = truncnorm.rvs(a, b, loc=self.send_interval, scale=self.send_std)
-        return self.send_interval
-
+        return interval
     def generate_RSSI(self, distance):
         rssi_scaled = self.transmission_model.generate_rssi(distance)
 
@@ -319,12 +323,12 @@ class node():
         snir_scaled = self.transmission_model.generate_snir(distance)
 
     def transmission(self, gpos):
-        ploss_scale = 150
+        ploss_scale = 75
         distance = abs(self.pos - gpos)
         if distance < self.max_transmission_distance:
             ploss_probability = np.exp(distance / ploss_scale)
             ploss_choice = np.random.rand() < ploss_probability
-            if 1:
+            if ploss_choice:
                 rssi_scaled = self.transmission_model.generate_rssi(distance)
                 snir_scaled = self.transmission_model.generate_snir(distance)
                 return True, rssi_scaled, snir_scaled
