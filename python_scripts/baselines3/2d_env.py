@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import truncnorm
 import cv2
 from enum import Enum
-
+import math
 # Define a custom FrameSkip wrapper
 class FrameSkip(gym.Wrapper):
     def __init__(self, env, skip=4):
@@ -31,7 +31,7 @@ class SimpleBaseEnv(gym.Env):
         super(SimpleBaseEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
-        self.action_space = spaces.Discrete(3, start=0)
+        self.action_space = spaces.Discrete(5, start=0)
         # The observation space is a single value (our current "position")
         self.render_mode = render_mode
         # Environment.pos
@@ -39,7 +39,7 @@ class SimpleBaseEnv(gym.Env):
         self.max_steps = 10000  # Maximum steps per episode
         # Observation_space = pos, current_pos1, current_pos2, pos1, rssi1, snir1, timestamp1, pos2,rssi2, snir2, timestamp2
         # Pos is the position when packet was received, timestamp is the time SINCE packet received
-        self.observation_space = spaces.Box(low=np.array([0 ,-1,-1, 0, 0]), high=np.array([1,1,1,1,1]), dtype=np.float32)
+        self.observation_space = spaces.Box(low=np.array([0,0 ,-1,-1,-1,-1, 0, 0]), high=np.array([1,1,1,1,1,1,1,1]), dtype=np.float32)
         # Environment state
         self.visited_pos = dict()
         self.received1 = 0
@@ -53,9 +53,13 @@ class SimpleBaseEnv(gym.Env):
         self.miss_penalty_min = 5
         self.packet_reward_max = 10
         speed = 20  # meter per second
-        max_distance = 3000 # meters
-        self.max_distance = int(max_distance / speed)  # scaled by speed
-        self.pos = self.max_distance / 2
+        max_distance = 3000 # meter
+        self.max_distance_x = int(max_distance / speed)  # scaled by speed
+        self.max_distance_y = int(max_distance / speed)
+        self.max_cross_distance = math.dist((0,0), (self.max_distance_x, self.max_distance_y))
+        self.pos_x = self.max_distance_x / 2
+        self.pos_y = self.max_distance_y / 2
+        
         self.target = 5  # The target value we want to reach
         self.steps = 0
         pos1 = 0
@@ -65,10 +69,11 @@ class SimpleBaseEnv(gym.Env):
         self.p_received1 = pos1
         self.p_received2 = pos2
 
-        self.p1_stamp = -1
-        self.p2_stamp = -1
+        self.p1_stamp_x = -1
+        self.p1_stamp_y = -1
+        self.p2_stamp_x = -1
+        self.p2_stamp_y = -1
         self.total_reward = 0
-        self.pos = int(self.max_distance / 2)  # Start in the middle
         self.rssi1 = 0
         self.rssi2 = 0
         self.snir1 = 0
@@ -90,7 +95,8 @@ class SimpleBaseEnv(gym.Env):
         self.visited_pos = dict()
         self.last_packet = 0
         self.total_misses = 0
-        self.pos = int(self.max_distance/2)
+        self.pos_x = int(self.max_distance_x / 2)
+        self.pos_y = int(self.max_distance_y / 2)
         self.node1.reset()
         self.node2.reset()
         self.steps = 0
@@ -103,19 +109,22 @@ class SimpleBaseEnv(gym.Env):
         self.timestamp2 = self.max_steps
         self.total_received = 0
 
-        self.p1_stamp = -1
-        self.p2_stamp = -1
-        state = [self.pos/ self.max_distance, self.p1_stamp, self.p2_stamp,
+        self.p1_stamp_x = -1
+        self.p1_stamp_y = -1
+
+        self.p2_stamp_x = -1
+        self.p2_stamp_y = -1
+        state = [self.pos_x / self.max_distance_x, self.pos_y / self.max_distance_y, self.p1_stamp_x, self.p2_stamp_y,
                 self.timestamp1 / self.max_steps,
                 self.timestamp2 / self.max_steps]
         return np.array(state, dtype=np.float32), {}
 
 
-    def get_pos_reward(self, pos1, pos2, time):
+    def get_pos_reward(self, pos1x, pos1y, pos2x, pos2y, time):
         time = (time - self.steps) # time to packet
         scaled_time = (time / self.max_steps)
-        distance = abs(pos1 - pos2)
-        scaled_distance = 1- distance / self.max_distance
+        distance = math.dist((pos1x,pos1y), (pos2x,pos2y))
+        scaled_distance = 1- distance / self.max_cross_distance
         scaled_distance_time = scaled_distance * scaled_time
         # Return reward based on scaled distance between a min and max reward
         reward = self.pos_reward_max - scaled_distance_time * (self.pos_reward_max - self.pos_reward_min)
@@ -135,16 +144,14 @@ class SimpleBaseEnv(gym.Env):
         # Ensure reward is within bounds in case of rounding errors
         penalty = min(self.pos_penalty_max, max(self.pos_penalty_min, penalty))
         return -penalty
-    def get_miss_penalty(self, pos1, pos2):
-        distance = abs(pos1 - pos2)
-        scaled_distance = distance / self.max_distance
+    def get_miss_penalty(self, pos1x,pos1y, pos2x, pos2y):
+        distance = math.dist((pos1x, pos1y), (pos2x, pos2y))
+        scaled_distance = distance / self.max_cross_distance
         # Return reward based on scaled distance between a min and max reward
         penalty = self.miss_penalty_min + scaled_distance * (self.miss_penalty_max - self.miss_penalty_min)
 
         # Ensure reward is within bounds in case of rounding errors
         penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
-        if distance > self.max_distance / 2:
-            penalty *2
         return -penalty
     def get_explore_reward(self, pos, time):
         base_reward  = 0.001
@@ -164,15 +171,21 @@ class SimpleBaseEnv(gym.Env):
         reward = 0
         self.steps += 1
 
-        if action == 0:
-            if self.pos > 0:
-                self.pos -= 1  # Action left
-        elif action == 1:
-            if self.pos < self.max_distance:
-                self.pos += 1  # Action right
-        elif action == 2:
-            self.pos = self.pos # stand still
-
+        if action == 0: # stand still
+            #nothing
+            pass
+        elif action == 1: # left
+            if self.pos_x > 0: 
+                self.pos -= 1  
+        elif action == 2: # right
+            if self.pos_x < self.max_distance_x:
+                self.pos += 1 
+        elif action == 3: # up
+            if self.pos_y < self.max_distance_y:
+                self.pos += 1  
+        elif action == 4: # down
+            if self.pos_y  > 0 :
+                self.pos -= 1 
 
         self.received1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
         self.received2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
@@ -204,7 +217,7 @@ class SimpleBaseEnv(gym.Env):
             self.p2_stamp = self.pos / self.max_distance
         elif self.received1 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward = self.get_miss_penalty(self.pos, self.node1.pos)
+            reward = self.get_miss_penalty(self.pos_x, self.pos_y, self.node1.pos)
         elif self.received2 == PACKET_STATUS.LOST:
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node2.pos)  
@@ -229,16 +242,18 @@ class SimpleBaseEnv(gym.Env):
     def render(self):
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
-        x = int(self.pos)
-        y = 5
+        x = int(self.pos_x)
+        y = int(self.pos_y)
         # Create a new black image
-        offset = int( (self.width - self.max_distance)/2 )
+        offset_x = int( (self.width - self.max_distance_x)/2 )
+        offset_y = int( (self.height - self.max_distance_y)/2 )
+
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
         # Draw the line and moving point
-        cv2.line(frame,pt1=(offset, y), pt2=(offset + self.max_distance,y), color=self.line_color)
-        cv2.line(frame,pt1=(int(self.width / 2), y+1), pt2=(int(self.width / 2),y-1), color=self.line_color)
-        cv2.rectangle(frame,pt1= (offset + x-2, y-2), pt2= (offset + x+2, y+2), color=self.point_color)
+        cv2.line(frame,pt1=(offset_x, int(self.max_distance_y / 2)), pt2=(offset_x + self.max_distance_x, int(self.max_distance_y / 2)), color=self.line_color)
+        cv2.line(frame,pt1=(int(self.max_distance_x / 2), offset_y), pt2=(int(self.max_distance_x / 2), self.max_distance_y + offset_y), color=self.line_color)
+        cv2.rectangle(frame,pt1= (offset_x + x-2, offset_y + y-2), pt2= (offset_x + x+2, offset_y + y+2), color=self.point_color)
 
         # Draw nodes
         if self.received1 != PACKET_STATUS.NOT_SENT:
@@ -300,8 +315,9 @@ class PACKET_STATUS(Enum):
     LOST = 2
     NOT_SENT = 3
 class node():
-    def __init__(self, pos=10, time_to_first_packet=10, send_interval=10, send_std=2):
-        self.pos = pos
+    def __init__(self, pos_x=10, pos_y=10, time_to_first_packet=10, send_interval=10, send_std=2):
+        self.pos_x = pos_x
+        self.pos_y = pos_y
         self.last_packet_time = 0
         self.time_to_first_packet = time_to_first_packet
         self.time_of_next_packet = time_to_first_packet
@@ -310,7 +326,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_distance = 70
+        self.max_transmission_radius = 70
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
@@ -331,10 +347,10 @@ class node():
     def generate_SNIR(self, distance):
         snir_scaled = self.transmission_model.generate_snir(distance)
 
-    def transmission(self, gpos):
+    def transmission(self, gpos_x,gpos_y):
         ploss_scale = 300
-        distance = abs(self.pos - gpos)
-        if distance < self.max_transmission_distance:
+        distance = math.dist((self.pos_x, self.pos_y), (gpos_x, gpos_y))
+        if distance < self.max_transmission_radius:
             ploss_probability = np.exp( - distance / ploss_scale)
             ploss_choice = np.random.rand() < ploss_probability
             if ploss_choice:
@@ -343,14 +359,14 @@ class node():
                 return True, rssi_scaled, snir_scaled
         return False, 0, 0
 
-    def send(self, time, gpos):
+    def send(self, time, gpos_x, gpos_y):
         # Decides whether a packet should be send and if it gets lost
         # Pobability of success is based of last time send and distance
         if time > self.time_of_next_packet:
             self.last_packet_time = time
             self.time_of_next_packet = time + self.generate_next_interval()
             #f"time of next packet: {self.time_of_next_packet}" )
-            is_received, rssi, snir = self.transmission(gpos)
+            is_received, rssi, snir = self.transmission(gpos_x,gpos_y)
             if is_received:
                 #print(f"packet is_received ")
                 return PACKET_STATUS.RECEIVED, rssi, snir
