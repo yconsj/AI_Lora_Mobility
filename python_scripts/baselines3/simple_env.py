@@ -59,7 +59,7 @@ class SimpleBaseEnv(gym.Env):
         self.target = 5  # The target value we want to reach
         self.steps = 0
         pos1 = 0
-        pos2 = 0
+        pos2 = self.max_distance
         self.node1 = node(pos1, time_to_first_packet=50, send_interval=300)
         self.node2 = node(pos2, time_to_first_packet=125, send_interval=300)
         self.p_received1 = pos1
