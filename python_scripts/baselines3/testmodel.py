@@ -1,3 +1,4 @@
+from sb3_contrib import RecurrentPPO
 from stable_baselines3 import DQN, PPO
 from simple_env import SimpleBaseEnv, FrameSkip
 from stable_baselines3.common.env_checker import check_env
@@ -8,18 +9,18 @@ def make_skipped_env():
     return env
 
 vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
-model = PPO("MlpPolicy", vec_env)
+model = RecurrentPPO("MlpLstmPolicy", vec_env)
 
-model.load("stable-model-best/best_model", print_system_info=True)
+model.set_parameters("stable-model-best/best_model")
 print(model.policy)
 obs = vec_env.reset()
 
 # test trained model
 
 done = False
-
+lstm_states = None
 while not done:
-    action, _ = model.predict(obs)
+    action, lstm_states = model.predict(obs, state=lstm_states)
     obs, reward, done, info = vec_env.step(action)
     if done:
         # Note that the VecEnv resets automatically
