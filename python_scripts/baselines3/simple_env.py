@@ -83,7 +83,11 @@ class SimpleBaseEnv(gym.Env):
         self.point_radius = 1
         self.point_color = (0, 0, 255)  # Red color
         self.line_color = (255, 0, 0)  # Blue color
-        self.window_name = "RL Animation"
+
+        if render_mode == "cv2":
+            self.window_name = "RL Animation"
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+
 
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
@@ -227,7 +231,6 @@ class SimpleBaseEnv(gym.Env):
         return np.array(state, dtype=np.float32), reward, done, False, info
     
     def render(self):
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
         x = int(self.pos)
         y = 5
@@ -332,7 +335,7 @@ class node():
         snir_scaled = self.transmission_model.generate_snir(distance)
 
     def transmission(self, gpos):
-        ploss_scale = 300
+        ploss_scale = 3000
         distance = abs(self.pos - gpos)
         if distance < self.max_transmission_distance:
             ploss_probability = np.exp( - distance / ploss_scale)

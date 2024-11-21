@@ -8,6 +8,7 @@ from scipy.stats import truncnorm
 import cv2
 from enum import Enum
 import math
+import random
 # Define a custom FrameSkip wrapper
 class FrameSkip(gym.Wrapper):
     def __init__(self, env, skip=4):
@@ -25,10 +26,17 @@ class FrameSkip(gym.Wrapper):
             if done:
                 break
         return obs, total_reward, done, trunc,info
+class PacketReference():
+    def __init__(self, pos = (-1,-1), rssi = -1, snir= -1):
+        self.pos = pos
+        self.rssi = rssi
+        self.snir = snir
 
-class SimpleBaseEnv(gym.Env):
+    def get(self):
+        return (self.pos[0], self.pos[1], self.rssi, self.snir)
+class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none"):
-        super(SimpleBaseEnv, self).__init__()
+        super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
         self.action_space = spaces.Discrete(5, start=0)
@@ -37,13 +45,16 @@ class SimpleBaseEnv(gym.Env):
         # Environment.pos
         self.steps = 0
         self.max_steps = 10000  # Maximum steps per episode
-        # Observation_space = pos, current_pos1, current_pos2, pos1, rssi1, snir1, timestamp1, pos2,rssi2, snir2, timestamp2
-        # Pos is the position when packet was received, timestamp is the time SINCE packet received
-        self.observation_space = spaces.Box(low=np.array([0,0 ,-1,-1,-1,-1, 0, 0]), high=np.array([1,1,1,1,1,1,1,1]), dtype=np.float32)
+        # Observation_space = (x,y),                        2
+        #                     (x1,x2), rssi, snir * 3       12
+        #                     (x1,x2), rssi, snir * 3       12
+        #                     elapsed_time1, elapsed_time2  2
+        #                                                   28
+        self.observation_space = spaces.Box(low=np.array(
+            [0]*2 + [-1]*24 + [0]*2), high=np.array(
+            [1]*28), dtype=np.float32)
         # Environment state
         self.visited_pos = dict()
-        self.received1 = 0
-        self.received2 = 0
         self.last_packet = 0
         self.pos_reward_max = 0.001                         
         self.pos_reward_min = 0
@@ -61,32 +72,26 @@ class SimpleBaseEnv(gym.Env):
         
         self.target = 5  # The target value we want to reach
         self.steps = 0
-        pos1 = (10, 10)
-        pos2 = (self.max_distance_x-10, self.max_distance_y -10)
+        pos1 = (25, 25)
+        pos2 = (self.max_distance_x-25, self.max_distance_y -25)
         self.node1 = node(pos1, time_to_first_packet=50, send_interval=300)
         self.node2 = node(pos2, time_to_first_packet=125, send_interval=300)
-        self.p_received1 = pos1
-        self.p_received2 = pos2
+        self.prefs1 = (PacketReference(), PacketReference(), PacketReference())
+        self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
+        self.elapsed_time1 = 0
+        self.elapsed_time2 = 0
 
-        self.p1_stamp = (-1, -1)
-        self.p2_stamp = ( -1, -1)
         self.total_reward = 0
-        self.rssi1 = 0
-        self.rssi2 = 0
-        self.snir1 = 0
-        self.snir2 = 0
-        self.timestamp1 = 0
-        self.timestamp2 = 0
-        self.p_dist1 = 0 # distance to node when received
-        self.p_dist2 = 0
         self.total_misses = 0
         self.total_received = 0
-        self.width, self.height = 200, 200  # Size of the window
+        self.width, self.height = 175, 175  # Size of the window
         self.point_radius = 1
         self.point_color = (0, 0, 255)  # Red color
         self.line_color = (255, 0, 0)  # Blue color
-        self.window_name = "RL Animation"
 
+        if render_mode == "cv2":
+            self.window_name = "RL Animation"
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
         self.visited_pos = dict()
@@ -97,25 +102,21 @@ class SimpleBaseEnv(gym.Env):
         self.node2.reset()
         self.steps = 0
         self.total_reward = 0
-        self.rssi1 = 0
-        self.rssi2 = 0
-        self.snir1 = 0
-        self.snir2 = 0
-        self.timestamp1 = self.max_steps
-        self.timestamp2 = self.max_steps
         self.total_received = 0
+        self.prefs1 = (PacketReference(), PacketReference(), PacketReference())
+        self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
 
-        self.p1_stamp = (-1, -1)
-
-        self.p2_stamp_x = (-1, -1)
-        state = [self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, self.p1_stamp[0], self.p1_stamp[1], self.p2_stamp[0], self.p2_stamp[1],
-                self.timestamp1 / self.max_steps,
-                self.timestamp2 / self.max_steps]
+        state = [
+            self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
+            *self.prefs1[0].get(), *self.prefs1[1].get(),*self.prefs1[2].get(),
+            *self.prefs2[0].get(),*self.prefs2[1].get(),*self.prefs2[2].get(),
+            self.elapsed_time1 / self.max_steps,
+            self.elapsed_time2 / self.max_steps
+        ]
         return np.array(state, dtype=np.float32), {}
 
 
     def get_pos_reward(self, pos1, pos2, time):
-        time = (time - self.steps) # time to packet
         scaled_time = (time / self.max_steps)
         distance = math.dist(pos1, pos2)
         scaled_distance = 1- distance / self.max_cross_distance
@@ -126,18 +127,26 @@ class SimpleBaseEnv(gym.Env):
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
         return reward
-    # def get_pos_penalty(self, pos1, pos2, time):
-    #     time = (time - self.steps) # time to packet
-    #     scaled_time = 1 - (time / self.max_steps)
-    #     distance = abs(pos1 - pos2)
-    #     scaled_distance = distance / self.max_distance
-    #     scaled_distance_time = scaled_distance * scaled_time
-    #     # Return reward based on scaled distance between a min and max reward
-    #     penalty = self.pos_reward_min + scaled_distance_time * (self.pos_penalty_max - self.pos_penalty_min)
-
-    #     # Ensure reward is within bounds in case of rounding errors
-    #     penalty = min(self.pos_penalty_max, max(self.pos_penalty_min, penalty))
-    #     return -penalty
+    
+    def is_new_best_pref(self, pref, p):
+        (pref1, pref2, pref3) = pref
+        if p.rssi > pref1.rssi or  p.rssi > pref2.rssi or  p.rssi > pref3.rssi:
+            return True
+        return False
+    def insert_best_pref(self, pref, p):
+        (pref1, pref2, pref3) = pref
+        if p.rssi > pref1.rssi:
+            pref3 = pref2
+            pref2 = pref1
+            pref1 = p
+            return (pref1, pref2, pref3)
+        if p.rssi > pref2.rssi:
+            pref3 = pref2
+            pref2 = p
+            return (pref1, pref2, pref3)
+        if p.rssi > pref3.rssi:
+            pref3 = p
+            return (pref1, pref2, pref3)
     def get_miss_penalty(self, pos1, pos2):
         distance = math.dist(pos1, pos2)
         scaled_distance = distance / self.max_cross_distance
@@ -169,56 +178,56 @@ class SimpleBaseEnv(gym.Env):
             #nothing
             pass
         elif action == 1: # left
-            if self.pos_x > 0: 
-                self.pos -= 1  
+            if self.pos[0] > 0: 
+                self.pos = (self.pos[0]-1, self.pos[1])  
         elif action == 2: # right
-            if self.pos_x < self.max_distance_x:
-                self.pos += 1 
+            if self.pos[0] < self.max_distance_x:
+                self.pos = (self.pos[0]+1, self.pos[1]) 
         elif action == 3: # up
-            if self.pos_y < self.max_distance_y:
-                self.pos += 1  
+            if self.pos[1] < self.max_distance_y:
+                self.pos = (self.pos[0], self.pos[1]+1)   
         elif action == 4: # down
-            if self.pos_y  > 0 :
-                self.pos -= 1 
+            if self.pos[1]  > 0 :
+                self.pos = (self.pos[0], self.pos[1]-1) 
 
-        self.received1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
-        self.received2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
-        self.timestamp1 = min(self.max_steps,self.timestamp1+1)
-        self.timestamp2 = min(self.max_steps,self.timestamp2+1)
-        if self.received1 == PACKET_STATUS.RECEIVED:
+        received1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
+        received2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
+        self.elapsed_time1 = min(self.max_steps,self.elapsed_time1+1)
+        self.elapsed_time2 = min(self.max_steps,self.elapsed_time2+1)
+        p1 = PacketReference(self.pos, rssi1,snir1)
+        p2 = PacketReference(self.pos, rssi2,snir2)
+        if received1 == PACKET_STATUS.RECEIVED:
             reward = self.packet_reward_max
             if self.last_packet == 2:
                 reward += self.packet_reward_max
-            self.p_received1 = self.pos
-            self.rssi1 = rssi1
-            self.snir1 = snir1
-            self.timestamp1 = 0
             self.last_packet = 1
             self.total_received += 1
-            self.p1_stamp =  (self.pos[0] / self.max_distance_y, self.pos[1] / self.max_distance_y)
-        elif self.received2 == PACKET_STATUS.RECEIVED:
+            self.elapsed_time1 = 0
+            # TODO: insert packet if best
+            if self.is_new_best_pref(self.prefs1, p1):
+                self.prefs1 = self.insert_best_pref(self.prefs1,p1)
+        elif received2 == PACKET_STATUS.RECEIVED:
             reward = self.packet_reward_max
             if self.last_packet == 1:
                 reward += self.packet_reward_max
-            self.p_received2 = self.pos
-            self.rssi2 = rssi2
-            self.snir2 = snir2
-            self.timestamp2 = 0
             self.last_packet = 2
             self.total_received += 1
-            self.p2_stamp =  (self.pos[0] / self.max_distance_y, self.pos[1] / self.max_distance_y)
+            self.elapsed_time2 = 0
+            # TODO: insert packet if 
+            if self.is_new_best_pref(self.prefs2, p2):
+                self.prefs2 = self.insert_best_pref(self.prefs2,p2)
 
-        elif self.received1 == PACKET_STATUS.LOST:
+        elif received1 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward = self.get_miss_penalty(self.pos, self.pos, self.node1.pos)
-        elif self.received2 == PACKET_STATUS.LOST:
+            reward = self.get_miss_penalty(self.pos, self.node1.pos)
+        elif received2 == PACKET_STATUS.LOST:
             self.total_misses += 1
-            reward = self.get_miss_penalty(self.pos, self.pos, self.node2.pos)
+            reward = self.get_miss_penalty(self.pos, self.node2.pos)
 
-        elif self.timestamp1 > self.timestamp2:
-            reward = self.get_pos_reward(self.pos, self.p1_stamp, self.timestamp1)
-        elif self.timestamp1 <= self.timestamp2:
-            reward = self.get_pos_reward(self.pos, self.p2_stamp, self.timestamp2)
+        elif self.elapsed_time1 > self.elapsed_time2:
+            reward = self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
+        elif self.elapsed_time1 <= self.elapsed_time2:
+            reward = self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
 
 
         reward += self.get_explore_reward(self.pos, self.steps)
@@ -226,16 +235,20 @@ class SimpleBaseEnv(gym.Env):
         done = self.steps >= self.max_steps or self.total_misses >= 20
         self.total_reward += reward
 
-        state = [self.pos[0]/ self.max_distance_x, self.pos[1] / self.max_distance_y, self.p1_stamp[0], self.p2_stamp[1],
-                self.timestamp1 / self.max_steps,
-                self.timestamp2 / self.max_steps]
+        state = [
+            self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
+            *self.prefs1[0].get(), *self.prefs1[1].get(),*self.prefs1[2].get(),
+            *self.prefs2[0].get(),*self.prefs2[1].get(),*self.prefs2[2].get(),
+            self.elapsed_time1 / self.max_steps,
+            self.elapsed_time2 / self.max_steps
+        ]
         info = {'total_received': self.total_received,
                 'total_misses': self.total_misses}
         return np.array(state, dtype=np.float32), reward, done, False, info
     
 
     def render(self):
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
         x = int(self.pos[0])
         y = int(self.pos[1])
@@ -246,27 +259,20 @@ class SimpleBaseEnv(gym.Env):
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
         # Draw the line and moving point
-        cv2.line(frame,pt1=(offset_x, int(self.max_distance_y / 2)), pt2=(offset_x + self.max_distance_x, int(self.max_distance_y / 2)), color=self.line_color)
-        cv2.line(frame,pt1=(int(self.max_distance_x / 2), offset_y), pt2=(int(self.max_distance_x / 2), self.max_distance_y + offset_y), color=self.line_color)
+        cv2.line(frame,pt1=(offset_x, offset_y + int(self.max_distance_y / 2)), pt2=(offset_x + self.max_distance_x, offset_y+ int(self.max_distance_y / 2)), color=self.line_color)
+        cv2.line(frame,pt1=(offset_x + int(self.max_distance_x / 2), offset_y), pt2=( offset_x + int(self.max_distance_x / 2), self.max_distance_y + offset_y), color=self.line_color)
         cv2.rectangle(frame,pt1= (offset_x + x-2, offset_y + y-2), pt2= (offset_x + x+2, offset_y + y+2), color=self.point_color)
 
         # Draw nodes
-        if self.received1 != PACKET_STATUS.NOT_SENT:
-            cv2.rectangle(frame,pt1= (offset_x + self.node1.pos[0]-1, offset_y + self.node1.pos[1]-1), pt2= (offset_x + self.node1.pos[0]+1, offset_y + self.node1.pos[1]+1), color=(0,128,0))
-        else:
-            cv2.rectangle(frame,pt1= (offset_x + self.node1.pos[0]-1, offset_y + self.node1.pos[1]-1), pt2= (offset_x + self.node1.pos[0]+1, offset_y + self.node1.pos[1]+1), color=self.point_color)
-
-        if self.received2 != PACKET_STATUS.NOT_SENT:
-            cv2.rectangle(frame,pt1= (offset_x + self.node2.pos[0]-1, offset_y + self.node2.pos[1]-1), pt2= (offset_x + self.node2.pos[0]+1, offset_y + self.node2.pos[1]+1), color=(0,128,0))
-        else:
-            cv2.rectangle(frame,pt1= (offset_x + self.node2.pos[0]-1, offset_y + self.node2.pos[1]-1), pt2= (offset_x + self.node2.pos[0]+1, offset_y + self.node2.pos[1]+1), color=self.point_color)
+        cv2.rectangle(frame,pt1= (offset_x + self.node1.pos[0]-1, offset_y + self.node1.pos[1]-1), pt2= (offset_x + self.node1.pos[0]+1, offset_y + self.node1.pos[1]+1), color=self.point_color)
+        cv2.rectangle(frame,pt1= (offset_x + self.node2.pos[0]-1, offset_y + self.node2.pos[1]-1), pt2= (offset_x + self.node2.pos[0]+1, offset_y + self.node2.pos[1]+1), color=self.point_color)
 
         # cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
         # cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
         # Display the frame
-        enlarged_image = cv2.resize(frame, (0, 0), fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
+        enlarged_image = cv2.resize(frame, (0, 0), fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
+        cv2.putText(enlarged_image, "Total received: " + str(self.total_received) + " | Total misses: " + str(self.total_misses), (200,200), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
         # Draw score
-        cv2.putText(enlarged_image, "Total received: " + str(self.total_received) + " | Total misses: " + str(self.total_misses), (250,75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
 
         cv2.imshow(self.window_name, enlarged_image)
         cv2.waitKey(5)  # Wait a short time to create the animation effect
@@ -327,7 +333,9 @@ class node():
     def reset(self):
         self.last_packet_time = 0
         self.time_of_next_packet = self.time_to_first_packet
-
+        posx = random.randint(0, 150)
+        posy = random.randint(0, 150)
+        self.pos = (posx,posy)
     def generate_next_interval(self):
         # Generate a truncated normal value for the next time interval
         # a and b are calculated to truncate around the mean interval with some range
