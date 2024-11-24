@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 import torch
@@ -5,11 +6,18 @@ import tensorflow as tf
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.env_util import make_vec_env
 
-
 # Define a PyTorch-to-TensorFlow compatible policy
 from baselines3.simple_env import SimpleBaseEnv
 
 # Define a TensorFlow model that matches the PPO structure
+from tf_exporter import rewrite_policy_net_header
+from utilities import load_config
+"""
+THIS CODE IS BASED ON THE SIMPLE CONVERTER FOR Stable-basleines3 MODELS TO TfLite FOUND HERE:
+https://github.com/chunky/sb3_to_coral
+
+"""
+
 class TFPolicy(tf.keras.Model):
     def __init__(self, input_dim, output_dim, hidden_layers):
         super(TFPolicy, self).__init__()
@@ -22,6 +30,7 @@ class TFPolicy(tf.keras.Model):
         self.dense_layers = []
         prev_dim = input_dim
         for layer in hidden_layers:
+            print(f"layer type: {type(layer)}")
             if isinstance(layer, tf.keras.layers.Dense):
                 # Create a Dense layer (from the given hidden layer)
                 self.dense_layers.append(layer)
@@ -29,6 +38,8 @@ class TFPolicy(tf.keras.Model):
                 prev_dim = layer.units  # Update the previous dimension to match the output size of this Dense layer
             elif isinstance(layer, tf.keras.layers.Activation):
                 # Add an Activation layer
+                self.dense_layers.append(layer)
+            elif isinstance(layer, tf.keras.layers.Softmax):
                 self.dense_layers.append(layer)
             else:
                 raise ValueError(f"Unknown layer type: {type(layer)}")
@@ -56,76 +67,78 @@ def sb3_to_tensorflow(sb3_model, env):
     hidden_layers = []
 
     # Extract the layers from SB3 model
-    sb3_layers = sb3_model.policy.mlp_extractor.policy_net  # Extract policy network
+    sb3_layers = sb3_model.policy.mlp_extractor.policy_net  # Feature Extractor policy network
+    sb3_layers.append(sb3_model.policy.action_net) # Actor network
+    #print(f"{sb3_model.policy.action_net = }")
+
     prev_dim = input_dim
 
     for sb3_layer in sb3_layers:
+        print(f"{sb3_layer = }")
         if isinstance(sb3_layer, torch.nn.Linear):
             # Create a Dense layer for TensorFlow and append it to the hidden_layers list
             tf_dense_layer = tf.keras.layers.Dense(sb3_layer.out_features, activation=None)
             hidden_layers.append(tf_dense_layer)
+        elif isinstance(sb3_layer, torch.nn.Tanh):
+            hidden_layers.append(tf.keras.layers.Activation("tanh"))
+        else:
+            raise ValueError(f"Unknown layer type: {type(sb3_layer)}")
 
-            # Now handle the activation function
-            activation_function = torch.nn.Tanh if isinstance(sb3_layer,
-                                                              torch.nn.Linear) else None  # Add your conditions for other layers
-            if activation_function:
-                hidden_layers.append(tf.keras.layers.Activation(activation_function.__name__.lower()))
-            prev_dim = sb3_layer.out_features  # Update the previous dimension to match this layer's output size
-
+    # construct the softmax output layer
+    hidden_layers.append(tf.keras.layers.Activation('softmax')) #(output_dim, activation='softmax'))
     # Initialize TFPolicy with the dynamic hidden layers list
     tf_model = TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=hidden_layers)
 
     # Transfer weights from SB3 model to TensorFlow model
     for i, sb3_layer in enumerate(sb3_layers):
-        print(f"layer {i}: {sb3_layer}")
+        #print(f"layer {i}: {sb3_layer}")
         if isinstance(sb3_layer, torch.nn.Linear):
             # Transfer weights and biases
             weights = sb3_layer.weight.detach().numpy().T  # Transpose to match TensorFlow layer format
             bias = sb3_layer.bias.detach().numpy()
-            print(f"tf_model layer{i}: {tf_model.dense_layers[i] = }")
+            print(f"tf_model layer {i}: {tf_model.dense_layers[i] = }")
             tf_model.dense_layers[i].set_weights([weights, bias])
 
     return tf_model
 
 
-def tf_to_tflite(tf_model, output_filename):
+def tf_to_tflite(tf_model, export_path):
     try:
         # Define a concrete function with an input signature
         concrete_func = tf_model.get_concrete_function()
-
-        # Convert the model to TFLite format using the concrete function
-        converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_func], trackable_obj=[])
-        tflite_model = converter.convert()
-
-        # Save the TFLite model to a binary file
-        with open("g_model", "wb") as f:
-            f.write(tflite_model)
-        print(f"Model successfully converted and saved to {output_filename}")
-
-        command = ["wsl", "xxd", "-i", "g_model"]
-        #
-        # # Use subprocess to execute the command
         try:
-            with open(output_filename, "w") as c_file:
-                # Write the header and the episode number
-                c_file.write(f'#include "policy_net_model.h"')
+            # Convert the model to TFLite format using the concrete function
+            converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_func], trackable_obj=[])
+            tflite_model = converter.convert()
+        except Exception as e:
+            print(f"Error during TFLite conversion: {e}")
 
-            with open(output_filename, "ab") as c_file:
-                subprocess.run(command, stdout=c_file, check=True)
-            print("Feedforward model successfully converted to C array in " + output_filename + "!")
-
-
-        except subprocess.CalledProcessError as e:
-            print(f"Error during conversion to C array: {e}")
-        except FileNotFoundError:
-            print("xxd command not found. Please ensure WSL is installed and xxd is available.")
-
+        else:
+            # Save the converted model to the specified .tflite file path
+            try:
+                with open(export_path, "wb") as f:
+                    f.write(tflite_model)
+                print(f"Model successfully converted and saved to {export_path}")
+                header_file_name = "policy_net_model.h"
+                export_dir = os.path.dirname(export_path)
+                header_path = os.path.join(export_dir, header_file_name)
+                g_model_length = len(tflite_model)  # Calculate g_model length
+                rewrite_policy_net_header(header_path, export_path, g_model_length, episode_num=0)
+            except IOError as e:
+                print(f"Error saving the TFLite model to file: {e}")
     except Exception as e:
         print(f"Error during TFLite conversion: {e}")
 
-model = PPO.load("stable-model.zip")
 
-env = make_vec_env(SimpleBaseEnv, n_envs=1, env_kwargs=dict())
+if __name__ == '__main__':
+    # model = PPO.load("stable-model.zip")
+    model = PPO.load("stable-model-best/best_model", print_system_info=True)
 
-tf_model = sb3_to_tensorflow(model, env)
-tf_to_tflite(tf_model, "tflite_model.cc")
+    env = make_vec_env(SimpleBaseEnv, n_envs=1, env_kwargs=dict())
+
+    tf_model = sb3_to_tensorflow(model, env)
+
+    config = load_config("config.json")
+    gen_model = config['model_path']
+    export_model_path = gen_model
+    tf_to_tflite(tf_model, export_model_path)

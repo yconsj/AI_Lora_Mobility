@@ -1,5 +1,7 @@
 from stable_baselines3 import DQN, PPO
+from sb3_contrib import RecurrentPPO
 from simple_env import SimpleBaseEnv, FrameSkip
+
 from simple_env import RewardPlottingCallback
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
@@ -17,6 +19,7 @@ def make_skipped_env():
     env = FrameSkip(env, skip=10)  # Frame skip for action repeat
     return env
 # http://localhost:6006/
+# tensorboard --logdir ./tensorboard/
 
 class TensorboardCallback(BaseCallback):
     """

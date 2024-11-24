@@ -205,6 +205,8 @@ def reinforce(env, policy_net, optimizer, gen_model_path, log_path, num_episodes
     stationary_data_json = load_stationary_data()
 
     training_info_export_path = config["training_info_path"]
+    export_training_info(training_info_export_path, current_episode_num=0, max_episode_num=num_episodes, packet_reward=0,
+                         exploration_reward=0, random_choice_probability=0, normalization_factors=norm_factors)
 
     for episode in range(num_episodes):
         print(f"Running episode {episode + 1} of {num_episodes}.")
@@ -299,7 +301,7 @@ def main():
     policy_net = PolicyNetwork(input_size, output_size)  # Initialize policy network
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)  # Initialize optimizer
 
-    num_episodes = 100  # Number of episodes to train
+    num_episodes = 0  # Number of episodes to train
     num_batches = 4
     concrete_func = policy_net.get_concrete_function()
     policy_net.summary()
@@ -315,14 +317,15 @@ def main():
     end_time = time.time()
     total_training_time = end_time - start_time  # Total training time in seconds
     # Calculate the average time per episode
-    avg_time_per_episode = total_training_time / num_episodes
-    print(f"Total training time: {total_training_time:.2f} seconds")
-    print(f"Average time per episode: {avg_time_per_episode:.2f} seconds")
+    if (num_episodes > 0):
+        avg_time_per_episode = total_training_time / num_episodes
+        print(f"Total training time: {total_training_time:.2f} seconds")
+        print(f"Average time per episode: {avg_time_per_episode:.2f} seconds")
 
     # Example input (make sure it matches the input shape of your model)
     # rrsi, snir, timestamp__lastpacket, total_packets, time, x,y
 
-    if num_episodes > 0:
+    if num_episodes > 1:
         plot_training(log_state=all_states_per_episode, mv_actions_per_episode=all_actions_per_episode,
                       mv_stationary_data=stationary_data_list, mv_reward_sums=reward_sums, window_size=100)
 
