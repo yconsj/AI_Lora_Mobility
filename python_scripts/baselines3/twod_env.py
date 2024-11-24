@@ -27,13 +27,17 @@ class FrameSkip(gym.Wrapper):
                 break
         return obs, total_reward, done, trunc,info
 class PacketReference():
-    def __init__(self, pos = (-1,-1), rssi = -1, snir= -1):
+    def __init__(self, max_pos = (150,150), pos = (-1,-1), rssi = -1, snir= -1):
         self.pos = pos
         self.rssi = rssi
         self.snir = snir
+        self.max_pos = max_pos
 
     def get(self):
-        return (self.pos[0], self.pos[1], self.rssi, self.snir)
+        if self.pos == (-1, -1):
+            return (self.pos[0], self.pos[1], self.rssi)
+
+        return (self.pos[0] / self.max_pos[0], self.pos[1] / self.max_pos[1], self.rssi)
 class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none"):
         super(TwoDEnv, self).__init__()
@@ -51,8 +55,8 @@ class TwoDEnv(gym.Env):
         #                     elapsed_time1, elapsed_time2  2
         #                                                   28
         self.observation_space = spaces.Box(low=np.array(
-            [0]*2 + [-1]*24 + [0]*2), high=np.array(
-            [1]*28), dtype=np.float32)
+            [0]*2 + [-1]*18 + [0]*2), high=np.array(
+            [1]*22), dtype=np.float32)
         # Environment state
         self.visited_pos = dict()
         self.last_packet = 0
@@ -105,7 +109,8 @@ class TwoDEnv(gym.Env):
         self.total_received = 0
         self.prefs1 = (PacketReference(), PacketReference(), PacketReference())
         self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
-
+        self.elapsed_time1 = 0
+        self.elapsed_time2 = 0
         state = [
             self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
             *self.prefs1[0].get(), *self.prefs1[1].get(),*self.prefs1[2].get(),
@@ -130,7 +135,7 @@ class TwoDEnv(gym.Env):
     
     def is_new_best_pref(self, pref, p):
         (pref1, pref2, pref3) = pref
-        if p.rssi > pref1.rssi or  p.rssi > pref2.rssi or  p.rssi > pref3.rssi:
+        if p.rssi > pref1.rssi or  p.rssi > pref2.rssi or p.rssi > pref3.rssi:
             return True
         return False
     def insert_best_pref(self, pref, p):
@@ -194,8 +199,8 @@ class TwoDEnv(gym.Env):
         received2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
         self.elapsed_time1 = min(self.max_steps,self.elapsed_time1+1)
         self.elapsed_time2 = min(self.max_steps,self.elapsed_time2+1)
-        p1 = PacketReference(self.pos, rssi1,snir1)
-        p2 = PacketReference(self.pos, rssi2,snir2)
+        p1 = PacketReference(pos= self.pos,rssi= rssi1,snir=snir1)
+        p2 = PacketReference(pos= self.pos, rssi=rssi2,snir=snir2)
         if received1 == PACKET_STATUS.RECEIVED:
             reward = self.packet_reward_max
             if self.last_packet == 2:
@@ -224,9 +229,9 @@ class TwoDEnv(gym.Env):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node2.pos)
 
-        elif self.elapsed_time1 > self.elapsed_time2:
+        elif self.elapsed_time1 > self.elapsed_time2 and (self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1):
             reward = self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
-        elif self.elapsed_time1 <= self.elapsed_time2:
+        elif self.elapsed_time1 <= self.elapsed_time2 and (self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1):
             reward = self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
 
 
@@ -234,11 +239,10 @@ class TwoDEnv(gym.Env):
 
         done = self.steps >= self.max_steps or self.total_misses >= 20
         self.total_reward += reward
-
         state = [
             self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
-            *self.prefs1[0].get(), *self.prefs1[1].get(),*self.prefs1[2].get(),
-            *self.prefs2[0].get(),*self.prefs2[1].get(),*self.prefs2[2].get(),
+            *self.prefs1[0].get(), *self.prefs1[1].get(), *self.prefs1[2].get(),
+            *self.prefs2[0].get(), *self.prefs2[1].get(), *self.prefs2[2].get(),
             self.elapsed_time1 / self.max_steps,
             self.elapsed_time2 / self.max_steps
         ]
@@ -267,6 +271,15 @@ class TwoDEnv(gym.Env):
         cv2.rectangle(frame,pt1= (offset_x + self.node1.pos[0]-1, offset_y + self.node1.pos[1]-1), pt2= (offset_x + self.node1.pos[0]+1, offset_y + self.node1.pos[1]+1), color=self.point_color)
         cv2.rectangle(frame,pt1= (offset_x + self.node2.pos[0]-1, offset_y + self.node2.pos[1]-1), pt2= (offset_x + self.node2.pos[0]+1, offset_y + self.node2.pos[1]+1), color=self.point_color)
 
+        # Draw packet refs
+        for pr in self.prefs1:
+            if pr.pos == (-1, -1):
+                continue
+            cv2.rectangle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), pt2= (offset_x + pr.pos[0], offset_y + pr.pos[1]), color=(0, 128, 0))
+        for pr in self.prefs2:
+            if pr.pos == (-1, -1):
+                continue
+            cv2.rectangle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), pt2= (offset_x + pr.pos[0], offset_y + pr.pos[1]), color=(128, 128, 0))
         # cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
         # cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
         # Display the frame
