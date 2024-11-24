@@ -27,6 +27,7 @@
 #include "LoRa/LoRaMacFrame_m.h"
 #include "inet/applications/base/ApplicationBase.h"
 #include "inet/transportlayer/contract/udp/UdpSocket.h"
+#include "inet/linklayer/common/MacAddress.h"
 
 namespace flora {
 
@@ -40,6 +41,8 @@ class MobileGatewayLoRaApp : public cSimpleModule, public cListener
     cMessage *selfMsg = nullptr;
     cOutVector rssiVector;
     cOutVector snirVector;
+    std::map<MacAddress, cModule*> macToModuleMap; // MAC to module mapping
+
 
   protected:
     virtual void initialize(int stage) override;
@@ -52,7 +55,7 @@ class MobileGatewayLoRaApp : public cSimpleModule, public cListener
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
     void logPacketInfoToModel(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id);
-
+    void constructMacSubmoduleTable(cModule *module);
   public:
       simsignal_t LoRa_GWPacketReceived;
       int counterOfSentPacketsFromNodes = 0;
