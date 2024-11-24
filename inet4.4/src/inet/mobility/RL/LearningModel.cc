@@ -28,14 +28,6 @@
 
 
 #include "LearningModel.h"
-#include "tensorflow/lite/micro/system_setup.h"
-
-
-#include "tensorflow/lite/micro/all_ops_resolver.h"
-#include "tensorflow/lite/micro/micro_interpreter.h"
-#include "tensorflow/lite/micro/micro_log.h"
-#include "tensorflow/lite/micro/system_setup.h"
-#include "tensorflow/lite/schema/schema_generated.h"
 #include "inet/common/geometry/common/Coord.h"
 #include "inet/mobility/contract/IMobility.h" // for accessing mobility
 #include "SimpleRLMobility.h"
@@ -65,9 +57,9 @@ float* model_output_buffer = nullptr;
 
 // Define dimensions
 const int kInputHeight = 1;
-const int kInputWidth = 6; // Change based on your features
+const int kInputWidth = 5; // Change based on your features
 const int kOutputHeight = 1;
-const int kOutputWidth = 2; // Change based on your model output
+const int kOutputWidth = 3; // Change based on your model output
 
 constexpr int kTensorArenaSize = const_g_model_length;
 // Keep aligned to 16 bytes for CMSIS
@@ -77,7 +69,8 @@ alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 LearningModel::LearningModel()
 {
     lastStateNumberOfPackets = 0.0;
-    currentState = InputState();
+    currentState = InputStateBasic();
+
     model = nullptr;
     std::vector<uint8_t> model_data(const_g_model_length, 0);
     packet_reward = -1.0;
@@ -126,6 +119,11 @@ void LearningModel::initialize()
        (model_input->dims->data[0] != kInputHeight) ||
        (model_input->dims->data[1] != kInputWidth) ||
        (model_input->type != kTfLiteFloat32)) {
+       EV << "size, data0, data1" << omnetpp::endl;
+       EV << model_input->dims->size << omnetpp::endl;
+       EV << model_input->dims->data[0] << omnetpp::endl;
+       EV << model_input->dims->data[1] << omnetpp::endl;
+
        throw cRuntimeError("LearningModel.cc: wrong input dimensions");
    }
    model_input_buffer = model_input->data.f; // Pointer to input data
@@ -136,6 +134,10 @@ void LearningModel::initialize()
        (model_output->dims->data[0] != kOutputHeight) ||
        (model_output->dims->data[1] != kOutputWidth) ||
        (model_output->type != kTfLiteFloat32)) {
+       EV << "size, data0, data1" << omnetpp::endl;
+       EV << model_output->dims->size << omnetpp::endl;
+       EV << model_output->dims->data[0] << omnetpp::endl;
+       EV << model_output->dims->data[1] << omnetpp::endl;
        throw cRuntimeError("LearningModel.cc: wrong output dimensions");
    }
    /*
@@ -220,11 +222,12 @@ SimpleRLMobility* LearningModel::getMobilityModule() {
 }
 
 // Method to get the position (coordinate) from the SimpleRLMobility module
-Coord LearningModel::getCoord() {
+const Coord LearningModel::getCoord() {
     // Fetch the mobility module, which is the parent of LearningModel
     SimpleRLMobility* mobility = getMobilityModule();
     // Return the current position of the mobility module
-    return mobility->getCurrentPosition();
+    const Coord pos = mobility->getCurrentPosition();
+    return pos;
 
 }
 
@@ -259,24 +262,20 @@ std::vector<uint8_t> LearningModel::ReadModelFromFile(const char* filename) {
 
 
 void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id) {
-    currentState.latestPacketRSSI = rssi;
-    currentState.latestPacketSNIR = snir;
-    currentState.latestPacketTimestamp = timestamp;
-    currentState.numReceivedPackets = nReceivedPackets;
-
-
-    if (lastPacketId == id){
-        rewardModifier *= 0.5;
-    } else {
-        lastPacketId = id;
-        rewardModifier = 1.0;
+    // normalize at update-time
+    if (id == 0) {
+        currentState.stampPos1 = getCoord() * coord_x_norm_factor;;
+        currentState.timestamp1 = simTime().dbl() * current_timestamp_norm_factor;
+    }
+    else if (id == 1) {
+        currentState.stampPos2 = getCoord() * coord_x_norm_factor;;
+        currentState.timestamp2 = simTime().dbl() * current_timestamp_norm_factor;
     }
 
 }
 
 
 double LearningModel::getReward() {
-
 
     double reward = (currentState.numReceivedPackets - lastStateNumberOfPackets) * packet_reward * rewardModifier;
     lastStateNumberOfPackets = currentState.numReceivedPackets;
@@ -289,39 +288,69 @@ double LearningModel::getReward() {
 }
 
 
-InputState LearningModel::normalizeInputState(InputState state) {
-    // TODO: reevaluate this normalization.
-    InputState normalizedState = InputState();
-    // Normalize using the class's normalization factors
-    normalizedState.latestPacketRSSI = state.latestPacketRSSI * latest_packet_rssi_norm_factor;
-    normalizedState.latestPacketSNIR = state.latestPacketSNIR * latest_packet_snir_norm_factor;
-    normalizedState.latestPacketTimestamp = state.latestPacketTimestamp.dbl() * latest_packet_timestamp_norm_factor;
-    normalizedState.numReceivedPackets = state.numReceivedPackets * num_received_packets_norm_factor;
-    normalizedState.currentTimestamp = state.currentTimestamp.dbl() * current_timestamp_norm_factor;
-    normalizedState.coord.x = state.coord.x * coord_x_norm_factor;
-    return normalizedState;
-}
-
 
 int LearningModel::pollModel()
 {
     // get remaining state info:
-    currentState.currentTimestamp = simTime();
-    currentState.coord = getCoord();
+    currentState.gwPosition = getCoord() * coord_x_norm_factor;
 
     int reward = getReward();
 
-    InputState normalizedState = normalizeInputState(currentState);
+    EV << "printing state: " << omnetpp::endl;
+    EV << "currentState.gwPosition: " << currentState.gwPosition << omnetpp::endl;
+    EV << "currentState.stampPos1: " << currentState.stampPos1 << omnetpp::endl;
+    EV << "currentState.stampPos2: " << currentState.stampPos2 << omnetpp::endl;
+    EV << "currentState.timestamp1: " << currentState.timestamp1 << omnetpp::endl;
+    EV << "currentState.timestamp2: " << currentState.timestamp2 << omnetpp::endl;
 
-    int output = invokeModel(normalizedState);
+    int output = invokeModel(currentState);
     StateLogger* stateLogger = getStateLoggerModule();
-    stateLogger->logStep(normalizedState, output, reward);
+    //stateLogger->logStep(normalizedState, output, reward);
 
     return output;
 
 }
 
-int LearningModel::invokeModel(InputState state) {
+
+int LearningModel::selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic) {
+    int selected_index = -1;
+
+    if (deterministic) {
+        // Deterministic mode: choose the index with the highest weight
+        selected_index = std::distance(model_output->data.f,
+                          std::max_element(model_output->data.f, model_output->data.f + num_outputs));
+        EV << "Deterministic mode: selected output index: " << selected_index
+           << " with highest weight: " << model_output->data.f[selected_index] << "\n";
+        return selected_index;
+    }
+
+    // Stochastic mode
+    float random_value = static_cast<float>(rand()) / RAND_MAX; // Random value in [0, 1)
+    if (random_choice_probability > random_value) {
+        // Choose a random integer from 0 to num_outputs - 1
+        selected_index = rand() % num_outputs;
+        EV << "By random choice, selected output index: " << selected_index
+           << " with weight: " << model_output->data.f[selected_index] << "\n";
+        return selected_index;
+    } else {
+        random_value = static_cast<float>(rand()) / RAND_MAX; // Take a new random value in [0, 1)
+        // Sample one output based on the weights
+        // Model uses softmax function on output, so it is already weighted and sums to 1.
+        float cumulative_weight = 0.0f;
+        for (size_t i = 0; i < num_outputs; ++i) {
+            cumulative_weight += model_output->data.f[i];
+            if (random_value < cumulative_weight) {
+                selected_index = i;
+                break;
+            }
+        }
+        EV << "Selected output index: " << selected_index
+           << " with weight: " << model_output->data.f[selected_index] << "\n";
+        return selected_index;
+    }
+}
+
+int LearningModel::invokeModel(InputStateBasic state) {
     if (interpreter == nullptr) {
         EV << "Interpreter is not initialized." << omnetpp::endl;
         return -1;
@@ -357,19 +386,26 @@ int LearningModel::invokeModel(InputState state) {
      */
 
     // Insert input data for the model from state values
-    model_input->data.f[0] = state.latestPacketRSSI;
-    model_input->data.f[1] = state.latestPacketSNIR;
-    model_input->data.f[2] = state.latestPacketTimestamp.dbl();
-    model_input->data.f[3] = state.numReceivedPackets;
-    model_input->data.f[4] = state.currentTimestamp.dbl();
-    model_input->data.f[5] = state.coord.x;
+    model_input->data.f[0] = state.gwPosition.x;
+    model_input->data.f[1] = state.stampPos1.x;
+    model_input->data.f[2] = state.stampPos2.x;
+
+    // time since packets were received;
+    double timesince1 = simTime().dbl() * current_timestamp_norm_factor - state.timestamp1;
+    double timesince2 = simTime().dbl() * current_timestamp_norm_factor - state.timestamp2;
+
+    model_input->data.f[3] = timesince1;
+    model_input->data.f[4] = timesince2;
     // model_input->data.f[6] = state.coord.y;
 
-    size_t num_inputs = kInputWidth;
     // Place the quantized input in the model's input tensor
-    for (size_t i = 0; i < num_inputs; ++i) { // Adjust based on your actual number of inputs
-        model_input->data.f[i] = (model_input_buffer[i]);
-        EV << "model_input->data.f"  << model_input->data.f[i] << omnetpp::endl;
+    for (size_t i = 0; i < kInputWidth; ++i) { // Adjust based on your actual number of inputs
+        //model_input->data.f[i] = (model_input_buffer[i]);
+        EV << "model_input->data.f" << i << ": "  << model_input->data.f[i] << omnetpp::endl;
+        if (!std::isfinite(model_input->data.f[i])) {
+            EV << "Invalid input detected at index " << i << ": " << model_input->data.f[i] << omnetpp::endl;
+            throw cRuntimeError("NaN or inf detected in model input");
+        }
     }
 
 
@@ -387,32 +423,9 @@ int LearningModel::invokeModel(InputState state) {
 
 
 
-
-    int selected_index = 0;
-
-    float random_value = static_cast<float>(rand()) / RAND_MAX; // Random value in [0, 1)
-    if (random_choice_probability > random_value) {
-        // Choose a random integer from 0 to num_outputs - 1
-        selected_index = rand() % num_outputs;
-        EV << "By random choice, selected output index: " << selected_index << " with weight: " << model_output->data.f[selected_index] << "\n";
-        return selected_index;
-    }
-    else {
-        random_value = static_cast<float>(rand()) / RAND_MAX; // take a new random value in [0, 1)
-        // Sample one output based on the weights
-        // model uses softmax function on output, so it is already weighted and sums to 1.
-        float cumulative_weight = 0.0f;
-        for (size_t i = 0; i < num_outputs; ++i) {
-            cumulative_weight += model_output->data.f[i];
-            if (random_value < cumulative_weight) {
-                selected_index = i;
-                break;
-            }
-        }
-        EV << "Selected output index: " << selected_index << " with weight: " << model_output->data.f[selected_index] << "\n";
-
-        return selected_index; // Return the selected index
-    }
+    bool deterministic = true;
+    int selected_index = selectOutputIndex(random_choice_probability, model_output, num_outputs, deterministic);
+    return selected_index;
 }
 
 

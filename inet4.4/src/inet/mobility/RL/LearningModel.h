@@ -22,6 +22,14 @@
 #include "SimpleRLMobility.h"
 #include <vector>
 #include "include/json.hpp"
+
+#include "tensorflow/lite/micro/system_setup.h"
+#include "tensorflow/lite/micro/all_ops_resolver.h"
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/micro_log.h"
+#include "tensorflow/lite/micro/system_setup.h"
+#include "tensorflow/lite/schema/schema_generated.h"
+
 using json = nlohmann::json;
 
 namespace inet {
@@ -41,11 +49,11 @@ protected:
 
 private:
     StateLogger* getStateLoggerModule();  // Function to fetch the StateLogger module. should not be virtual
-    int invokeModel(InputState state);
+    int invokeModel(InputStateBasic state);
     double getReward();
     std::vector<uint8_t> model_data;
-    Coord getCoord();
-    InputState currentState;
+    const Coord getCoord();
+    InputStateBasic currentState;
     int lastPacketId = -1;
     double rewardModifier = 1.0;
     double packet_reward = -1.0;
@@ -62,11 +70,11 @@ private:
 
 
     SimpleRLMobility* getMobilityModule();
-    InputState normalizeInputState(InputState state);
     double lastStateNumberOfPackets;
     virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
     void readJsonFile(const std::string& filepath);
     double readJsonValue(const json& jsonData, const std::string& key);
+    int selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic);
 };
 
 } /* namespace inet */

@@ -24,7 +24,6 @@ class INET_API SimpleRLMobility : public MovingMobilityBase
 {
   public:
     virtual double getMaxSpeed() const override { return speed; }
-    virtual const Coord& getCurrentPosition() override;
     virtual const Coord& getInitialPosition();
     virtual bool isNewGridPosition();
     SimpleRLMobility();

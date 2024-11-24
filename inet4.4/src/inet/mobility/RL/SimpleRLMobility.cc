@@ -24,7 +24,7 @@ SimpleRLMobility::SimpleRLMobility()
     speed = 0;
     pollModelTimer = nullptr;
     modelUpdateInterval = 0;
-    initialPosition = Coord(NAN, NAN, NAN);
+    initialPosition = lastPosition;
 
     heading = deg(360);
     elevation = deg(0.0);
@@ -101,7 +101,7 @@ const Coord& SimpleRLMobility::getLoRaNodePosition(int index)
     } else {
         EV << "loRaNodes[" << index << "] module not found!" << endl;
     }
-    cRuntimeError("node or mobility submodule is not found");
+    throw cRuntimeError("node or mobility submodule is not found");
     // Return an invalid coordinate if the node or mobility submodule is not found
     return Coord(NAN, NAN, NAN);
 }
@@ -111,28 +111,41 @@ void SimpleRLMobility::pollModel() {
     EV << "test LM" <<  endl;
     cModule* submodule = getSubmodule("learningModel");
     LearningModel *learningModel = check_and_cast<LearningModel*>(submodule);
-
+    if (!learningModel) {
+        EV << "LearningModel submodule not found!" << endl;
+        return;
+    }
     // Call a function from LearningModel
-    if (learningModel) {
-        int choice = learningModel->pollModel();
-
+    int choice = learningModel->pollModel();
+    if (choice == 2) {
+        lastVelocity = direction * 0.0;
+        EV << "Stalling at position " << lastPosition.x << omnetpp::endl;
+        return;
+    }
+    else {
         Coord targetPosition = getLoRaNodePosition(choice); // Change 0 to the desired node index if needed
-
         if (!std::isnan(targetPosition.x)) { // Check if position is valid
             // Move towards the target node in x-direction only
+            double epsilon = 1e-6; // Small tolerance for floating-point comparison
             double deltaX = targetPosition.x - lastPosition.x;
-            direction = Coord(deltaX, 0, 0); // Set direction vector only in x-direction
-            direction.normalize();
-            lastVelocity = direction * speed;
-
-            // Optional: Print debug information
-            EV << "Moving towards LoRaNode[" << choice << "] in x-direction at position: " << targetPosition.x << endl;
+            if (std::abs(deltaX) > epsilon) { // Check if deltaX is significantly different from zero
+                direction = Coord(deltaX, 0, 0); // Set direction vector only in x-direction
+                direction.normalize();           // Normalize the direction
+                lastVelocity = direction * speed;
+                EV << "targetPosition: " << targetPosition << omnetpp::endl;
+                EV << "lastPosition: " << lastPosition << omnetpp::endl;
+                EV << "direction: " << direction << omnetpp::endl;
+                EV << "Moving towards LoRaNode[" << choice << "] in x-direction at position: " << targetPosition.x << endl;
+                EV << "lastVelocity: " << lastVelocity << omnetpp::endl;
+            } else {
+                // If deltaX is too small, set velocity to zero
+                lastVelocity = Coord(0, 0, 0);
+                EV << "Moving towards LoRaNode[" << choice << "] in x-direction at position: " << targetPosition.x << endl;
+                EV << "But already on top. Velocity set to 0: " << lastVelocity << omnetpp::endl;
+            }
         } else {
             EV << "Invalid target position; LoRaNode[" << choice << "]! may not be reachable." << endl;
         }
-
-    } else {
-        EV << "LearningModel submodule not found!" << endl;
     }
 }
 
@@ -141,14 +154,9 @@ void SimpleRLMobility::move()
     double elapsedTime = (simTime() - lastUpdate).dbl();
 
     lastPosition += lastVelocity * elapsedTime;
-
     // do something if we reach the wall
     Coord dummyCoord;
     handleIfOutside(REFLECT, dummyCoord, lastVelocity);
-}
-
-const Coord& SimpleRLMobility::getCurrentPosition() {
-    return lastPosition;
 }
 
 

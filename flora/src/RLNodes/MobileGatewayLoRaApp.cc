@@ -17,17 +17,51 @@
 
 //#include "inet/networklayer/ipv4/IPv4Datagram.h"
 //#include "inet/networklayer/contract/ipv4/IPv4ControlInfo.h"
+#include "../LoRa/LoRaMac.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/applications/base/ApplicationPacket_m.h"
 #include "../LoRaPhy/LoRaRadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/mobility/RL/LearningModel.h"
+#include "inet/linklayer/base/MacProtocolBase.h"
 
 namespace flora {
 
 Define_Module(MobileGatewayLoRaApp);
 
+
+void MobileGatewayLoRaApp::constructMacSubmoduleTable(cModule *module) {
+    for (cModule::SubmoduleIterator it(module); !it.end(); ++it) {
+        cModule *submodule = *it;
+
+        // Check if the submodule is a LoRaMac
+        if (auto loRaMac = dynamic_cast<flora::LoRaMac *>(submodule)) {
+            // Go 2 levels up to get the LoRaNode module
+            cModule *nicModule = loRaMac->getParentModule(); // Assume it's LoRaNic
+            cModule *nodeModule = nicModule ? nicModule->getParentModule() : nullptr;
+
+            if (nodeModule) {
+                // Retrieve the LoRaNode index
+                int nodeIndex = nodeModule->getIndex();
+
+                // Retrieve the MAC address
+                inet::MacAddress macAddress = loRaMac->getAddress();
+
+                // Store the MAC address and associated module
+                macToModuleMap[macAddress] = nodeModule; // Map MAC address to the LoRaNode module
+                EV << "Added LoRaNode[" << nodeIndex << "] with MAC address: " << macAddress
+                        << " (MAC module: " << loRaMac->getFullPath() << ")" << endl;
+            } else {
+                EV << "Failed to find grandparent LoRaNode for LoRaMac: " << loRaMac->getFullPath() << endl;
+            }
+        } else {
+            // Recursively search in submodules
+            EV << "Skipping non-LoRaMac submodule: " << submodule->getFullName() << endl;
+            constructMacSubmoduleTable(submodule);
+        }
+    }
+}
 
 void MobileGatewayLoRaApp::initialize(int stage)
 {
@@ -40,8 +74,9 @@ void MobileGatewayLoRaApp::initialize(int stage)
     } else if (stage == INITSTAGE_APPLICATION_LAYER) {
         startUDP();
         getSimulation()->getSystemModule()->subscribe("LoRa_AppPacketSent", this);
+        cModule *network = getSimulation()->getSystemModule();
+        constructMacSubmoduleTable(network);  // Call the recursive function directly
     }
-
 }
 
 
@@ -157,9 +192,19 @@ void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
     // --- Logging message data --- //
     //rssiVector.record(frame->getRSSI());
     //snirVector.record(snirInd->getMinimumSnir());
-    int id = pk->getSenderModuleId();
-    logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), (double)counterOfReceivedPackets, simTime(), id );
+    inet::MacAddress transmitterAddress = frame->getTransmitterAddress();
+    EV << "Transmitter address: " << transmitterAddress << endl;
 
+    auto it = macToModuleMap.find(transmitterAddress);
+    if (it != macToModuleMap.end()) {
+        cModule *loRaNode = it->second;
+        int nodeIndex = loRaNode->getIndex();
+        EV << "Packet received from LoRaNode[" << nodeIndex << "] with MAC: " << transmitterAddress << endl;
+
+       logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), (double)counterOfReceivedPackets, simTime(), nodeIndex );
+   } else {
+       EV << "Unknown transmitter: " << transmitterAddress.str() << "\n";
+   }
 
     // FIXME : Identify network server message is destined for.
     L3Address destAddr = destAddresses[0];
