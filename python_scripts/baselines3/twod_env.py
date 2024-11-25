@@ -9,6 +9,7 @@ import cv2
 from enum import Enum
 import math
 import random
+from scipy.optimize import least_squares
 # Define a custom FrameSkip wrapper
 class FrameSkip(gym.Wrapper):
     def __init__(self, env, skip=4):
@@ -67,13 +68,14 @@ class TwoDEnv(gym.Env):
         self.miss_penalty_max = 10
         self.miss_penalty_min = 5
         self.packet_reward_max = 10
+        
         speed = 20  # meter per second
         max_distance = 3000 # meter
         self.max_distance_x = int(max_distance / speed)  # scaled by speed
         self.max_distance_y = int(max_distance / speed)
         self.max_cross_distance = math.dist((0,0), (self.max_distance_x, self.max_distance_y))
         self.pos = ( int(self.max_distance_x / 2), int(self.max_distance_y / 2))
-        
+        self.prev_pos = self.pos
         self.target = 5  # The target value we want to reach
         self.steps = 0
         pos1 = (25, 25)
@@ -84,7 +86,8 @@ class TwoDEnv(gym.Env):
         self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
         self.elapsed_time1 = 0
         self.elapsed_time2 = 0
-
+        self.initial_guess1 = self.pos
+        self.initial_guess2 = self.pos
         self.total_reward = 0
         self.total_misses = 0
         self.total_received = 0
@@ -98,12 +101,25 @@ class TwoDEnv(gym.Env):
             cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
+        self.prev_pos = self.pos
         self.visited_pos = dict()
         self.last_packet = 0
         self.total_misses = 0
         self.pos = (int(self.max_distance_x / 2), int(self.max_distance_y / 2))
+        self.initial_guess1 = self.pos
+        self.initial_guess2 = self.pos
         self.node1.reset()
         self.node2.reset()
+        x1 = random.randint(0,150)
+        y1 = random.randint(0,150)
+        self.node1.pos = (x1,y1)
+        while True:
+            x2 = random.randint(0,150)
+            y2 = random.randint(0,150)
+            if math.dist((x2,y2), self.node1.pos) >= 75:
+                self.node2.pos= (x2,y2)
+                break
+
         self.steps = 0
         self.total_reward = 0
         self.total_received = 0
@@ -135,6 +151,8 @@ class TwoDEnv(gym.Env):
     
     def is_new_best_pref(self, pref, p):
         (pref1, pref2, pref3) = pref
+        if p.pos == pref1.pos or p.pos == pref2.pos or p.pos == pref3.pos:
+            return False
         if p.rssi > pref1.rssi or  p.rssi > pref2.rssi or p.rssi > pref3.rssi:
             return True
         return False
@@ -172,6 +190,29 @@ class TwoDEnv(gym.Env):
         self.visited_pos[pos] = time
 
         return base_reward
+    def trilateration_residuals(self, params, positions, distances):
+        x, y = params  # Unknown position (x, y)
+        residuals = []
+        
+        for (px, py), d in zip(positions, distances):
+            calculated_distance = np.sqrt((x - px)**2 + (y - py)**2)
+            residuals.append(calculated_distance - d)
+        
+        return residuals
+    def trilateration(self, prefs, initial_guess):
+        (pref1,pref2,pref3) = prefs
+        positions = [pref1.pos, pref2.pos, pref3.pos]
+        distances = [self.node1.inverse_RSSI(pref1.rssi),self.node1.inverse_RSSI(pref2.rssi),self.node1.inverse_RSSI(pref3.rssi)]
+        # Initial guess for the unknown position (x, y)
+       
+        
+        # Perform least squares optimization
+        result = least_squares(self.trilateration_residuals, initial_guess, args=(positions, distances))
+        
+        # Return the optimized position
+        return result.x
+
+
 
     def step(self, action):
         if self.render_mode == "cv2":
@@ -229,10 +270,18 @@ class TwoDEnv(gym.Env):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node2.pos)
 
-        elif self.elapsed_time1 > self.elapsed_time2 and (self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1):
-            reward = self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
-        elif self.elapsed_time1 <= self.elapsed_time2 and (self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1):
-            reward = self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
+        elif self.elapsed_time1 > self.elapsed_time2: 
+            #reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
+            if self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1:
+                aprox_pos = self.trilateration(self.prefs1, self.initial_guess1)
+                self.initial_guess1 = aprox_pos
+                reward += self.get_pos_reward(self.pos,aprox_pos, self.elapsed_time1)
+        elif self.elapsed_time1 <= self.elapsed_time2:
+            #reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
+            if self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1:
+                aprox_pos = self.trilateration(self.prefs2, self.initial_guess2)
+                self.initial_guess2 = aprox_pos
+                reward += self.get_pos_reward(self.pos,aprox_pos, self.elapsed_time2)
 
 
         reward += self.get_explore_reward(self.pos, self.steps)
@@ -313,7 +362,16 @@ class SignalModel:
         # Scale RSSI between 0 and 1
         rssi_scaled = (rssi - self.rssi_min) / (self.rssi_max - self.rssi_min)
         return np.clip(rssi_scaled, 0, 1)  # Ensure it’s within [0, 1]
-
+    def inverse_generate_rssi(self, rssi_scaled):
+        # Ensure rssi_scaled is within the valid range [0, 1]
+        rssi_scaled = np.clip(rssi_scaled, 0, 1)
+        
+        # Step 1: Undo the scaling to get rssi
+        rssi = self.rssi_min + rssi_scaled * (self.rssi_max - self.rssi_min)
+        
+        # Step 2: Solve for distance using the path loss model
+        distance = 10 ** ((self.rssi_ref - rssi) / (10 * self.path_loss_exponent))
+        return distance
     def generate_snir(self, distance):
         if distance < 0:
             raise ValueError("Distance must be greater than 0.")
@@ -339,7 +397,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_radius = 70
+        self.max_transmission_radius = 75
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
@@ -348,7 +406,7 @@ class node():
         self.time_of_next_packet = self.time_to_first_packet
         posx = random.randint(0, 150)
         posy = random.randint(0, 150)
-        self.pos = (posx,posy)
+        #self.pos = (posx,posy)
     def generate_next_interval(self):
         # Generate a truncated normal value for the next time interval
         # a and b are calculated to truncate around the mean interval with some range
@@ -358,7 +416,8 @@ class node():
         return interval
     def generate_RSSI(self, distance):
         rssi_scaled = self.transmission_model.generate_rssi(distance)
-
+    def inverse_RSSI(self, rssi):
+        return self.transmission_model.inverse_generate_rssi(rssi)
     def generate_SNIR(self, distance):
         snir_scaled = self.transmission_model.generate_snir(distance)
 
