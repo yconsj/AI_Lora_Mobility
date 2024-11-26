@@ -41,7 +41,7 @@ def main():
     envs = 4
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls= SubprocVecEnv)
 
-    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=20, verbose=1)
+    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=20, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1, best_model_save_path="stable-model-2d-best")
     print("Learning started")
     model = PPO("MlpPolicy", env, gamma=0.9, tensorboard_log="./tensorboard/").learn(1000000,callback=[eval_callback, TensorboardCallback()])
