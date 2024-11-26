@@ -13,7 +13,7 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package flora.RLNodes;
+package flora.RLNodes.Nodes;
 
 import inet.node.contract.INetworkNode;
 import inet.mobility.RL.SimpleRLMobility;
@@ -23,7 +23,7 @@ import inet.networklayer.contract.INetworkLayer;
 import inet.linklayer.loopback.LoopbackInterface;
 import flora.LoRa.LoRaGWNic;
 import flora.LoRaApp.SimpleLoRaApp;
-import flora.RLNodes.MobileGatewayLoRaApp;
+import flora.RLNodes.MobileGatewayLoRaApp.MobileGatewayLoRaApp;
 import inet.linklayer.contract.IEthernetInterface;
 import inet.applications.contract.IApp;
 import inet.transportlayer.contract.IUdp;
@@ -31,6 +31,7 @@ import inet.networklayer.contract.IRoutingTable;
 import inet.common.MessageDispatcher;
 import inet.linklayer.ethernet.contract.IEthernetLayer;
 import inet.protocolelement.contract.IProtocolLayer;
+import flora.RLNodes.CustomLoRaGWRadio.CustomLoRaGWRadio;
 
 module MobileLoRaGW like INetworkNode
 {
@@ -49,7 +50,7 @@ module MobileLoRaGW like INetworkNode
         int numUdpApps = default(0);
         bool hasUdp = default(firstAvailableOrEmpty("Udp") != "");
         string udpType = default(firstAvailableOrEmpty("UDP"));
-
+        
         LoRaGWNic.radio.antenna.mobilityModule = default("^.^.^.mobility");
 
         *.mobilityModule = default(exists(mobility) ? absPath(".mobility") : "");

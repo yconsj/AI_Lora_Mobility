@@ -13,7 +13,7 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package flora.RLNodes;
+package flora.RLNodes.Nodes;
 
 import inet.mobility.static.StationaryMobility;
 import inet.networklayer.common.InterfaceTable;

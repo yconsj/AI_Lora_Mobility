@@ -15,13 +15,11 @@
 
 #include "MobileGatewayLoRaApp.h"
 
-//#include "inet/networklayer/ipv4/IPv4Datagram.h"
-//#include "inet/networklayer/contract/ipv4/IPv4ControlInfo.h"
-#include "../LoRa/LoRaMac.h"
+#include "LoRa/LoRaMac.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/applications/base/ApplicationPacket_m.h"
-#include "../LoRaPhy/LoRaRadioControlInfo_m.h"
+#include "LoRaPhy/LoRaRadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/mobility/RL/LearningModel.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
@@ -200,8 +198,7 @@ void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)
         cModule *loRaNode = it->second;
         int nodeIndex = loRaNode->getIndex();
         EV << "Packet received from LoRaNode[" << nodeIndex << "] with MAC: " << transmitterAddress << endl;
-
-       logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), (double)counterOfReceivedPackets, simTime(), nodeIndex );
+        logPacketInfoToModel(frame->getRSSI(), snirInd->getMinimumSnir(), (double)counterOfReceivedPackets, simTime(), nodeIndex );
    } else {
        EV << "Unknown transmitter: " << transmitterAddress.str() << "\n";
    }
