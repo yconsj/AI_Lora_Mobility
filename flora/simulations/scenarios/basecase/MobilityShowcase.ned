@@ -1,18 +1,19 @@
 package flora.simulations.scenarios.basecase;
 
-import flora.RLNodes.MobileLoRaGW;
+import flora.RLNodes.Nodes.MobileLoRaGW;
 import inet.node.inet.StandardHost;
 import inet.visualizer.common.IntegratedVisualizer;
 import inet.applications.udpapp.UdpBasicApp;
 import inet.node.inet.Router;
 import inet.node.internetcloud.InternetCloud;
 import flora.LoRaPhy.LoRaMedium;
+import flora.RLNodes.CustomLoRaMedium.CustomLoRaMedium;
 import flora.LoraNode.LoRaNode;
 import inet.node.inet.StandardHost;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.ethernet.Eth1G;
 
-import flora.RLNodes.MobileGatewayLoRaApp;
+import flora.RLNodes.MobileGatewayLoRaApp.MobileGatewayLoRaApp;
 
 
 @namespace(inet);
@@ -31,10 +32,9 @@ network MobilityShowcase
             @display("p=400,304");
         }
         MobileLoraGw[numberOfGateways]: MobileLoRaGW {
-            
             @display("p=157,238;is=s");
         }
-        LoRaMedium: LoRaMedium {
+        LoRaMedium: LoRaMedium { // CustomLoRaMedium
             @display("p=309,102");
         }
         networkServer: StandardHost {

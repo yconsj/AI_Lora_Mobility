@@ -38,7 +38,6 @@ namespace inet {
 class LearningModel : public omnetpp::cSimpleModule {
 public:
     virtual void setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id);
-
     LearningModel();
     virtual ~LearningModel();
     virtual int pollModel();
@@ -51,8 +50,23 @@ private:
     StateLogger* getStateLoggerModule();  // Function to fetch the StateLogger module. should not be virtual
     int invokeModel(InputStateBasic state);
     double getReward();
-    std::vector<uint8_t> model_data;
     const Coord getCoord();
+
+    bool compareArrays(const std::array<double, 3>& predicted, const std::array<double, 3>& expected, double tolerance = 1e-6);
+    void testModelOutput(
+        const std::array<double, 5>& state,
+        int expectedAction,
+        const std::array<double, 3>& expectedActionProbs);
+
+    SimpleRLMobility* getMobilityModule();
+    virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
+    void readJsonFile(const std::string& filepath);
+    double readJsonValue(const json& jsonData, const std::string& key);
+    int selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic);
+
+private:
+    double lastStateNumberOfPackets;
+    std::vector<uint8_t> model_data;
     InputStateBasic currentState;
     int lastPacketId = -1;
     double rewardModifier = 1.0;
@@ -68,13 +82,6 @@ private:
     double current_timestamp_norm_factor = -1.0;     // Normalization factor for current timestamp
     double coord_x_norm_factor = -1.0;               // Normalization factor for x-coordinate
 
-
-    SimpleRLMobility* getMobilityModule();
-    double lastStateNumberOfPackets;
-    virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
-    void readJsonFile(const std::string& filepath);
-    double readJsonValue(const json& jsonData, const std::string& key);
-    int selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic);
 };
 
 } /* namespace inet */

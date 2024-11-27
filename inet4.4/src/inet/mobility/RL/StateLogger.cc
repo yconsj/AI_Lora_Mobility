@@ -30,13 +30,12 @@ void StateLogger::initialize() {
     inputStateArray.clear(); // Clear any previous data (if needed)
     choiceArray.clear();
     rewardArray.clear();
-
     runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
 
 }
 
 
-void StateLogger::logStep(InputState& inputState, int choice, double reward) {
+void StateLogger::logStep(InputStateBasic& inputState, int choice, double reward) {
     inputStateArray.push_back(inputState);
     choiceArray.push_back(choice);
     rewardArray.push_back(reward);
@@ -51,24 +50,24 @@ void StateLogger::writeToFile() {
     }
     // Construct the filename based on the current runnumber
     std::string filename = std::string(log_file_basename) + "_" + std::to_string(runnumber) + ".txt";
-    //std::string filename = "logFile.txt";
     std::ofstream outFile(filename);
 
     if (outFile.is_open()) {
-        // Write inputState array
+        // Write inputStateArray (InputStateBasic)
         outFile << "[";  // Start of inputState array
         if (!inputStateArray.empty()) {
             for (size_t i = 0; i < inputStateArray.size(); ++i) {
-                const InputState& state = inputStateArray[i];
-                outFile << "(" << state.latestPacketRSSI << ", "
-                        << state.latestPacketSNIR << ", "
-                        << state.latestPacketTimestamp << ", "
-                        << state.numReceivedPackets << ", "
-                        << state.currentTimestamp << ", "
-                        << state.coord.x <<
-                        // << ", " << state.coord.y <<
-                        ")"
-                        ;
+                const InputStateBasic& state = inputStateArray[i];
+                outFile << "("
+                        << state.gwPosition.x << ", "
+                        << state.gwPosition.y << ", "
+                        << state.stampPos1.x << ", "
+                        << state.stampPos1.y << ", "
+                        << state.stampPos2.x << ", "
+                        << state.stampPos2.y << ", "
+                        << state.timestamp1 << ", "
+                        << state.timestamp2 << ", "
+                        << state.numReceivedPackets << ")";
                 if (i < inputStateArray.size() - 1) outFile << ", ";
             }
         }

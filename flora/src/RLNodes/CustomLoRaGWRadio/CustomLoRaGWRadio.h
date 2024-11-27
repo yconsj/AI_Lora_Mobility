@@ -13,32 +13,29 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef INET_RLSTATE_STATELOGGER_H_
-#define INET_RLSTATE_STATELOGGER_H_
+#ifndef LORA_CustomLoRaGWRadio_H_
+#define LORA_CustomLoRaGWRadio_H_
 
-#include <vector>
-#include <fstream>
-#include "InputState.h"
-namespace inet {
+#include "inet/physicallayer/wireless/common/base/packetlevel/FlatRadioBase.h"
+#include "LoRaPhy/LoRaTransmitter.h"
+#include "LoRaPhy/LoRaReceiver.h"
+#include "LoRaPhy/LoRaTransmission.h"
+#include "LoRaPhy/LoRaReception.h"
+#include "LoRa/LoRaMacFrame_m.h"
+#include "inet/physicallayer/wireless/common//medium/RadioMedium.h"
+#include "LoRaPhy/LoRaMedium.h"
+#include "inet/common/LayeredProtocolBase.h"
+#include "LoRa/LoRaGWRadio.h"
 
-class StateLogger : public omnetpp::cSimpleModule {
-public:
-    StateLogger();
-    virtual ~StateLogger();
-    virtual void logStep(InputStateBasic& inputState, int choice, double reward);
+namespace flora {
+
+class CustomLoRaGWRadio : public LoRaGWRadio {
+
 protected:
+    virtual void initialize(int stage) override;
     virtual void finish() override;
-    virtual void initialize() override;
-
-private:
-    std::vector<InputStateBasic> inputStateArray;
-    std::vector<int> choiceArray;
-    std::vector<double> rewardArray;
-    int runnumber = -1;
-    void writeToFile();
-
 };
 
-} /* namespace inet */
+}
 
-#endif /* INET_RLSTATE_STATELOGGER_H_ */
+#endif /* LORA_CustomLoRaGWRadio_H_ */
