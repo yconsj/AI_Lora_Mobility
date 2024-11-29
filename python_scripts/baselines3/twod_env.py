@@ -267,10 +267,10 @@ class TwoDEnv(gym.Env):
             if self.is_new_best_pref(self.prefs2, p2):
                 self.prefs2 = self.insert_best_pref(self.prefs2,p2)
 
-        elif received1 == PACKET_STATUS.LOST : # and (self.prefs1[0].rssi == -1 or self.prefs1[1].rssi == -1 or self.prefs1[2].rssi == -1):
+        elif received1 == PACKET_STATUS.LOST: #and (self.prefs1[0].rssi == -1 or self.prefs1[1].rssi == -1 or self.prefs1[2].rssi == -1):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node1.pos)
-        elif received2 == PACKET_STATUS.LOST : #and (self.prefs2[0].rssi == -1 or self.prefs2[1].rssi == -1 or self.prefs2[2].rssi == -1):
+        elif received2 == PACKET_STATUS.LOST: #and (self.prefs2[0].rssi == -1 or self.prefs2[1].rssi == -1 or self.prefs2[2].rssi == -1):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node2.pos)
 
@@ -281,10 +281,10 @@ class TwoDEnv(gym.Env):
                 aprox_pos = self.trilateration(self.prefs2, self.initial_guess2)
                 self.initial_guess2 = aprox_pos
                 
-        if self.elapsed_time1 > self.elapsed_time2: 
+        if self.elapsed_time1 > self.elapsed_time2  and self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1: 
             #reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
                 reward += self.get_pos_reward(self.pos,self.initial_guess1, self.elapsed_time1)
-        elif self.elapsed_time1 <= self.elapsed_time2:
+        elif self.elapsed_time1 <= self.elapsed_time2 and self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1:
             #reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
                 reward += self.get_pos_reward(self.pos,self.initial_guess2, self.elapsed_time2)
 
