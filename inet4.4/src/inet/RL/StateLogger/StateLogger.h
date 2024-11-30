@@ -18,24 +18,34 @@
 
 #include <vector>
 #include <fstream>
-#include "InputState.h"
+
+#include "inet/RL/InputState.h"
+#include "inet/RL/include/json.hpp"
+using json = nlohmann::json;
+
+
 namespace inet {
 
 class StateLogger : public omnetpp::cSimpleModule {
 public:
     StateLogger();
     virtual ~StateLogger();
+    virtual void addTransmissionTime();
+    virtual void logStationaryGatewayPacketReception(int loragwIndex);
     virtual void logStep(InputStateBasic& inputState, int choice, double reward);
+    void writeToFile();
+
+
 protected:
     virtual void finish() override;
     virtual void initialize() override;
-
 private:
     std::vector<InputStateBasic> inputStateArray;
     std::vector<int> choiceArray;
     std::vector<double> rewardArray;
+    std::vector<double> transmissionTimes;
+    std::vector<double> stationaryReceptionTimes;  // Store reception times for stationary gateways
     int runnumber = -1;
-    void writeToFile();
 
 };
 

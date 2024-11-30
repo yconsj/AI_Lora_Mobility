@@ -7,13 +7,14 @@
 // Author: Emin Ilker Cetinbas (niw3_at_yahoo_d0t_com)
 //
 
-#include "inet/mobility/RL/SimpleRLMobility.h"
+#include "inet/RL/SimpleRLMobility/SimpleRLMobility.h"
+
+#include "inet/RL/LearningModel/LearningModel.h"
 #include "inet/mobility/static/StationaryMobility.h"
 
 #include "inet/common/INETMath.h"
 #include "inet/common/geometry/common/Coord.h"
 
-#include "LearningModel.h"
 
 namespace inet {
 

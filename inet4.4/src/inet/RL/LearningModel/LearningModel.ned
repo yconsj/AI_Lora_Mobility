@@ -13,11 +13,11 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package inet.mobility.RL;
+package inet.RL.LearningModel;
 
-
-module StateLogger
+module LearningModel
 {
 	parameters :
-		@class(StateLogger);
+		@class(LearningModel);
+        
 }

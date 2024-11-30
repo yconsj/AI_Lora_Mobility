@@ -14,6 +14,8 @@
 // 
 
 
+#include "inet/RL/LearningModel/LearningModel.h"
+
 #include <algorithm>  // std::generate
 #include <cassert>
 #include <cstddef>
@@ -28,14 +30,14 @@
 
 
 
-#include "LearningModel.h"
 #include "inet/common/geometry/common/Coord.h"
 #include "inet/mobility/contract/IMobility.h" // for accessing mobility
-#include "SimpleRLMobility.h"
-#include "InputState.h"
-#include "StateLogger.h"  // Include the StateLogger header
 #include <random>  // For random sampling
-#include "modelfiles/policy_net_model.h"
+
+#include "inet/RL/InputState.h"
+#include "inet/RL/modelfiles/policy_net_model.h"
+#include "inet/RL/SimpleRLMobility/SimpleRLMobility.h"
+#include "inet/RL/StateLogger/StateLogger.h"  // Include the StateLogger header
 
 
 namespace inet {
@@ -229,11 +231,18 @@ void LearningModel::readJsonFile(const std::string& filepath) {
 }
 
 StateLogger* LearningModel::getStateLoggerModule() {
-    // Fetch the StateLogger module as a submodule of LearningModel
-    StateLogger* stateLogger = check_and_cast<StateLogger*>(getSubmodule("stateLogger"));
-    if (stateLogger == nullptr) {
-        throw cRuntimeError("StateLogger module not found in LearningModel.");
+    // Retrieve the network module directly
+    cModule* network = getSimulation()->getSystemModule();
+    if (network == nullptr) {
+        throw cRuntimeError("Failed to find the network module.");
     }
+
+    // Fetch the StateLogger module as a submodule of the network
+    StateLogger* stateLogger = check_and_cast<StateLogger*>(network->getSubmodule("stateLogger"));
+    if (stateLogger == nullptr) {
+        throw cRuntimeError("StateLogger module not found in the network.");
+    }
+
     return stateLogger;
 }
 
@@ -293,7 +302,10 @@ std::vector<uint8_t> LearningModel::ReadModelFromFile(const char* filename) {
 
 
 void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id) {
-    // normalize at update-time
+    currentState.numReceivedPackets = nReceivedPackets;
+
+
+    // we will normalize these later, when doing inference
     if (id == 0) {
         currentState.stampPos1 = getCoord() * coord_x_norm_factor;;
         currentState.timestamp1 = simTime().dbl() * current_timestamp_norm_factor;
@@ -302,8 +314,6 @@ void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPack
         currentState.stampPos2 = getCoord() * coord_x_norm_factor;;
         currentState.timestamp2 = simTime().dbl() * current_timestamp_norm_factor;
     }
-    currentState.numReceivedPackets = nReceivedPackets;
-
 }
 
 
@@ -325,7 +335,7 @@ int LearningModel::pollModel()
 {
     // get remaining state info:
     currentState.gwPosition = getCoord() * coord_x_norm_factor;
-
+    currentState.timeOfSample = simTime().dbl();
     int reward = getReward();
 
     EV << "printing state: " << omnetpp::endl;

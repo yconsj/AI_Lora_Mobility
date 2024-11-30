@@ -13,9 +13,11 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package flora.RLNodes.packetcounter;
-module PacketCounter {
-    parameters:
-        string outputFileName = default("stationaryPacketLog.json");
-        @class(PacketCounter);
+package inet.RL.StateLogger;
+
+
+module StateLogger
+{
+	parameters :
+		@class(StateLogger);
 }

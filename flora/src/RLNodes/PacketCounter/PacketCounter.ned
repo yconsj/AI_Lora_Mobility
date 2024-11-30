@@ -13,13 +13,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package inet.mobility.RL;
-
-module LearningModel
-{
-	parameters :
-		@class(LearningModel);
-	submodules:
-		stateLogger : StateLogger;	    
-        
+package flora.RLNodes.PacketCounter;
+module PacketCounter {
+    parameters:
+        @class(PacketCounter);
 }
