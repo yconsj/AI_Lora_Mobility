@@ -50,24 +50,25 @@ class TwoDEnv(gym.Env):
         # Environment.pos
         self.steps = 0
         self.max_steps = 10000  # Maximum steps per episode
-        # Observation_space = (x,y),                        2
+        # Observation_space = 
+        #                     prev_actin (x,y),             3
         #                     (x1,x2), rssi, snir * 3       12
         #                     (x1,x2), rssi, snir * 3       12
         #                     elapsed_time1, elapsed_time2  2
         #                                                   28
         self.observation_space = spaces.Box(low=np.array(
-            [0]*2 + [-1]*18 + [0]*2), high=np.array(
-            [1]*22), dtype=np.float32)
+            [0]*3 + [-1]*18 + [0]*2), high=np.array(
+            [1]*23), dtype=np.float32)
         # Environment state
         self.visited_pos = dict()
         self.last_packet = 0
-        self.pos_reward_max = 0.001                         
+        self.pos_reward_max = 0.005                       
         self.pos_reward_min = 0
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
         self.miss_penalty_max = 10
         self.miss_penalty_min = 5
-        self.packet_reward_max = 10
+        self.packet_reward_max = 5
         
         speed = 20  # meter per second
         max_distance = 3000 # meter
@@ -95,12 +96,13 @@ class TwoDEnv(gym.Env):
         self.point_radius = 1
         self.point_color = (0, 0, 255)  # Red color
         self.line_color = (255, 0, 0)  # Blue color
-
+        self.prev_action = 0
         if render_mode == "cv2":
             self.window_name = "RL Animation"
             cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
+        self.pev_action = 0
         self.prev_pos = self.pos
         self.visited_pos = dict()
         self.last_packet = 0
@@ -119,7 +121,6 @@ class TwoDEnv(gym.Env):
             if math.dist((x2,y2), self.node1.pos) >= 75:
                 self.node2.pos= (x2,y2)
                 break
-
         self.steps = 0
         self.total_reward = 0
         self.total_received = 0
@@ -127,7 +128,7 @@ class TwoDEnv(gym.Env):
         self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
         self.elapsed_time1 = 0
         self.elapsed_time2 = 0
-        state = [
+        state = [ self.prev_action / 4,
             self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
             *self.prefs1[0].get(), *self.prefs1[1].get(),*self.prefs1[2].get(),
             *self.prefs2[0].get(),*self.prefs2[1].get(),*self.prefs2[2].get(),
@@ -180,16 +181,17 @@ class TwoDEnv(gym.Env):
         penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
         return -penalty
     def get_explore_reward(self, pos, time):
-        base_reward  = 0.001
+        base_reward  = 0.01
         if pos not in self.visited_pos.keys():
             self.visited_pos[pos] = time
-            return base_reward
+            multiplier = abs(pos[0] - int(self.max_distance_x / 2)) * abs(pos[1] - int(self.max_distance_y / 2)) / (self.max_cross_distance * 2)
+            return base_reward * multiplier
         
         base_reward = base_reward * (time - self.visited_pos[pos]) / self.max_steps
-
+        
         self.visited_pos[pos] = time
 
-        return base_reward
+        return 0
     def trilateration_residuals(self, params, positions, distances):
         x, y = params  # Unknown position (x, y)
         residuals = []
@@ -210,7 +212,7 @@ class TwoDEnv(gym.Env):
         result = least_squares(self.trilateration_residuals, initial_guess, args=(positions, distances))
         
         # Return the optimized position
-        return result.x
+        return int(result.x[0]),int(result.x[1])
 
 
 
@@ -243,58 +245,62 @@ class TwoDEnv(gym.Env):
         p1 = PacketReference(pos= self.pos,rssi= rssi1,snir=snir1)
         p2 = PacketReference(pos= self.pos, rssi=rssi2,snir=snir2)
         if received1 == PACKET_STATUS.RECEIVED:
-            reward = self.packet_reward_max
-            if self.last_packet == 2:
-                reward += self.packet_reward_max
-            self.last_packet = 1
-            self.total_received += 1
-            self.elapsed_time1 = 0
+            if (self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1) or True:
+                reward = self.packet_reward_max
+                if self.last_packet == 2:
+                    reward += self.packet_reward_max
+                self.last_packet = 1
+                self.total_received += 1
+                self.elapsed_time1 = 0
             # TODO: insert packet if best
             if self.is_new_best_pref(self.prefs1, p1):
                 self.prefs1 = self.insert_best_pref(self.prefs1,p1)
         elif received2 == PACKET_STATUS.RECEIVED:
-            reward = self.packet_reward_max
-            if self.last_packet == 1:
-                reward += self.packet_reward_max
-            self.last_packet = 2
-            self.total_received += 1
-            self.elapsed_time2 = 0
+            if  (self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1) or True:
+                reward = self.packet_reward_max
+                if self.last_packet == 1:
+                    reward += self.packet_reward_max
+                self.last_packet = 2
+                self.total_received += 1
+                self.elapsed_time2 = 0
             # TODO: insert packet if 
             if self.is_new_best_pref(self.prefs2, p2):
                 self.prefs2 = self.insert_best_pref(self.prefs2,p2)
 
-        elif received1 == PACKET_STATUS.LOST:
+        elif received1 == PACKET_STATUS.LOST: #and (self.prefs1[0].rssi == -1 or self.prefs1[1].rssi == -1 or self.prefs1[2].rssi == -1):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node1.pos)
-        elif received2 == PACKET_STATUS.LOST:
+        elif received2 == PACKET_STATUS.LOST: #and (self.prefs2[0].rssi == -1 or self.prefs2[1].rssi == -1 or self.prefs2[2].rssi == -1):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node2.pos)
 
-        elif self.elapsed_time1 > self.elapsed_time2: 
-            #reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
-            if self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1:
+        if self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1:
                 aprox_pos = self.trilateration(self.prefs1, self.initial_guess1)
                 self.initial_guess1 = aprox_pos
-                reward += self.get_pos_reward(self.pos,aprox_pos, self.elapsed_time1)
-        elif self.elapsed_time1 <= self.elapsed_time2:
-            #reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
-            if self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1:
+        if self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1:
                 aprox_pos = self.trilateration(self.prefs2, self.initial_guess2)
                 self.initial_guess2 = aprox_pos
-                reward += self.get_pos_reward(self.pos,aprox_pos, self.elapsed_time2)
+                
+        if self.elapsed_time1 > self.elapsed_time2  and self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1: 
+            #reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
+                reward += self.get_pos_reward(self.pos,self.initial_guess1, self.elapsed_time1)
+        elif self.elapsed_time1 <= self.elapsed_time2 and self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1:
+            #reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
+                reward += self.get_pos_reward(self.pos,self.initial_guess2, self.elapsed_time2)
 
 
         reward += self.get_explore_reward(self.pos, self.steps)
 
         done = self.steps >= self.max_steps or self.total_misses >= 20
         self.total_reward += reward
-        state = [
+        state = [self.prev_action / 4,
             self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
             *self.prefs1[0].get(), *self.prefs1[1].get(), *self.prefs1[2].get(),
             *self.prefs2[0].get(), *self.prefs2[1].get(), *self.prefs2[2].get(),
             self.elapsed_time1 / self.max_steps,
             self.elapsed_time2 / self.max_steps
         ]
+        self.prev_action = action
         info = {'total_received': self.total_received,
                 'total_misses': self.total_misses}
         return np.array(state, dtype=np.float32), reward, done, False, info
@@ -329,6 +335,8 @@ class TwoDEnv(gym.Env):
             if pr.pos == (-1, -1):
                 continue
             cv2.rectangle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), pt2= (offset_x + pr.pos[0], offset_y + pr.pos[1]), color=(128, 128, 0))
+        cv2.rectangle(frame, (offset_x + self.initial_guess1[0], offset_y + self.initial_guess1[1]), pt2= (offset_x + self.initial_guess1[0] +1, offset_y + self.initial_guess1[1] +1), color=(0, 128, 0))
+        cv2.rectangle(frame, (offset_x + self.initial_guess2[0], offset_y + self.initial_guess2[1]), pt2= (offset_x + self.initial_guess2[0] +1, offset_y + self.initial_guess2[1]+1), color=(128, 128, 0))
         # cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
         # cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
         # Display the frame
@@ -397,7 +405,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_radius = 75
+        self.max_transmission_radius = 60
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
