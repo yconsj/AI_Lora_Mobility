@@ -136,7 +136,7 @@ def main():
 
     # Run the simulation
     print("Starting simulation...")
-    # env.run_simulation()
+    env.run_simulation()
 
     batch = 0  # Specify the batch number if needed
     # Read the log data
