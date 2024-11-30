@@ -323,8 +323,8 @@ class node():
         self.time_of_next_packet = time_to_first_packet
         self.send_interval = send_interval
         self.send_std = send_std  # standard deviation
-        self.lower_bound_send_time = send_interval / 2
-        self.upper_bound_send_time = send_interval * 2
+        self.lower_bound_send_time = send_interval - (send_interval / 2)
+        self.upper_bound_send_time = send_interval + (send_interval / 2)
 
         self.max_transmission_distance = 70
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
