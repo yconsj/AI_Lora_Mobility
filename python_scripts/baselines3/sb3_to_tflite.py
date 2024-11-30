@@ -12,11 +12,13 @@ from baselines3.simple_env import SimpleBaseEnv
 # Define a TensorFlow model that matches the PPO structure
 from tf_exporter import rewrite_policy_net_header
 from utilities import load_config
+
 """
 THIS CODE IS BASED ON THE SIMPLE CONVERTER FOR Stable-basleines3 MODELS TO TfLite FOUND HERE:
 https://github.com/chunky/sb3_to_coral
 
 """
+
 
 class TFPolicy(tf.keras.Model):
     def __init__(self, input_dim, output_dim, hidden_layers):
@@ -24,7 +26,7 @@ class TFPolicy(tf.keras.Model):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.hidden_layers = hidden_layers
-        self.policy_output_layer = tf.keras.layers.Softmax() #tf.keras.layers.Dense(output_dim)
+        self.policy_output_layer = tf.keras.layers.Softmax()  # tf.keras.layers.Dense(output_dim)
 
         # Build the model with the provided hidden layers
         self.dense_layers = []
@@ -40,7 +42,7 @@ class TFPolicy(tf.keras.Model):
                 # Add an Activation layer
                 self.dense_layers.append(layer)
             elif isinstance(layer, tf.keras.layers.Softmax):
-                #self.dense_layers.append(layer)
+                # self.dense_layers.append(layer)
                 pass
             else:
                 raise ValueError(f"Unknown layer type: {type(layer)}")
@@ -70,8 +72,8 @@ def sb3_to_tensorflow(sb3_model, env):
     print(f"{sb3_model.policy = } \n {sb3_model.policy_class = }")
     # Extract the layers from SB3 model
     sb3_layers = sb3_model.policy.mlp_extractor.policy_net  # Feature Extractor policy network
-    sb3_layers.append(sb3_model.policy.action_net) # Actor network
-    #print(f"{sb3_model.policy.action_net = }")
+    sb3_layers.append(sb3_model.policy.action_net)  # Actor network
+    # print(f"{sb3_model.policy.action_net = }")
 
     prev_dim = input_dim
 
@@ -87,7 +89,7 @@ def sb3_to_tensorflow(sb3_model, env):
             raise ValueError(f"Unknown layer type: {type(sb3_layer)}")
 
     # construct the softmax output layer
-   # Initialize TFPolicy with the dynamic hidden layers list
+    # Initialize TFPolicy with the dynamic hidden layers list
     tf_model = TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=hidden_layers)
 
     # Transfer weights from SB3 model to TensorFlow model
@@ -97,13 +99,10 @@ def sb3_to_tensorflow(sb3_model, env):
             # Transfer weights and biases
             weights = sb3_layer.weight.detach().numpy().T  # Transpose to match TensorFlow layer format
             bias = sb3_layer.bias.detach().numpy()
-            #print(f"{weights = }\n{bias = }")
+            # print(f"{weights = }\n{bias = }")
             tf_model.dense_layers[i].set_weights([weights, bias])
-            #print(f"tf_model layer {i}: {tf_model.dense_layers[i] = }."
-                  #f"{tf_model.dense_layers[i].get_weights() = }")
-
-
-
+            # print(f"tf_model layer {i}: {tf_model.dense_layers[i] = }."
+            # f"{tf_model.dense_layers[i].get_weights() = }")
 
     return tf_model
 
@@ -135,6 +134,18 @@ def tf_to_tflite(tf_model, export_path):
             print(f"Error during TFLite conversion: {e}")
     except Exception as e:
         print(f"Error during TFLite conversion: {e}")
+
+
+def sb3_to_tflite_pipeline(relative_model_path):
+    model = PPO.load(relative_model_path, print_system_info=True)
+    env = make_vec_env(SimpleBaseEnv, n_envs=1, env_kwargs=dict())
+
+    tf_model = sb3_to_tensorflow(model, env)
+
+    config = load_config("config.json")
+    gen_model = config['model_path']
+    export_model_path = gen_model
+    tf_to_tflite(tf_model, export_model_path)
 
 
 if __name__ == '__main__':
