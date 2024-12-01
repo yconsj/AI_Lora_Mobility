@@ -277,7 +277,7 @@ class TwoDEnv(gym.Env):
                               time: int):
         pos_reward = 0
 
-        dist_diff_threshold = 30
+        dist_diff_threshold = self.max_transmission_distance
         # Iterate over all packet references (prefs) to calculate the reward
 
         for pref in prefs:
@@ -676,13 +676,23 @@ class Node:
         return self.transmission_model.inverse_generate_rssi(rssi)
 
     def transmission(self, gpos):
+        """
+        Simulate the transmission of a signal to a given position (gpos).
+        Returns:
+            - (True, rssi_scaled, snir_scaled) if the transmission is successful.
+            - (False, 0, 0) if the transmission fails.
+        """
         distance = math.dist(self.pos, gpos)
 
-        # Use SignalModel to calculate packet loss probability
-        ploss_probability = self.transmission_model.calculate_ploss_probability(distance)
-        ploss_choice = np.random.rand() < (1 - ploss_probability)  # Success if random < 1 - P(loss)
+        # Check if the target is out of range
+        if distance > self.transmission_model.max_radius:
+            return False, 0, 0
 
-        if ploss_choice:
+        # Use TransmissionModel to calculate packet loss probability
+        ploss_probability = self.transmission_model.calculate_ploss_probability(distance)
+        transmission_success = np.random.rand() < (1 - ploss_probability)  # Success if random < 1 - P(loss)
+
+        if transmission_success:
             rssi_scaled = self.transmission_model.generate_rssi(distance)
             snir_scaled = self.transmission_model.generate_snir(distance)
             return True, rssi_scaled, snir_scaled

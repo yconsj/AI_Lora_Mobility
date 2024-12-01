@@ -1,11 +1,9 @@
-from stable_baselines3 import DQN, PPO
+from stable_baselines3 import PPO
 from twod_env import TwoDEnv, FrameSkip
-from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.atari_wrappers import MaxAndSkipEnv
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
-import numpy as np
+import torch
 
 import multiprocessing
 
@@ -42,16 +40,23 @@ class TensorboardCallback(BaseCallback):
 
 
 def main():
-    envs = 4
+    envs = 8
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=20, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1,
                                  best_model_save_path="stable-model-2d-best")
     print("Learning started")
-    model = PPO("MlpPolicy", env, gamma=0.999, tensorboard_log="./tensorboard/").learn(500000,
-                                                                                       callback=[eval_callback,
-                                                                                                 TensorboardCallback()])
+    if torch.cuda.is_available():
+        device = "cuda"
+    else:
+        device = "cpu"
+    model = PPO("MlpPolicy", env, gamma=0.999, tensorboard_log="./tensorboard/",
+                device=device, policy_kwargs={'net_arch': [64, 64, 64]}, batch_size=64,
+                n_steps=4096). \
+        learn(500000,
+              callback=[eval_callback,
+                        TensorboardCallback()])
 
     model.save("stable-model")
 
