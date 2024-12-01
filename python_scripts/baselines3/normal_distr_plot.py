@@ -47,5 +47,39 @@ def plot_truncated_normal_distribution(generator, num_samples=10000):
 
 
 # Usage
-generator = PacketGenerator()
-plot_truncated_normal_distribution(generator)
+if False:
+    generator = PacketGenerator()
+    plot_truncated_normal_distribution(generator)
+if True:
+    # Transmission function (modified to handle arrays of distances)
+    def transmission_probability(distances, ploss_scale=100):
+        """
+        Calculate the transmission probability based on distance and path loss scaling.
+
+        Args:
+            distances (array-like): Array of distances between the agent and points.
+            ploss_scale (float): Scaling factor for the path loss decay.
+
+        Returns:
+            array-like: Transmission probabilities corresponding to each distance.
+        """
+        # Apply the transmission formula element-wise to the distances array
+        return np.exp(-distances / ploss_scale)
+
+
+    # Generate distance values from 0 to the maximum distance you are interested in
+    max_distance = 150  # Maximum distance (can be adjusted)
+    distances = np.linspace(0, max_distance, 500)
+
+    # Calculate transmission probabilities for each distance
+    transmission_probs = transmission_probability(distances)
+
+    # Plot the results
+    plt.figure(figsize=(8, 6))
+    plt.plot(distances, transmission_probs, label="Transmission Probability", color='b')
+    plt.title('Transmission Probability by Distance')
+    plt.xlabel('Distance (meters)')
+    plt.ylabel('Transmission Probability')
+    plt.grid(True)
+    plt.legend()
+    plt.show()

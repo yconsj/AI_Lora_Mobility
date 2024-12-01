@@ -1,4 +1,9 @@
 # Initialize Pygame
+import math
+import time
+
+import pygame as pygame
+
 pygame.init()
 
 # Constants for scaling

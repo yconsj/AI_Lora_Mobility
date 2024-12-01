@@ -1,4 +1,3 @@
-from stable_baselines3 import A2C, PPO
 from stable_baselines3.common.callbacks import BaseCallback
 import numpy as np
 import gymnasium as gym
@@ -31,7 +30,7 @@ class FrameSkip(gym.Wrapper):
         return obs, total_reward, done, trunc, info
 
 
-class PacketReference():
+class PacketReference:
     def __init__(self, max_pos=(150, 150), pos=(-1, -1), rssi=-1, snir=-1):
         self.pos = pos
         self.rssi = rssi
@@ -46,7 +45,7 @@ class PacketReference():
 
 
 class ExplorationRewardSystem:
-    def __init__(self, grid_size, max_transmission_distance, fade_rate=0.1):
+    def __init__(self, grid_size, max_transmission_distance, ploss_scale, fade_rate=0.1):
         """
         Initializes the exploration reward system.
 
@@ -58,6 +57,7 @@ class ExplorationRewardSystem:
         self.grid_size = grid_size
         self.max_transmission_distance = max_transmission_distance
         self.fade_rate = fade_rate
+        self.ploss_scale = ploss_scale
         self.paint_matrix = None
         self.reset()
 
@@ -67,26 +67,34 @@ class ExplorationRewardSystem:
 
     def _apply_paint(self, position):
         """
-        Paints the cells in the agent's transmission range.
+        Paints the cells in the agent's transmission range with intensity starting from 1
+        at the agent's position and tapering off according to an exponential decay model.
 
         Args:
             position (tuple): (x, y) position of the agent as integers.
         """
         x, y = position
-        max_dist = self.max_transmission_distance
 
-        # Create a distance matrix for cells within the max transmission distance
+        # Create a meshgrid of coordinates for the grid
         x_coords, y_coords = np.meshgrid(
             np.arange(self.grid_size[0]),
             np.arange(self.grid_size[1]),
             indexing="ij",
         )
-        distances = np.sqrt((x_coords - x) ** 2 + (y_coords - y) ** 2)
-        in_range = distances <= max_dist
 
-        # Paint intensity scales with proximity (1 at the agent, 0 at max distance)
-        intensity = np.clip(1 - (distances / max_dist), 0, 1)
-        self.paint_matrix[in_range] += intensity[in_range]
+        # Calculate distances from the agent's position
+        distances = np.sqrt((x_coords - x) ** 2 + (y_coords - y) ** 2)
+        in_range = distances <= self.max_transmission_distance
+
+        # Apply exponential decay for intensity
+        intensity = np.exp(-distances / self.ploss_scale)  # Exponential decay
+        intensity = np.clip(intensity, 0, 1)  # Ensure the intensity is within [0, 1]
+
+        # Update the paint matrix only for cells within the transmission range
+        self.paint_matrix[in_range] = np.maximum(self.paint_matrix[in_range], intensity[in_range])
+
+        # Optionally, ensure the entire paint matrix remains within valid range
+        self.paint_matrix = np.clip(self.paint_matrix, 0, 1)
 
     def _fade_paint(self):
         """Fades the paint in all cells."""
@@ -94,20 +102,27 @@ class ExplorationRewardSystem:
 
     def get_explore_rewards(self, position):
         """
-        Computes the exploration reward based on new paint.
+        Computes the exploration reward based on new paint, scaled as a ratio of the current sum of paint
+        to the maximum possible paint level.
 
         Args:
             position (tuple): (x, y) position of the agent as integers.
 
         Returns:
-            float: Reward based on the increase in paint from this step.
+            float: ratio of current paint compared to maximum paint possible.
         """
-        old_paint = self.paint_matrix.copy()  # Snapshot before painting
         self._apply_paint(position)  # Apply paint from the current position
         self._fade_paint()  # Fade all cells
 
-        # Reward is the increase in total paint
-        reward = np.sum(self.paint_matrix) - np.sum(old_paint)
+        # Calculate the total amount of paint in the grid
+        current_paint_level = np.sum(self.paint_matrix)
+
+        # The maximum paint level is equal to the total number of cells in the grid
+        max_paint_level = self.grid_size[0] * self.grid_size[1]
+
+        # Calculate the scaled reward as the ratio of current paint level to the max possible paint level
+        reward = current_paint_level / max_paint_level
+
         return reward
 
 
@@ -124,23 +139,28 @@ class TwoDEnv(gym.Env):
         self.max_steps = 10000  # Maximum steps per episode
         # Observation_space = 
         #                     prev_action, (gwpos.x,gwpos.y),             3
-        #                     (x1,x2), rssi, snir * 3                     12
-        #                     (x1,x2), rssi, snir * 3                     12
+        #                     smoothedpos.x, smoothedpos.y                2
+        #                     ((x1, x2), rssi) * 3                        9
+        #                     ((x1, x2), rssi) * 3                        9
         #                     elapsed_time1, elapsed_time2                2
-        #                                                                 28
+        #                                                                 25
         self.observation_space = spaces.Box(low=np.array(
-            [0] * 3 + [-1] * 18 + [0] * 2), high=np.array(
-            [1] * 23), dtype=np.float32)
+            [0] * 3 +
+            [0] * 2 +
+            (([0] * 2 + [-1] * 1) * 3) * 2 +
+            [0] * 2),
+            high=np.array(
+                [1] * 25), dtype=np.float32)
         # Environment state
         self.visited_pos = dict()
         self.last_packet = 0
-        self.pos_reward_max = 0.005
-        self.pos_reward_min = 0
-        self.pos_penalty_max = 3
-        self.pos_penalty_min = 0
-        self.miss_penalty_max = 10
-        self.miss_penalty_min = 5
-        self.packet_reward_max = 5
+        self.pos_reward_max = 0.1 / 4.0
+        self.pos_reward_min = 0.0
+        self.pos_penalty_max = 3.0
+        self.pos_penalty_min = 0.0
+        self.miss_penalty_max = 10.0
+        self.miss_penalty_min = 0.0
+        self.packet_reward_max = 10.0
 
         unscaled_speed = 20  # meter per second
         unscaled_max_distance = 3000  # meter
@@ -149,13 +169,22 @@ class TwoDEnv(gym.Env):
         self.max_cross_distance = math.dist((0, 0), (self.max_distance_x, self.max_distance_y))
         self.pos = (int(self.max_distance_x / 2), int(self.max_distance_y / 2))
         self.prev_pos = self.pos
-        unscaled_max_transmission_distance = 1500
+        self.alpha = 0.01  # Smoothing factor for EWMA
+        self.ewma_x = self.pos[0]
+        self.ewma_y = self.pos[1]
+
+        unscaled_max_transmission_distance = 1000
         self.max_transmission_distance = unscaled_max_transmission_distance * \
-                                         (self.max_distance_x / unscaled_max_distance)
+            (self.max_distance_x / unscaled_max_distance)
 
         node1_pos, node2_pos = self.generate_random_node_positions()
-        self.node1 = node(node1_pos, time_to_first_packet=50, send_interval=300, max_transmission_radius=self.max_transmission_distance)
-        self.node2 = node(node2_pos, time_to_first_packet=125, send_interval=300)
+        self.ploss_scale=300
+        self.transmission_model = TransmissionModel(ploss_scale=self.ploss_scale, rssi_ref=-30,
+                                                    path_loss_exponent=2.7, noise_floor=-100,
+                                                    rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30,
+                                                    max_transmission_distance=self.max_transmission_distance)
+        self.node1 = Node(self.transmission_model, pos=node1_pos, time_to_first_packet=50, send_interval=300)
+        self.node2 = Node(self.transmission_model, pos=node2_pos, time_to_first_packet=125, send_interval=300)
         self.prefs1 = (PacketReference(), PacketReference(), PacketReference())
         self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
         self.elapsed_time1 = 0
@@ -163,9 +192,11 @@ class TwoDEnv(gym.Env):
         self.initial_guess1 = self.pos
         self.initial_guess2 = self.pos
         self.exploration_reward_system = \
-            ExplorationRewardSystem(grid_size=(self.max_distance_x,self.max_distance_y),
-                                    max_transmission_distance=self.max_transmission_distance)
-        self.exploration_reward_scale = 0.005
+            ExplorationRewardSystem(grid_size=(self.max_distance_x, self.max_distance_y),
+                                    max_transmission_distance=self.max_transmission_distance,
+                                    ploss_scale=self.ploss_scale,
+                                    fade_rate=0.005)
+        self.exploration_reward_scale = 1  # 0.1
         self.total_reward = 0
         self.max_misses = 25
         self.total_misses = 0
@@ -176,12 +207,12 @@ class TwoDEnv(gym.Env):
         self.line_color = (255, 0, 0)  # Blue color
         self.prev_action = 0
 
-
         if render_mode == "cv2":
             self.window_name = "RL Animation"
             cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
-    def generate_random_node_positions(self):
+    @staticmethod
+    def generate_random_node_positions():
         minimum_node_distance = 75
         x1 = random.randint(0, 150)
         y1 = random.randint(0, 150)
@@ -202,6 +233,8 @@ class TwoDEnv(gym.Env):
         self.last_packet = 0
         self.total_misses = 0
         self.pos = (int(self.max_distance_x / 2), int(self.max_distance_y / 2))
+        self.ewma_x = self.pos[0]
+        self.ewma_y = self.pos[1]
         self.initial_guess1 = self.pos
         self.initial_guess2 = self.pos
         self.node1.reset()
@@ -219,6 +252,7 @@ class TwoDEnv(gym.Env):
         self.elapsed_time2 = 0
         state = [self.prev_action / 4,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
+                 self.ewma_x / self.max_distance_x, self.ewma_y / self.max_distance_y,
                  *self.prefs1[0].get(), *self.prefs1[1].get(), *self.prefs1[2].get(),
                  *self.prefs2[0].get(), *self.prefs2[1].get(), *self.prefs2[2].get(),
                  self.elapsed_time1 / self.max_steps,
@@ -238,7 +272,43 @@ class TwoDEnv(gym.Env):
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
         return reward
 
-    def is_new_best_pref(self, pref, p):
+    def get_pos_radius_reward(self, gw_pos: tuple[float, float],
+                              prefs: tuple[PacketReference, PacketReference, PacketReference],
+                              time: int):
+        pos_reward = 0
+
+        dist_diff_threshold = 30
+        # Iterate over all packet references (prefs) to calculate the reward
+
+        for pref in prefs:
+            if pref.rssi != -1:
+                # Calculate the implied distance to the stationary node based on RSSI
+                pref_dist_to_stationary_node = self.transmission_model.inverse_generate_rssi(pref.rssi)
+
+                # Calculate the Euclidean distance from the agent (GW) to the packet reference
+                pref_dist_to_gw = math.dist(gw_pos, pref.pos)
+
+                # Calculate the absolute difference between the expected distance (from RSSI) and actual distance
+                # (from GW)
+                dist_diff = abs(pref_dist_to_stationary_node - pref_dist_to_gw)
+
+                # Reward scaling: If dist_diff is less than a threshold, scale reward between 0 and 1
+                if dist_diff < dist_diff_threshold:
+                    scaled_reward = 1 - (dist_diff / dist_diff_threshold)  # Scale the reward to be between 0 and 1
+                    pos_reward += scaled_reward
+
+        # Scale the final reward based on time (before clipping)
+        scaled_time = time / self.max_steps
+        pos_reward *= scaled_time
+
+        # Ensure the final reward is within the defined range [pos_reward_min, pos_reward_max]
+        pos_reward = max(self.pos_reward_min, min(self.pos_reward_max, pos_reward))
+
+        # Return the total calculated reward
+        return pos_reward
+
+    @staticmethod
+    def is_new_best_pref(pref, p):
         (pref1, pref2, pref3) = pref
         if p.pos == pref1.pos or p.pos == pref2.pos or p.pos == pref3.pos:
             return False
@@ -246,29 +316,44 @@ class TwoDEnv(gym.Env):
             return True
         return False
 
-    def insert_best_pref(self, pref, p):
+    @staticmethod
+    def insert_best_pref(pref, p):
         (pref1, pref2, pref3) = pref
         if p.rssi > pref1.rssi:
             pref3 = pref2
             pref2 = pref1
             pref1 = p
-            return (pref1, pref2, pref3)
+            return pref1, pref2, pref3
         if p.rssi > pref2.rssi:
             pref3 = pref2
             pref2 = p
-            return (pref1, pref2, pref3)
+            return pref1, pref2, pref3
         if p.rssi > pref3.rssi:
             pref3 = p
-            return (pref1, pref2, pref3)
+            return pref1, pref2, pref3
 
     def get_miss_penalty(self, pos1, pos2):
-        distance = math.dist(pos1, pos2)
+        """       distance = math.dist(pos1, pos2)
         scaled_distance = distance / self.max_cross_distance
         # Return reward based on scaled distance between a min and max reward
         penalty = self.miss_penalty_min + scaled_distance * (self.miss_penalty_max - self.miss_penalty_min)
 
         # Ensure reward is within bounds in case of rounding errors
         penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
+        return -penalty"""
+        distance = math.dist(pos1, pos2)
+
+        # If the distance is greater than max_cross_distance, use the max penalty
+        if distance > self.max_transmission_distance:
+            return -self.miss_penalty_max
+
+        # If within range, scale the penalty with distance
+        scaled_distance = distance / self.max_transmission_distance
+        penalty = self.miss_penalty_min + scaled_distance * (self.miss_penalty_max - self.miss_penalty_min)
+
+        # Ensure penalty is within bounds in case of rounding errors
+        penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
+
         return -penalty
 
     def get_explore_reward(self, pos, time):
@@ -276,7 +361,7 @@ class TwoDEnv(gym.Env):
         if pos not in self.visited_pos.keys():
             self.visited_pos[pos] = time
             multiplier = abs(pos[0] - int(self.max_distance_x / 2)) * abs(pos[1] - int(self.max_distance_y / 2)) / (
-                        self.max_cross_distance * 2)
+                    self.max_cross_distance * 2)
             return base_reward * multiplier
 
         base_reward = base_reward * (time - self.visited_pos[pos]) / self.max_steps
@@ -285,7 +370,8 @@ class TwoDEnv(gym.Env):
 
         return 0
 
-    def trilateration_residuals(self, params, positions, distances):
+    @staticmethod
+    def trilateration_residuals(params, positions, distances):
         x, y = params  # Unknown position (x, y)
         residuals = []
 
@@ -329,7 +415,8 @@ class TwoDEnv(gym.Env):
         elif action == 4:  # down
             if self.pos[1] > 0:
                 self.pos = (self.pos[0], self.pos[1] - 1)
-
+        self.ewma_x = self.alpha * self.pos[0] + (1 - self.alpha) * self.ewma_x
+        self.ewma_y = self.alpha * self.pos[1] + (1 - self.alpha) * self.ewma_y
         received1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
         received2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
         self.elapsed_time1 = min(self.max_steps, self.elapsed_time1 + 1)
@@ -359,10 +446,12 @@ class TwoDEnv(gym.Env):
             if self.is_new_best_pref(self.prefs2, p2):
                 self.prefs2 = self.insert_best_pref(self.prefs2, p2)
 
-        elif received1 == PACKET_STATUS.LOST:  # and (self.prefs1[0].rssi == -1 or self.prefs1[1].rssi == -1 or self.prefs1[2].rssi == -1):
+        elif received1 == PACKET_STATUS.LOST:
+            # and (self.prefs1[0].rssi == -1 or self.prefs1[1].rssi == -1 or self.prefs1[2].rssi == -1):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node1.pos)
-        elif received2 == PACKET_STATUS.LOST:  # and (self.prefs2[0].rssi == -1 or self.prefs2[1].rssi == -1 or self.prefs2[2].rssi == -1):
+        elif received2 == PACKET_STATUS.LOST:
+            # and (self.prefs2[0].rssi == -1 or self.prefs2[1].rssi == -1 or self.prefs2[2].rssi == -1):
             self.total_misses += 1
             reward = self.get_miss_penalty(self.pos, self.node2.pos)
 
@@ -373,21 +462,28 @@ class TwoDEnv(gym.Env):
             approx_pos = self.trilateration(self.prefs2, self.initial_guess2)
             self.initial_guess2 = approx_pos
 
-        if self.elapsed_time1 > self.elapsed_time2 and self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and \
-                self.prefs1[2].rssi != -1:
+        if self.elapsed_time1 > self.elapsed_time2:
+            # and self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1
+
             # reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
-            reward += self.get_pos_reward(self.pos, self.initial_guess1, self.elapsed_time1)
-        elif self.elapsed_time1 <= self.elapsed_time2 and self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and \
-                self.prefs2[2].rssi != -1:
+            # reward += self.get_pos_reward(self.pos, self.initial_guess1, self.elapsed_time1)
+            reward += self.get_pos_radius_reward(self.pos, self.prefs1, self.elapsed_time1)
+        elif self.elapsed_time1 <= self.elapsed_time2:
+            # and self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1
             # reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
-            reward += self.get_pos_reward(self.pos, self.initial_guess2, self.elapsed_time2)
+            # reward += self.get_pos_reward(self.pos, self.initial_guess2, self.elapsed_time2)
+            reward += self.get_pos_radius_reward(self.pos, self.prefs2, self.elapsed_time2)
 
         # reward += self.get_explore_reward(self.pos, self.steps)
-        reward += self.exploration_reward_system.get_explore_rewards(self.pos) * self.exploration_reward_scale
+        explore_reward = self.exploration_reward_system.get_explore_rewards(self.pos) * self.exploration_reward_scale
+        # print(f"{explore_reward = }")
+        reward += explore_reward
+        reward = min(self.packet_reward_max*2, reward)
         done = self.steps >= self.max_steps or self.total_misses >= self.max_misses
         self.total_reward += reward
         state = [self.prev_action / 4,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
+                 self.ewma_x / self.max_distance_x, self.ewma_y / self.max_distance_y,
                  *self.prefs1[0].get(), *self.prefs1[1].get(), *self.prefs1[2].get(),
                  *self.prefs2[0].get(), *self.prefs2[1].get(), *self.prefs2[2].get(),
                  self.elapsed_time1 / self.max_steps,
@@ -406,8 +502,24 @@ class TwoDEnv(gym.Env):
         # Create a new black image
         offset_x = int((self.width - self.max_distance_x) / 2)
         offset_y = int((self.height - self.max_distance_y) / 2)
-
+        # Create a new black image (background)
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+
+        # Draw the grid as a base layer (vectorized)
+        grid = self.exploration_reward_system.paint_matrix
+
+        # Vectorized intensity calculation (between 0 and 1)
+        green = np.clip(grid * 255, 0, 255).astype(np.uint8)  # Green intensity
+        red = np.clip((1 - grid) * 255, 0, 255).astype(np.uint8)  # Red intensity
+
+        # Create the color frame using stacking (0 for blue, green and red as calculated)
+        color_frame = np.dstack((np.zeros_like(red), green, red))
+
+        # Swap the axes to match the frame's expected orientation (flip row/column)
+        color_frame = color_frame.transpose((1, 0, 2))
+
+        # Place the color frame onto the final frame (accounting for the offsets)
+        frame[offset_y:offset_y + grid.shape[0], offset_x:offset_x + grid.shape[1]] = color_frame
 
         # Draw the line and moving point
         cv2.line(frame, pt1=(offset_x, offset_y + int(self.max_distance_y / 2)),
@@ -423,23 +535,33 @@ class TwoDEnv(gym.Env):
         cv2.rectangle(frame, pt1=(offset_x + self.node2.pos[0] - 1, offset_y + self.node2.pos[1] - 1),
                       pt2=(offset_x + self.node2.pos[0] + 1, offset_y + self.node2.pos[1] + 1), color=self.point_color)
 
-        # Draw packet refs
-        for pr in self.prefs1:
+        # Add a black pixel in the middle of the nodes
+        cv2.rectangle(frame, pt1=(offset_x + self.node1.pos[0] - 1, offset_y + self.node1.pos[1] - 1),
+                      pt2=(offset_x + self.node1.pos[0] + 1, offset_y + self.node1.pos[1] + 1), color=(0, 0, 0))
+        cv2.rectangle(frame, pt1=(offset_x + self.node2.pos[0] - 1, offset_y + self.node2.pos[1] - 1),
+                      pt2=(offset_x + self.node2.pos[0] + 1, offset_y + self.node2.pos[1] + 1), color=(0, 0, 0))
+
+        # Draw packet refs with black dots and additional circles based on RSSI
+        for pr in self.prefs1 + self.prefs2:
             if pr.pos == (-1, -1):
                 continue
-            cv2.rectangle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]),
-                          pt2=(offset_x + pr.pos[0], offset_y + pr.pos[1]), color=(0, 128, 0))
-        for pr in self.prefs2:
-            if pr.pos == (-1, -1):
-                continue
-            cv2.rectangle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]),
-                          pt2=(offset_x + pr.pos[0], offset_y + pr.pos[1]), color=(128, 128, 0))
-        cv2.rectangle(frame, (offset_x + self.initial_guess1[0], offset_y + self.initial_guess1[1]),
-                      pt2=(offset_x + self.initial_guess1[0] + 1, offset_y + self.initial_guess1[1] + 1),
-                      color=(0, 128, 0))
-        cv2.rectangle(frame, (offset_x + self.initial_guess2[0], offset_y + self.initial_guess2[1]),
-                      pt2=(offset_x + self.initial_guess2[0] + 1, offset_y + self.initial_guess2[1] + 1),
+            # Draw a black dot at the packet ref's position
+            pr_radius = 2  # Set radius of the black dot
+            cv2.circle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), pr_radius, (0, 0, 0), -1)
+
+            # Calculate the radius from RSSI (convert RSSI to distance)
+            rssi_distance = self.transmission_model.inverse_generate_rssi(pr.rssi)  # Assume a method exists
+            circle_radius = int(rssi_distance)  # Convert to integer for drawing
+            cv2.circle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), circle_radius, (255, 0, 0),
+                       1)  # Blue circle
+
+        # Draw the initial guesses with black boxes
+        cv2.rectangle(frame, (offset_x + self.initial_guess1[0] - 2, offset_y + self.initial_guess1[1] - 2),
+                      (offset_x + self.initial_guess1[0] + 2, offset_y + self.initial_guess1[1] + 2), color=(0, 128, 0))
+        cv2.rectangle(frame, (offset_x + self.initial_guess2[0] - 2, offset_y + self.initial_guess2[1] - 2),
+                      (offset_x + self.initial_guess2[0] + 2, offset_y + self.initial_guess2[1] + 2),
                       color=(128, 128, 0))
+
         # Draw the maximum transmission distance circle
         cv2.circle(
             frame,  # img: the image to draw on
@@ -448,6 +570,7 @@ class TwoDEnv(gym.Env):
             color=(255, 0, 0),  # color: blue (B, G, R)
             thickness=1  # thickness: 1 for outline
         )
+
         # cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
         # cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
         # Display the frame
@@ -464,9 +587,12 @@ class TwoDEnv(gym.Env):
         cv2.destroyAllWindows()
 
 
-class SignalModel:
-    def __init__(self, rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
+class TransmissionModel:
+    def __init__(self, max_transmission_distance=60.0, ploss_scale=300, rssi_ref=-30, path_loss_exponent=2.7,
+                 noise_floor=-100,
                  rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30):
+        self.ploss_scale = ploss_scale
+        self.max_radius = max_transmission_distance
         self.rssi_ref = rssi_ref
         self.path_loss_exponent = path_loss_exponent
         self.noise_floor = noise_floor
@@ -487,11 +613,7 @@ class SignalModel:
     def inverse_generate_rssi(self, rssi_scaled):
         # Ensure rssi_scaled is within the valid range [0, 1]
         rssi_scaled = np.clip(rssi_scaled, 0, 1)
-
-        # Step 1: Undo the scaling to get rssi
         rssi = self.rssi_min + rssi_scaled * (self.rssi_max - self.rssi_min)
-
-        # Step 2: Solve for distance using the path loss model
         distance = 10 ** ((self.rssi_ref - rssi) / (10 * self.path_loss_exponent))
         return distance
 
@@ -504,7 +626,18 @@ class SignalModel:
         snir = 10 * np.log10(rssi_linear / noise_linear)
         # Scale SNIR between 0 and 1, inverted scale
         snir_scaled = 1 - (snir - self.snir_min) / (self.snir_max - self.snir_min)
-        return np.clip(snir_scaled, 0, 1)  # Ensure it’s within [0, 1]
+        return np.clip(snir_scaled, 0, 1)
+
+    def calculate_ploss_probability(self, distance):
+        """
+        Calculate the probability of packet loss based on distance.
+        Emulates the FLoRa framework's packet loss handling.
+        """
+        if distance > self.max_radius:
+            return 1.0  # Out of range -> always lost
+        distance = max(distance, 0.00001)  # Avoid divide by zero
+        ploss_probability = 1 - np.exp(-distance / self.ploss_scale)  # Exponential decay
+        return ploss_probability
 
 
 class PACKET_STATUS(Enum):
@@ -513,8 +646,9 @@ class PACKET_STATUS(Enum):
     NOT_SENT = 3
 
 
-class node():
-    def __init__(self, pos=(10, 10), time_to_first_packet=10, send_interval=10, send_std=2, max_transmission_radius=60.0):
+class Node:
+    def __init__(self, transmission_model, pos=(10, 10), time_to_first_packet=10, send_interval=10, send_std=2
+                 ):
         self.pos = pos
         self.last_packet_time = 0
         self.time_to_first_packet = time_to_first_packet
@@ -524,9 +658,7 @@ class node():
         self.lower_bound_send_time = send_interval - (send_interval / 2)
         self.upper_bound_send_time = send_interval + (send_interval / 2)
 
-        self.max_transmission_radius = max_transmission_radius
-        self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
-                                              rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
+        self.transmission_model = transmission_model
 
     def reset(self):
         self.last_packet_time = 0
@@ -544,15 +676,17 @@ class node():
         return self.transmission_model.inverse_generate_rssi(rssi)
 
     def transmission(self, gpos):
-        ploss_scale = 300
         distance = math.dist(self.pos, gpos)
-        if distance < self.max_transmission_radius:
-            ploss_probability = np.exp(- distance / ploss_scale)
-            ploss_choice = np.random.rand() < ploss_probability
-            if ploss_choice:
-                rssi_scaled = self.transmission_model.generate_rssi(distance)
-                snir_scaled = self.transmission_model.generate_snir(distance)
-                return True, rssi_scaled, snir_scaled
+
+        # Use SignalModel to calculate packet loss probability
+        ploss_probability = self.transmission_model.calculate_ploss_probability(distance)
+        ploss_choice = np.random.rand() < (1 - ploss_probability)  # Success if random < 1 - P(loss)
+
+        if ploss_choice:
+            rssi_scaled = self.transmission_model.generate_rssi(distance)
+            snir_scaled = self.transmission_model.generate_snir(distance)
+            return True, rssi_scaled, snir_scaled
+
         return False, 0, 0
 
     def send(self, time, gpos):
