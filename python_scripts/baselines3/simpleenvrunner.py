@@ -35,8 +35,8 @@ class TensorboardCallback(BaseCallback):
         dones = self.locals["dones"]
         for i, done in enumerate(dones):
             if done:
-                total_received_values = infos[i].get("total_received", 0)
-                total_misses_values = infos[i].get('total_misses', 0)
+                total_received_values = infos[i].get_scaled("total_received", 0)
+                total_misses_values = infos[i].get_scaled('total_misses', 0)
                 self.logger.record("total_received", total_received_values)
                 self.logger.record("total_misses", total_misses_values)
         return True
