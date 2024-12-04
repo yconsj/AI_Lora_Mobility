@@ -18,6 +18,7 @@ class FrameSkip(gym.Wrapper):
     def __init__(self, env, skip=4):
         """Return only every `skip`-th frame."""
         super(FrameSkip, self).__init__(env)
+        env._skip = skip
         self._skip = skip
 
     def step(self, action):
@@ -164,7 +165,7 @@ def count_valid_packet_reference(pref_tuple: tuple[PacketReference, PacketRefere
 class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none", stack_size=4):
         super(TwoDEnv, self).__init__()
-
+        self._skip = None
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
         self.action_space = spaces.Discrete(5, start=0)
@@ -195,7 +196,9 @@ class TwoDEnv(gym.Env):
         self.max_distance_x = int(unscaled_max_distance / unscaled_speed)  # scaled by speed
         self.max_distance_y = int(unscaled_max_distance / unscaled_speed)
         self.max_cross_distance = math.dist((0, 0), (self.max_distance_x, self.max_distance_y))
-        self.pos = (int(self.max_distance_x / 2), int(self.max_distance_y / 2))
+        x = random.randint(0, self.max_distance_x)
+        y = random.randint(0, self.max_distance_y)
+        self.pos = x, y
         self.prev_pos = self.pos
         self.alpha = 0.01  # Smoothing factor for EWMA
         self.ewma_x = self.pos[0]
@@ -232,7 +235,7 @@ class TwoDEnv(gym.Env):
                                     max_transmission_distance=self.max_transmission_distance,
                                     ploss_scale=self.ploss_scale,
                                     fade_rate=0.005)
-        self.exploration_reward_scale = 0.1  # 0.1
+        self.exploration_reward_max = 0.1
 
         self.total_reward = 0
         self.max_misses = 25
@@ -313,10 +316,8 @@ class TwoDEnv(gym.Env):
                               prefs: tuple[PacketReference, PacketReference, PacketReference],
                               time: int):
         pos_reward = 0
-
         dist_diff_threshold = self.max_transmission_distance
         # Iterate over all packet references (prefs) to calculate the reward
-
         for pref in prefs:
             if pref.rssi != -1:
                 # Calculate the implied distance to the stationary node based on RSSI
@@ -333,7 +334,6 @@ class TwoDEnv(gym.Env):
                 if dist_diff < dist_diff_threshold:
                     scaled_reward = 1 - (dist_diff / dist_diff_threshold)  # Scale the reward to be between 0 and 1
                     pos_reward += scaled_reward
-
         # Scale the final reward based on time (before clipping)
         scaled_time = time / self.max_steps
         pos_reward *= scaled_time
@@ -462,30 +462,26 @@ class TwoDEnv(gym.Env):
         p1 = PacketReference(pos=self.pos, rssi=rssi1, snir=snir1)
         p2 = PacketReference(pos=self.pos, rssi=rssi2, snir=snir2)
         if received1 == PACKET_STATUS.RECEIVED:
-            if (self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1) or True:
-                reward = self.packet_reward_max
-                if self.last_packet == 2:
-                    reward += self.packet_reward_max
-                self.last_packet = 1
-                self.total_received += 1
-                self.elapsed_time1 = 0
-            # TODO: insert packet if best
+            reward = self.packet_reward_max
+            if self.last_packet == 2:
+                reward += self.packet_reward_max
+            self.last_packet = 1
+            self.total_received += 1
+            self.elapsed_time1 = 0
             if self.is_new_best_pref(self.prefs1, p1):
                 self.prefs1 = self.insert_best_pref(self.prefs1, p1)
         elif received2 == PACKET_STATUS.RECEIVED:
-            if (self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1) or True:
-                reward = self.packet_reward_max
-                if self.last_packet == 1:
-                    reward += self.packet_reward_max
-                self.last_packet = 2
-                self.total_received += 1
-                self.elapsed_time2 = 0
+            reward = self.packet_reward_max
+            if self.last_packet == 1:
+                reward += self.packet_reward_max
+            self.last_packet = 2
+            self.total_received += 1
+            self.elapsed_time2 = 0
             # TODO: insert packet if
             if self.is_new_best_pref(self.prefs2, p2):
                 self.prefs2 = self.insert_best_pref(self.prefs2, p2)
 
         elif received1 == PACKET_STATUS.LOST:
-            # and (self.prefs1[0].rssi == -1 or self.prefs1[1].rssi == -1 or self.prefs1[2].rssi == -1):
             self.total_misses += 1
             miss_penalty = self.get_miss_penalty(self.pos, self.node1.pos)
 
@@ -526,13 +522,10 @@ class TwoDEnv(gym.Env):
 
         # reward += self.get_explore_reward(self.pos, self.steps)
 
-        if (count_valid_packet_reference(self.prefs1) == len(self.prefs1)) and \
-                count_valid_packet_reference(self.prefs2) == len(self.prefs2):
-            explore_reward = self.exploration_reward_scale
-        else:
-            explore_reward = self.exploration_reward_system.get_explore_rewards(
-                self.pos) * self.exploration_reward_scale
-        # print(f"{explore_reward = }")
+        explore_reward_scale = (1 + count_valid_packet_reference(self.prefs1) + count_valid_packet_reference(self.prefs2)) / (1 + len(self.prefs1) + len(self.prefs2))
+        explore_reward = min(self.exploration_reward_system.get_explore_rewards(
+                self.pos) * self.exploration_reward_max * explore_reward_scale,self.exploration_reward_max)
+
         reward += explore_reward
         reward = min(self.packet_reward_max * 2, reward)
         done = self.steps >= self.max_steps or self.total_misses >= self.max_misses
@@ -545,7 +538,8 @@ class TwoDEnv(gym.Env):
                  self.elapsed_time1 / self.max_steps,
                  self.elapsed_time2 / self.max_steps
                  ]
-        self.prev_action = action
+        if (self._skip is not None and self.steps % self._skip == 0):
+            self.prev_action = action
         info = {'total_received': self.total_received,
                 'total_misses': self.total_misses}
         return np.array(state, dtype=np.float32), reward, done, False, info

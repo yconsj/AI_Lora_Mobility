@@ -3,16 +3,20 @@ from twod_env import TwoDEnv, FrameSkip, FrameStack
 
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
+
+
 def make_skipped_env():
     env = TwoDEnv(render_mode="cv2")
     env = FrameSkip(env, skip=10)  # Frame skip for action repeat
     return env
 
+
 def make_framestacked_env():
     env = TwoDEnv(render_mode="cv2")
     env = FrameSkip(env, skip=5)
-    env = FrameStack(env, stack_size=10)
+    env = FrameStack(env, stack_size=5)
     return env
+
 
 vec_env = make_vec_env(make_framestacked_env, n_envs=1, env_kwargs=dict())
 test_best = True

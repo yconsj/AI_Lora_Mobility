@@ -22,7 +22,7 @@ def make_skipped_env():
 
 def make_framestacked_env():
     env = TwoDEnv(render_mode="none")
-    env = FrameSkip(env, skip=10)
+    env = FrameSkip(env, skip=5)
     env = FrameStack(env, stack_size=5)
     return env
 
