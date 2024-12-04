@@ -12,7 +12,7 @@ import multiprocessing
 ## tensorboard --logdir ./tensorboard/;./tensorboard/  ##
 
 def make_skipped_env():
-    env = TwoDEnv(render_mode="none")
+    env = TwoDEnv(render_mode="none", timeskip=10)
     env = FrameSkip(env, skip=10)  # Frame skip for action repeat
     return env
 # http://localhost:6006/
@@ -44,7 +44,7 @@ def main():
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=20, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1, best_model_save_path="stable-model-2d-best")
     print("Learning started")
-    model = PPO("MlpPolicy", env, gamma= 0.999, tensorboard_log="./tensorboard/").learn(500000,callback=[eval_callback, TensorboardCallback()])
+    model = PPO("MlpPolicy", env, gamma= 0.9, tensorboard_log="./tensorboard/").learn(500000,callback=[eval_callback, TensorboardCallback()])
 
     model.save("stable-model")
 

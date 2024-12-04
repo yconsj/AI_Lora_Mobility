@@ -1,7 +1,7 @@
 from twod_env import TwoDEnv, FrameSkip
 from stable_baselines3.common.env_checker import check_env
 
-env = TwoDEnv(render_mode="cv2")
+env = TwoDEnv(render_mode="cv2", timeskip=10)
 env = FrameSkip(env, skip=10)  # Frame skip for action repeat
 
 episodes = 1
@@ -14,4 +14,5 @@ for episode in range(episodes):
         
         random_action = env.action_space.sample()
         obs, reward, done, truncated, info= env.step(random_action)
-       # print(reward)
+        print(obs)
+        print(reward)
