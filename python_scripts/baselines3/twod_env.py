@@ -449,11 +449,13 @@ class TwoDEnv(gym.Env):
         elif received1 == PACKET_STATUS.LOST:
             # and (self.prefs1[0].rssi == -1 or self.prefs1[1].rssi == -1 or self.prefs1[2].rssi == -1):
             self.total_misses += 1
-            reward = self.get_miss_penalty(self.pos, self.node1.pos)
+            miss_penalty = self.get_miss_penalty(self.pos, self.node1.pos)
+            reward = miss_penalty * sum(1 for value in self.prefs1 if value.rssi != -1)
         elif received2 == PACKET_STATUS.LOST:
             # and (self.prefs2[0].rssi == -1 or self.prefs2[1].rssi == -1 or self.prefs2[2].rssi == -1):
             self.total_misses += 1
-            reward = self.get_miss_penalty(self.pos, self.node2.pos)
+            miss_penalty = self.get_miss_penalty(self.pos, self.node2.pos)
+            reward = miss_penalty * sum(1 for value in self.prefs2 if value.rssi != -1)
 
         if self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1:
             approx_pos = self.trilateration(self.prefs1, self.initial_guess1)
