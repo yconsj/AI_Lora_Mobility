@@ -16,7 +16,7 @@
 package flora.RLNodes.Nodes;
 
 import inet.node.contract.INetworkNode;
-import inet.mobility.RL.SimpleRLMobility;
+import inet.RL.SimpleRLMobility.SimpleRLMobility;
 import inet.mobility.static.StationaryMobility;
 import inet.networklayer.common.InterfaceTable;
 import inet.networklayer.contract.INetworkLayer;

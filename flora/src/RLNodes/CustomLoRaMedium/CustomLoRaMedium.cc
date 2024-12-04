@@ -19,7 +19,6 @@
 #include "inet/common/INETUtils.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
-//#include "inet/linklayer/contract/IMACFrame.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -29,6 +28,7 @@
 #include "inet/physicallayer/wireless/common/medium/RadioMedium.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IErrorModel.h"
+#include <fstream>
 
 namespace flora {
 
@@ -36,10 +36,32 @@ Define_Module(CustomLoRaMedium);
 
 CustomLoRaMedium::CustomLoRaMedium() : LoRaMedium()
 {
+
 }
 
 CustomLoRaMedium::~CustomLoRaMedium()
 {
+}
+
+void CustomLoRaMedium::addTransmission(const IRadio *transmitterRadio, const ITransmission *transmission) {
+    // Call the parent class's addTransmission
+    LoRaMedium::addTransmission(transmitterRadio, transmission);
+
+    // Fetch the StateLogger module from the network
+    cModule *network = getSimulation()->getSystemModule();
+    auto stateLogger = check_and_cast<StateLogger*>(network->getSubmodule("stateLogger"));
+
+    if (stateLogger) {
+        // Add the transmission time to the StateLogger
+        stateLogger->addTransmissionTime();
+    } else {
+        EV << "Error: StateLogger module not found in the network." << std::endl;
+    }
+}
+
+void CustomLoRaMedium::finish() {
+    // Call the parent class's finish method
+    LoRaMedium::finish();
 }
 
 

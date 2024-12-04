@@ -31,6 +31,9 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
 #include <algorithm>
 
+#include "../../../../inet4.4/src/inet/RL/StateLogger/StateLogger.h"  // Include the StateLogger header
+
+
 namespace flora {
 class CustomLoRaMedium : public LoRaMedium
 {
@@ -41,6 +44,9 @@ class CustomLoRaMedium : public LoRaMedium
 public:
     CustomLoRaMedium();
     virtual ~CustomLoRaMedium();
+    virtual void finish() override;
+    void addTransmission(const IRadio *transmitterRadio, const ITransmission *transmission) override;
+
 };
 }
 #endif /* LORAPHY_CUSTOMLORAMEDIUM_H_ */

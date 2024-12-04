@@ -5,19 +5,13 @@
 #include <omnetpp.h>
 #include <fstream>
 #include <string>
-#include "../include/json.hpp"
-using json = nlohmann::json;
+#include "inet/RL/StateLogger/StateLogger.h"
 
 namespace flora {
 
 class PacketCounter : public omnetpp::cSimpleModule, public omnetpp::cListener {
 private:
-    int counterGW1 = 0;
-    int counterGW2 = 0;
     int runNumber;
-    std::ofstream outputFile;
-    std::string outputFileName; // Changed to std::string for file name
-
     void updateJsonFile();
 
 public:

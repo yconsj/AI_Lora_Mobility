@@ -13,22 +13,22 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef INET_MOBILITY_RL_LEARNINGMODEL_H_
-#define INET_MOBILITY_RL_LEARNINGMODEL_H_
+#ifndef INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_
+#define INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_
 
 #include "inet/common/geometry/common/Coord.h"
-#include "StateLogger.h"
-#include "InputState.h"
-#include "SimpleRLMobility.h"
 #include <vector>
-#include "include/json.hpp"
-
 #include "tensorflow/lite/micro/system_setup.h"
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_log.h"
 #include "tensorflow/lite/micro/system_setup.h"
 #include "tensorflow/lite/schema/schema_generated.h"
+
+#include "inet/RL/InputState.h"
+#include "inet/RL/include/json.hpp"
+#include "inet/RL/SimpleRLMobility/SimpleRLMobility.h"
+#include "inet/RL/StateLogger/StateLogger.h"
 
 using json = nlohmann::json;
 
@@ -86,4 +86,4 @@ private:
 
 } /* namespace inet */
 
-#endif /* INET_MOBILITY_RL_LEARNINGMODEL_H_ */
+#endif /* INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_ */

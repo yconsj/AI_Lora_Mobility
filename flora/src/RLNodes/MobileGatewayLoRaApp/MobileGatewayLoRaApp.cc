@@ -15,13 +15,13 @@
 
 #include "MobileGatewayLoRaApp.h"
 
+#include "../../../../inet4.4/src/inet/RL/LearningModel/LearningModel.h"
 #include "LoRa/LoRaMac.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/applications/base/ApplicationPacket_m.h"
 #include "LoRaPhy/LoRaRadioControlInfo_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
-#include "inet/mobility/RL/LearningModel.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
 
 namespace flora {

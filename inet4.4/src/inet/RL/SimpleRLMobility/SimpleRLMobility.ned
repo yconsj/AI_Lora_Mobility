@@ -7,10 +7,10 @@
 // Author: Emin Ilker Cetinbas (niw3_at_yahoo_d0t_com)
 //
 
-package inet.mobility.RL;
+package inet.RL.SimpleRLMobility;
 
 import inet.mobility.base.MovingMobilityBase;
-import inet.mobility.RL.LearningModel;
+import inet.RL.LearningModel.LearningModel;
 
 //
 // This is a linear mobility model with speed, angle and acceleration parameters.
@@ -35,6 +35,5 @@ module SimpleRLMobility extends MovingMobilityBase
         
     submodules:
         learningModel: LearningModel;
-    	
 }
 
