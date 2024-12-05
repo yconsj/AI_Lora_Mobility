@@ -63,17 +63,17 @@ class FrameStack(gym.Wrapper):
 
 
 class PacketReference:
-    def __init__(self, max_pos=(150, 150), pos=(-1, -1), rssi=-1, snir=-1):
+    def __init__(self, max_pos=(150, 150), pos=(0, 0), rssi=0, snir=0, valid = False):
         self.pos = pos
         self.rssi = rssi
         self.snir = snir
         self.max_pos = max_pos
+        self.valid = valid
 
     def get_scaled(self):
-        if self.pos == (-1, -1):
-            return self.pos[0], self.pos[1], self.rssi
-
-        return self.pos[0] / self.max_pos[0], self.pos[1] / self.max_pos[1], self.rssi
+        if self.valid:
+            return 0, 0, 0, 0
+        return self.pos[0] / self.max_pos[0], self.pos[1] / self.max_pos[1], self.rssi, 1
 
 
 class ExplorationRewardSystem:
@@ -134,27 +134,25 @@ class ExplorationRewardSystem:
 
     def get_explore_rewards(self, position):
         """
-        Computes the exploration reward based on new paint, scaled as a ratio of the current sum of paint
-        to the maximum possible paint level.
-
+        Computes the exploration reward based on the increase in paint since the last step.
         Args:
             position (tuple): (x, y) position of the agent as integers.
-
         Returns:
-            float: ratio of current paint compared to maximum paint possible.
+            float: The reward based on the increase in paint since the last step, with a minimum of 0.
         """
+        # Calculate the total paint level before applying paint
+        previous_paint_level = np.sum(self.paint_matrix)
+
+        # Apply paint from the current position and fade all cells
         self._apply_paint(position)  # Apply paint from the current position
         self._fade_paint()  # Fade all cells
 
-        # Calculate the total amount of paint in the grid
+        # Calculate the total paint level after applying paint
         current_paint_level = np.sum(self.paint_matrix)
-
-        # The maximum paint level is equal to the total number of cells in the grid
-        max_paint_level = self.grid_size[0] * self.grid_size[1]
-
-        # Calculate the scaled reward as the ratio of current paint level to the max possible paint level
-        reward = current_paint_level / max_paint_level
-
+        # Calculate the increase in paint
+        paint_increase = current_paint_level - previous_paint_level
+        # Ensure the reward is at least 0
+        reward = max(0, paint_increase)
         return reward
 
 
