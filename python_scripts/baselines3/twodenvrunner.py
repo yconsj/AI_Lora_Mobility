@@ -84,7 +84,7 @@ class TensorboardCallback(BaseCallback):
 
 
 def main():
-    envs = 6
+    envs = 4
     env = make_vec_env(make_framestacked_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=20, verbose=1)
     ## tensorboard --logdir ./tensorboard/;./tensorboard/  ##
