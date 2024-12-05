@@ -152,7 +152,7 @@ class ExplorationRewardSystem:
         # Calculate the increase in paint
         paint_increase = current_paint_level - previous_paint_level
         # Ensure the reward is at least 0
-        reward = paint_increase # max(0, paint_increase)
+        reward = max(0, paint_increase)
         return reward
 
 
@@ -208,7 +208,8 @@ class TwoDEnv(gym.Env):
         self.max_transmission_distance = unscaled_max_transmission_distance * \
                                          (self.max_distance_x / unscaled_max_distance)
 
-        node1_pos, node2_pos = self.generate_random_node_positions()
+        node1_pos, node2_pos = self.generate_random_node_positions(minimum_node_distance=self.max_transmission_distance,
+                                                                   gwpos=self.pos)
         self.ploss_scale = 300
         self.transmission_model = TransmissionModel(ploss_scale=self.ploss_scale, rssi_ref=-30,
                                                     path_loss_exponent=2.7, noise_floor=-100,
@@ -226,7 +227,7 @@ class TwoDEnv(gym.Env):
         self.last_packet = 0
         self.pos_reward_min = 0.0
         self.pos_reward_max = 1 / 4.0
-        self.packet_reward_max = 100.0
+        self.packet_reward_max = 1000.0
         self.packet_reward_min = self.packet_reward_max / 10
         self.miss_penalty_min = 0.0
         self.miss_penalty_max = self.packet_reward_max / 16
@@ -258,10 +259,12 @@ class TwoDEnv(gym.Env):
             cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
     @staticmethod
-    def generate_random_node_positions():
-        minimum_node_distance = 75
+    def generate_random_node_positions(minimum_node_distance=75.0, gwpos=None):
         x1 = random.randint(0, 150)
         y1 = random.randint(0, 150)
+        if gwpos is not None:
+            while (math.dist((x1, y1), gwpos) < minimum_node_distance):
+                x1, y1 = random.randint(0, 150), random.randint(0, 150)
         node1_pos = (x1, y1)
         while True:
             x2 = random.randint(0, 150)
@@ -277,14 +280,17 @@ class TwoDEnv(gym.Env):
         self.prev_pos = self.pos
         self.last_packet = 0
         self.total_misses = 0
-        self.pos = (int(self.max_distance_x / 2), int(self.max_distance_y / 2))
+        x = random.randint(0, self.max_distance_x)
+        y = random.randint(0, self.max_distance_y)
+        self.pos = x, y
         self.ewma_x = self.pos[0]
         self.ewma_y = self.pos[1]
         self.initial_guess1 = self.pos
         self.initial_guess2 = self.pos
         self.node1.reset()
         self.node2.reset()
-        node1_pos, node2_pos = self.generate_random_node_positions()
+        node1_pos, node2_pos = self.generate_random_node_positions(minimum_node_distance=self.max_transmission_distance,
+                                                                   gwpos=self.pos)
         self.node1.pos = node1_pos
         self.node2.pos = node2_pos
         self.steps = 0
@@ -427,7 +433,7 @@ class TwoDEnv(gym.Env):
     def localization_stage(self, packet1, packet2):
         reward = 0
 
-        # continue giving a little bit of exploration reward:
+        # continue giving a small part of exploration reward:
         explore_reward = min(self.exploration_reward_system.get_explore_rewards(
             self.pos) * self.exploration_reward_max * 0.1, self.exploration_reward_max)
         reward += explore_reward
@@ -440,9 +446,9 @@ class TwoDEnv(gym.Env):
             reward += self.packet_reward_min
 
         if self.elapsed_time1 > self.elapsed_time2:
-            reward = self.get_pos_radius_reward(self.pos, self.pacrefs1, self.elapsed_time1)
+            reward += self.get_pos_radius_reward(self.pos, self.pacrefs1, self.elapsed_time1)
         elif self.elapsed_time1 <= self.elapsed_time2:
-            reward = self.get_pos_radius_reward(self.pos, self.pacrefs2, self.elapsed_time2)
+            reward += self.get_pos_radius_reward(self.pos, self.pacrefs2, self.elapsed_time2)
         # stage transition
         if (count_valid_packet_reference(self.pacrefs1) >= 3) and (count_valid_packet_reference(self.pacrefs2) >= 3):
             self.stage = self.reception_stage_index

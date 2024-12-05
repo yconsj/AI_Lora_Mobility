@@ -17,9 +17,13 @@ def make_framestacked_env():
     env = FrameStack(env, stack_size=5)
     return env
 
+useCNN = False
+if useCNN:
+    vec_env = make_vec_env(make_framestacked_env, n_envs=1, env_kwargs=dict())
+else:
+    vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
 
-vec_env = make_vec_env(make_framestacked_env, n_envs=1, env_kwargs=dict())
-test_best = True
+test_best = False
 if test_best:
     model = PPO.load("stable-model-2d-best/best_model", print_system_info=True)
 else:

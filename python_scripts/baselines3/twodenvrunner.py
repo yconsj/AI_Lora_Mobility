@@ -12,8 +12,6 @@ from torch import nn
 from twod_env import TwoDEnv, FrameSkip, FrameStack
 
 
-
-
 def make_skipped_env():
     env = TwoDEnv(render_mode="none")
     env = FrameSkip(env, skip=10)  # Frame skip for action repeat
@@ -83,35 +81,46 @@ class TensorboardCallback(BaseCallback):
         return True
 
 
+
 def main():
-    envs = 4
-    env = make_vec_env(make_framestacked_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
-    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=20, verbose=1)
-    ## tensorboard --logdir ./tensorboard/;./tensorboard/  ##
-    # http://localhost:6006/
-    eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1,
-                                 best_model_save_path="stable-model-2d-best")
-    print("Learning started")
     if th.cuda.is_available():
         device = "cuda"
     else:
         device = "cpu"
 
-    # Define policy_kwargs with the custom feature extractor
-    policy_kwargs = dict(
-        features_extractor_class=CustomCNN,
-        features_extractor_kwargs=dict(features_dim=128),  # Output feature dimension
-    )
+    useCNN = False
+    envs = 4
+    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=20, verbose=1)
+    if useCNN:
+        env = make_vec_env(make_framestacked_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
+        ## tensorboard --logdir ./tensorboard/;./tensorboard/  ##
+        # http://localhost:6006/
+        eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1,
+                                     best_model_save_path="stable-model-2d-best")
+        # Define policy_kwargs with the custom feature extractor
+        policy_kwargs = dict(
+            features_extractor_class=CustomCNN,
+            features_extractor_kwargs=dict(features_dim=128),  # Output feature dimension
+        )
 
-    # Create the PPO model using CnnPolicy
-    model = PPO("CnnPolicy", env, policy_kwargs=policy_kwargs, gamma=0.999, tensorboard_log="./tensorboard/",
-                device=device, batch_size=64,
-                n_steps=2048)
+        # Create the PPO model using CnnPolicy
+        model = PPO("CnnPolicy", env, policy_kwargs=policy_kwargs, gamma=0.999, tensorboard_log="./tensorboard/",
+                    device=device, batch_size=64,
+                    n_steps=2048)
+    else:
+        env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
+        eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1,
+                                     best_model_save_path="stable-model-2d-best")
+        model = PPO("MlpPolicy", env, gamma=0.9, tensorboard_log="./tensorboard/")
+
     # Move to device if necessary
     model.policy.to(device)
-
-    model.learn(500000, callback=[eval_callback, TensorboardCallback()])
-    model.save("stable-model")
+    print("Learning started")
+    try:
+        model.learn(100000, callback=[eval_callback, TensorboardCallback()])
+        model.save("stable-model")
+    except KeyboardInterrupt:
+        model.save("stable-model")
 
 
 if __name__ == '__main__':
