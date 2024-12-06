@@ -39,10 +39,10 @@ while not done:
         print(f"State: {obs}")
         print(f"Action: {action}")
         print(f"Action Probabilities: {action_probabilities}")
+    counter += 1
 
     obs, reward, done, info = vec_env.step(action)
 
-    counter += 1
     if done:
         # VecEnv resets automatically when done
         break
