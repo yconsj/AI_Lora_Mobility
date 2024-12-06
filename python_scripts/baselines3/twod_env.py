@@ -234,20 +234,24 @@ class TwoDEnv(gym.Env):
         #                     prev_action, (gwpos.x,gwpos.y),             3
         #                     smoothedpos.x, smoothedpos.y                2
         #                     ((x1, x2), rssi, valid) * 3                 12
+        #                     number of packets received, sent by node 1  1
         #                     ((x1, x2), rssi, valid) * 3                 12
+        #                     number of packets received, sent by node 2  1
         #                     elapsed_time1, elapsed_time2                2
+        #                     last_packet                                 1
         #                     curriculum_index                            1
         #                     steps                                       1
         #                                                                 33
         self.observation_space = spaces.Box(low=np.array(
             [0] * 3 +
             [0] * 2 +
-            (([0] * 4) * 3) * 2 +
+            ((([0] * 4) * 3) + [0] * 1) * 2 +
             [0] * 2 +
+            [0] * 1 +
             [0] * 1 +
             [0] * 1),
             high=np.array(
-                [1] * 32 + [self.max_steps] * 1), dtype=np.float32)
+                [1] * 35 + [self.max_steps] * 1), dtype=np.float32)
         # Environment state
 
         unscaled_speed = 20  # meter per second
@@ -276,14 +280,18 @@ class TwoDEnv(gym.Env):
                                                     max_transmission_distance=self.max_transmission_distance)
         node1_pos = 0,120
         node2_pos = 120, 0
-        self.node1 = Node(self.transmission_model, pos=node1_pos, time_to_first_packet=50, send_interval=300)
-        self.node2 = Node(self.transmission_model, pos=node2_pos, time_to_first_packet=125, send_interval=300)
+        self.node_send_interval = 300
+        self.node1 = Node(self.transmission_model, pos=node1_pos, time_to_first_packet=50,
+                          send_interval=self.node_send_interval)
+        self.node2 = Node(self.transmission_model, pos=node2_pos, time_to_first_packet=125,
+                          send_interval=self.node_send_interval)
         self.pacrefs1 = (PacketReference(), PacketReference(), PacketReference())
         self.pacrefs2 = (PacketReference(), PacketReference(), PacketReference())
+        self.total_received1 = 0
+        self.total_received2 = 0
         self.elapsed_time1 = 0
         self.elapsed_time2 = 0
-        self.initial_guess1 = self.pos
-        self.initial_guess2 = self.pos
+        self.expected_max_received_per_node = self.max_steps // self.node_send_interval
 
         self.last_packet = 0
         self.pos_reward_min = 0.0
@@ -340,6 +348,8 @@ class TwoDEnv(gym.Env):
         #self.node2.pos = node2_pos
         self.steps = 0
         self.total_reward = 0
+        self.total_received1 = 0
+        self.total_received2 = 0
         self.total_received = 0
         self.exploration_reward_system.reset()
         self.pacrefs1 = (PacketReference(), PacketReference(), PacketReference())
@@ -352,16 +362,20 @@ class TwoDEnv(gym.Env):
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
                  self.ewma_x / self.max_distance_x, self.ewma_y / self.max_distance_y,
                  *self.pacrefs1[0].get_scaled(), *self.pacrefs1[1].get_scaled(), *self.pacrefs1[2].get_scaled(),
+                 count_valid_packet_reference(self.pacrefs1) / 3,
                  *self.pacrefs2[0].get_scaled(), *self.pacrefs2[1].get_scaled(), *self.pacrefs2[2].get_scaled(),
+                 count_valid_packet_reference(self.pacrefs2) / 3,
                  self.elapsed_time1 / self.max_steps,
                  self.elapsed_time2 / self.max_steps,
+                 self.last_packet / 2,
                  self.stage / self.reception_stage_index,
                  self.steps
                  ]
         return np.array(state, dtype=np.float32), {}
 
     def get_pos_reward(self, pos1, pos2, time):
-        scaled_time = (time / self.max_steps)
+        max_pos_reward_time = self.node_send_interval * 4
+        scaled_time = min(1, time / max_pos_reward_time)
         distance = math.dist(pos1, pos2)
         scaled_distance = 1 - distance / self.max_cross_distance
         scaled_distance_time = scaled_distance * scaled_time
@@ -375,6 +389,9 @@ class TwoDEnv(gym.Env):
     def get_pos_radius_reward(self, gw_pos: tuple[float, float],
                               pacrefs: tuple[PacketReference, PacketReference, PacketReference],
                               time: int):
+        max_pos_reward_time = self.node_send_interval * 4
+        scaled_time = min(1.0, time / max_pos_reward_time)
+
         pos_reward = 0
         dist_diff_threshold = self.max_transmission_distance
         # Iterate over all packet references (pacrefs) to calculate the reward
@@ -393,9 +410,9 @@ class TwoDEnv(gym.Env):
                 # Reward scaling: If dist_diff is less than a threshold, scale reward between 0 and 1
                 if dist_diff < dist_diff_threshold:
                     scaled_reward = 1 - (dist_diff / dist_diff_threshold)  # Scale the reward to be between 0 and 1
+
                     pos_reward += scaled_reward
-        # Scale the final reward based on time (before clipping)
-        scaled_time = time / self.max_steps
+        pos_reward = self.pos_reward_max - pos_reward * (self.pos_reward_max - self.pos_reward_min)
         pos_reward *= scaled_time
 
         # Ensure the final reward is within the defined range [pos_reward_min, pos_reward_max]
@@ -441,13 +458,13 @@ class TwoDEnv(gym.Env):
         received2, _, _ = packet2
         if received1 == PACKET_STATUS.RECEIVED and self.last_packet != 1:
             reward += self.packet_reward_min * 0.5
-        elif received1 == PACKET_STATUS and self.last_packet == 1:
-            reward -= self.packet_reward_min * 0.05
+        elif received1 == PACKET_STATUS.RECEIVED and self.last_packet == 1:
+            reward -= 0  # self.packet_reward_min * 0.05
 
         if received2 == PACKET_STATUS.RECEIVED and self.last_packet != 2:
             reward += self.packet_reward_min * 0.5
-        elif received2 == PACKET_STATUS and self.last_packet == 2:
-            reward -= self.packet_reward_min * 0.05
+        elif received2 == PACKET_STATUS.RECEIVED and self.last_packet == 2:
+            reward -= 0  # self.packet_reward_min * 0.05
 
         # stage transition
         if ((count_valid_packet_reference(self.pacrefs1) >= 1)
@@ -468,16 +485,16 @@ class TwoDEnv(gym.Env):
 
         received1, _, _ = packet1
         received2, _, _ = packet2
-        if received1 == PACKET_STATUS.RECEIVED:
+        if received1 == PACKET_STATUS.RECEIVED and count_valid_packet_reference(self.pacrefs1) < 3:
             reward += self.packet_reward_min
-        if received2 == PACKET_STATUS.RECEIVED:
+        if received2 == PACKET_STATUS.RECEIVED and count_valid_packet_reference(self.pacrefs2) < 3:
             reward += self.packet_reward_min
         time_scale = max(0.1, 1 - self.steps / max_localization_stage)
         if count_valid_packet_reference(self.pacrefs1) < 3:
             reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1) * time_scale
             # self.get_pos_radius_reward(self.pos, self.pacrefs1, self.elapsed_time1)
         if count_valid_packet_reference(self.pacrefs2) < 3:
-            self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2) * time_scale
+            reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2) * time_scale
             # reward += self.get_pos_radius_reward(self.pos, self.pacrefs2, self.elapsed_time2)
         # stage transition
         if (count_valid_packet_reference(self.pacrefs1) >= 3) and (count_valid_packet_reference(self.pacrefs2) >= 3):
@@ -488,6 +505,8 @@ class TwoDEnv(gym.Env):
         reward = 0
         received1, rssi1, snir1 = packet1
         received2, rssi2, snir2 = packet2
+        reception_penalty_max_time = 6000.0
+        penalty_time_scale = min(1.0, self.steps / reception_penalty_max_time)
 
         # position reward based on actual node location
         if self.last_packet == 1:
@@ -504,7 +523,9 @@ class TwoDEnv(gym.Env):
             miss_penalty = self.get_miss_penalty(self.pos, self.node1.pos)
             # higher penalty for missing packets from the same node in a row
             miss_penalty = miss_penalty * 2 if self.last_packet != 1 else miss_penalty
+            miss_penalty *= penalty_time_scale
             reward += miss_penalty
+
         if received2 == PACKET_STATUS.RECEIVED:
             reward += self.packet_reward_max
             if self.last_packet == 1:
@@ -513,6 +534,7 @@ class TwoDEnv(gym.Env):
             miss_penalty = self.get_miss_penalty(self.pos, self.node2.pos)
             # higher penalty for missing packets from the same node in a row
             miss_penalty = miss_penalty * 2 if self.last_packet != 2 else miss_penalty
+            miss_penalty *= penalty_time_scale
             reward += miss_penalty
 
         return reward
@@ -554,6 +576,7 @@ class TwoDEnv(gym.Env):
         if received1 == PACKET_STATUS.RECEIVED:
             self.last_packet = 1
             self.total_received += 1
+            self.total_received1 += 1
             self.elapsed_time1 = 0
             p1 = PacketReference(pos=self.pos, rssi=rssi1, snir=snir1, valid=True)
             if is_new_best_pacref(self.pacrefs1, p1):
@@ -564,6 +587,7 @@ class TwoDEnv(gym.Env):
         if received2 == PACKET_STATUS.RECEIVED:
             self.last_packet = 2
             self.total_received += 1
+            self.total_received2 += 1
             self.elapsed_time2 = 0
             p2 = PacketReference(pos=self.pos, rssi=rssi2, snir=snir2, valid=True)
             if is_new_best_pacref(self.pacrefs2, p2):
@@ -585,9 +609,12 @@ class TwoDEnv(gym.Env):
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
                  self.ewma_x / self.max_distance_x, self.ewma_y / self.max_distance_y,
                  *self.pacrefs1[0].get_scaled(), *self.pacrefs1[1].get_scaled(), *self.pacrefs1[2].get_scaled(),
+                 count_valid_packet_reference(self.pacrefs1) / 3,
                  *self.pacrefs2[0].get_scaled(), *self.pacrefs2[1].get_scaled(), *self.pacrefs2[2].get_scaled(),
+                 count_valid_packet_reference(self.pacrefs2) / 3,
                  self.elapsed_time1 / self.max_steps,
                  self.elapsed_time2 / self.max_steps,
+                 self.last_packet / 2,
                  self.stage / self.reception_stage_index,
                  self.steps
                  ]
@@ -598,7 +625,6 @@ class TwoDEnv(gym.Env):
         return np.array(state, dtype=np.float32), reward, done, False, info
 
     def render(self):
-
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
         x = int(self.pos[0])
         y = int(self.pos[1])
@@ -657,8 +683,7 @@ class TwoDEnv(gym.Env):
             # Calculate the radius from RSSI (convert RSSI to distance)
             rssi_distance = self.transmission_model.inverse_generate_rssi(pr.rssi)  # Assume a method exists
             circle_radius = int(rssi_distance)  # Convert to integer for drawing
-            cv2.circle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), circle_radius, (255, 0, 0),
-                       1)  # Blue circle
+            cv2.circle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), circle_radius, (255, 0, 0), 1)  # Blue circle
 
         # Draw the maximum transmission distance circle
         cv2.circle(
@@ -669,14 +694,20 @@ class TwoDEnv(gym.Env):
             thickness=1  # thickness: 1 for outline
         )
 
-        # cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
-        # cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
         # Display the frame
         enlarged_image = cv2.resize(frame, (0, 0), fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
-        cv2.putText(enlarged_image,
-                    "Total received: " + str(self.total_received) + " | Total misses: " + str(self.total_misses),
-                    (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        # Draw score
+
+        # Add text outside the main environment
+        text_offset = 10
+        stats = [
+            f"Total received node1: {self.total_received1}",
+            f"Total received node2: {self.total_received2}",
+            f"Total misses: {self.total_misses}",
+            f"Stage: {self.stage}"
+        ]
+        for i, text in enumerate(stats):
+            cv2.putText(enlarged_image, text, (text_offset, self.height * 3 + (i + 1) * 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         cv2.imshow(self.window_name, enlarged_image)
         cv2.waitKey(5)  # Wait a short time to create the animation effect

@@ -116,7 +116,9 @@ def main():
             features_extractor_kwargs=dict(features_dim=128),  # Output feature dimension
         )
         # Create the PPO model using CnnPolicy
-        model = PPO("CnnPolicy", env, policy_kwargs=policy_kwargs, gamma=0.995, tensorboard_log="./tensorboard/",
+        model = PPO("CnnPolicy", env, policy_kwargs=policy_kwargs,
+                    gamma=0.999, learning_rate=(10.0 ** -4), n_steps=n_steps, batch_size=batch_size,
+                    tensorboard_log="./tensorboard/",
                     device=device)  # batch_size=64, n_steps=2048
     elif network_type == NETWORK_TYPE.CNN_DQN:
         env = make_vec_env(make_framestacked_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
