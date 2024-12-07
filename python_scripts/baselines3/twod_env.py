@@ -77,7 +77,7 @@ class PacketReference:
 
 
 class ExplorationRewardSystem:
-    def __init__(self, grid_size, max_transmission_distance, ploss_scale, fade_rate=0.1):
+    def __init__(self, grid_size, max_transmission_distance, ploss_scale, fade_rate=0.1, gamma=0.1):
         """
         Initializes the exploration reward system.
 
@@ -85,12 +85,15 @@ class ExplorationRewardSystem:
             grid_size (tuple): Size of the grid (width, height) as integers.
             max_transmission_distance (float): Maximum transmission distance of the agent.
             fade_rate (float): Rate at which paint fades each step (default 0.1).
+            ploss_scale (float): Scaling factor for distance-based intensity decay.
+            gamma (float): Ratio to determine alpha as a fraction of max intensity.
         """
         self.grid_size = grid_size
         self.max_transmission_distance = max_transmission_distance
         self.fade_rate = fade_rate
         self.ploss_scale = ploss_scale
-        self.paint_matrix = None
+        self.gamma = gamma  # Determines how fast the paint accumulates
+        self.paint_matrix = None  # Current paint levels
         self.reset()
 
     def reset(self):
@@ -99,8 +102,8 @@ class ExplorationRewardSystem:
 
     def _apply_paint(self, position):
         """
-        Paints the cells in the agent's transmission range with intensity starting from 1
-        at the agent's position and tapering off according to an exponential decay model.
+        Paints the cells in the agent's transmission range. Paint increases
+        incrementally until reaching a distance-based maximum.
 
         Args:
             position (tuple): (x, y) position of the agent as integers.
@@ -118,16 +121,17 @@ class ExplorationRewardSystem:
         distances = np.sqrt((x_coords - x) ** 2 + (y_coords - y) ** 2)
         in_range = distances <= self.max_transmission_distance
 
-        # Apply exponential decay for intensity
-        intensity = (1 - self.paint_matrix[x_coords, y_coords]) * np.exp(-distances / self.ploss_scale)
+        # Calculate the maximum intensity for each cell based on distance
+        max_intensity = np.exp(-distances / self.ploss_scale)
 
-        intensity = np.clip(intensity, 0, 1)  # Ensure the intensity is within [0, 1]
+        # Calculate the per-step paint increment (alpha)
+        increase = max_intensity * self.gamma
 
-        # Update the paint matrix only for cells within the transmission range
-        self.paint_matrix[in_range] = np.maximum(self.paint_matrix[in_range], intensity[in_range])
-
-        # Optionally, ensure the entire paint matrix remains within valid range
-        self.paint_matrix = np.clip(self.paint_matrix, 0, 1)
+        # Increment paint levels, respecting the max intensity limit
+        self.paint_matrix[in_range] = np.minimum(
+            max_intensity[in_range],  # Max paint value
+            self.paint_matrix[in_range] + increase[in_range]  # Current value + incremental paint
+        )
 
     def _fade_paint(self):
         """Fades the paint in all cells."""
@@ -145,23 +149,21 @@ class ExplorationRewardSystem:
         previous_paint_level = np.sum(self.paint_matrix)
 
         # Apply paint from the current position and fade all cells
-        self._apply_paint(position)  # Apply paint from the current position
-        self._fade_paint()  # Fade all cells
+        self._apply_paint(position)
+        self._fade_paint()
 
         # Calculate the total paint level after applying paint
         current_paint_level = np.sum(self.paint_matrix)
 
         # Calculate the increase in paint
-        paint_increase = current_paint_level - previous_paint_level
-        paint_increase = paint_increase  # Ensure paint_increase is non-negative
+        paint_increase = np.maximum(0, current_paint_level - previous_paint_level)
 
-        alpha = 0.5
         # Normalize coverage by dividing the sum of paint by the maximum possible paint level
         coverage_bonus = np.sum(self.paint_matrix) / self.paint_matrix.size
 
-        reward = (1 - alpha) * coverage_bonus + alpha * paint_increase
         # Combine paint increase and coverage bonus into the reward
-        reward = max(0, reward)
+        alpha = 0.1
+        reward = (1 - alpha) * coverage_bonus + alpha * max(0, paint_increase)
 
         return reward
 
@@ -197,6 +199,7 @@ def is_new_best_pacref(pref, p):
     # Check if the packet's RSSI is higher than any of the existing preferences
     return p.rssi > max(pref1.rssi, pref2.rssi, pref3.rssi)
 
+
 def insert_best_pacref(pref, p):
     # Unpack the preferences (pref) for clarity
     pref1, pref2, pref3 = pref
@@ -216,6 +219,7 @@ def insert_best_pacref(pref, p):
         return pref1, pref2, p  # `p` becomes the third best preference
 
     return pref  # Return the original preferences if no new packet is inserted
+
 
 class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none", stack_size=4):
@@ -272,13 +276,13 @@ class TwoDEnv(gym.Env):
                                          (self.max_distance_x / unscaled_max_distance)
 
         node1_pos, node2_pos = generate_random_node_positions(minimum_node_distance=self.max_transmission_distance,
-                                                                   gwpos=self.pos)
+                                                              gwpos=self.pos)
         self.ploss_scale = 300
         self.transmission_model = TransmissionModel(ploss_scale=self.ploss_scale, rssi_ref=-30,
                                                     path_loss_exponent=2.7, noise_floor=-100,
                                                     rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30,
                                                     max_transmission_distance=self.max_transmission_distance)
-        node1_pos = 0,120
+        node1_pos = 0, 120
         node2_pos = 120, 0
         self.node_send_interval = 300
         self.node1 = Node(self.transmission_model, pos=node1_pos, time_to_first_packet=50,
@@ -305,7 +309,7 @@ class TwoDEnv(gym.Env):
             ExplorationRewardSystem(grid_size=(self.max_distance_x, self.max_distance_y),
                                     max_transmission_distance=self.max_transmission_distance,
                                     ploss_scale=self.ploss_scale,
-                                    fade_rate=0.0005)
+                                    fade_rate=0.0005, gamma=1.0/self.node_send_interval)
         self.exploration_reward_max = 0.1
 
         self.total_reward = 0
@@ -343,9 +347,9 @@ class TwoDEnv(gym.Env):
         self.node1.reset()
         self.node2.reset()
         node1_pos, node2_pos = generate_random_node_positions(minimum_node_distance=self.max_transmission_distance,
-                                                                   gwpos=self.pos)
-        #self.node1.pos = node1_pos
-        #self.node2.pos = node2_pos
+                                                              gwpos=self.pos)
+        # self.node1.pos = node1_pos
+        # self.node2.pos = node2_pos
         self.steps = 0
         self.total_reward = 0
         self.total_received1 = 0
@@ -468,7 +472,7 @@ class TwoDEnv(gym.Env):
 
         # stage transition
         if ((count_valid_packet_reference(self.pacrefs1) >= 1)
-                 and (count_valid_packet_reference(self.pacrefs2) >= 1)):
+                and (count_valid_packet_reference(self.pacrefs2) >= 1)):
             self.stage = self.localization_stage_index
 
         return reward
@@ -478,7 +482,7 @@ class TwoDEnv(gym.Env):
         reward = 0
 
         # if self.pos == self.prev_pos:
-            # reward += -0.1  # Small penalty for inaction
+        # reward += -0.1  # Small penalty for inaction
 
         # continue giving a small part of exploration reward:
         explore_scale = 0.1
@@ -685,7 +689,8 @@ class TwoDEnv(gym.Env):
             # Calculate the radius from RSSI (convert RSSI to distance)
             rssi_distance = self.transmission_model.inverse_generate_rssi(pr.rssi)  # Assume a method exists
             circle_radius = int(rssi_distance)  # Convert to integer for drawing
-            cv2.circle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), circle_radius, (255, 0, 0), 1)  # Blue circle
+            cv2.circle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), circle_radius, (255, 0, 0),
+                       1)  # Blue circle
 
         # Draw the maximum transmission distance circle
         cv2.circle(
@@ -801,7 +806,6 @@ class Node:
                 self.upper_bound_send_time - self.send_interval) / self.send_std
         interval = truncnorm.rvs(a, b, loc=self.send_interval, scale=self.send_std)
         return max(0, interval)
-
 
     def inverse_RSSI(self, rssi):
         return self.transmission_model.inverse_generate_rssi(rssi)
