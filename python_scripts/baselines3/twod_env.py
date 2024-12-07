@@ -77,7 +77,7 @@ class PacketReference:
 
 
 class ExplorationRewardSystem:
-    def __init__(self, grid_size, max_transmission_distance, ploss_scale, fade_rate=0.1, tau=300, epsilon=0.01):
+    def __init__(self, grid_size, max_transmission_distance, ploss_scale, fade_rate=0.1, tau=300):
         """
         Initializes the exploration reward system.
 
@@ -87,39 +87,23 @@ class ExplorationRewardSystem:
             fade_rate (float): Rate at which paint fades each step (default 0.1).
             ploss_scale (float): Scaling factor for distance-based intensity decay.
             tau (int): Time until a cell should be fully painted.
-            epsilon (float): Fraction of intensity remaining unpainted after tau steps. For example, epsilon=0.01 means 99% of max intensity.
         """
         self.grid_size = grid_size
         self.max_transmission_distance = max_transmission_distance
         self.fade_rate = fade_rate
         self.ploss_scale = ploss_scale
 
-        """
-        The paint level I_t evolves according to:
-            I_t = I_max * (1 - e^(-γ * t))
-        The goal is for I_t to approach I_max after t = τ. However, e^(-γ * t) asymptotically approaches 0, meaning I_t never exactly reaches I_max. 
-        To address this, we set a threshold ε such that:
-            I_τ ≥ (1 - ε) * I_max
-        This gives:
-            (1 - ε) * I_max = I_max * (1 - e^(-γ * τ))
-        Simplifying:
-            1 - ε = 1 - e^(-γ * τ)
-            e^(-γ * τ) = ε
-            -γ * τ = ln(ε)
-        Thus, γ = - ln(ε) / τ
-        """
-        self.epsilon = epsilon  # Define epsilon
         self.tau = tau  # Duration before cell is painted fully
-        # Calculate gamma based on tau and epsilon
-        self.gamma = -np.log(self.epsilon) / self.tau
-        self.paint_matrix = None  # Current paint levels
+        self.time_matrix = np.zeros(self.grid_size, dtype=np.float32)  # Time spent in each cell
+        self.paint_matrix = np.zeros(self.grid_size, dtype=np.float32)  # Current paint levels
         self.reset()
 
     def reset(self):
-        """Resets the paint matrix and initializes it to zeros."""
-        self.paint_matrix = np.zeros(self.grid_size, dtype=np.float32)
+        """Resets the paint and time matrices."""
+        self.paint_matrix.fill(0)
+        self.time_matrix.fill(0)
 
-    def _apply_paint(self, position):
+    def _apply_paint(self, position, time_step=1):
         """
         Paints the cells in the agent's transmission range. Paint increases
         incrementally until reaching a distance-based maximum.
@@ -128,6 +112,7 @@ class ExplorationRewardSystem:
             position (tuple): (x, y) position of the agent as integers.
         """
         x, y = position
+        x, y = x - 1, y - 1  # Investigate off-by-one issue if necessary
 
         # Create a meshgrid of coordinates for the grid
         x_coords, y_coords = np.meshgrid(
@@ -140,21 +125,27 @@ class ExplorationRewardSystem:
         distances = np.sqrt((x_coords - x) ** 2 + (y_coords - y) ** 2)
         in_range = distances <= self.max_transmission_distance
 
+        # Increment the time spent in the current cell
+        self.time_matrix[x, y] += time_step
+
         # Calculate the maximum intensity for each cell based on distance
         max_intensity = np.exp(-distances / self.ploss_scale)
 
-        # Calculate the per-step paint increment (alpha)
-        increase = max_intensity * self.gamma
+        # Calculate paint levels based on cumulative time spent (exponential growth model)
+        self.paint_matrix[in_range] = np.maximum(max_intensity[in_range] * (
+                1 - np.exp(-self.time_matrix[x, y] / self.tau)
+        ), self.paint_matrix[in_range])
 
-        # Increment paint levels, respecting the max intensity limit
-        self.paint_matrix[in_range] = np.minimum(
-            max_intensity[in_range],  # Max paint value
-            self.paint_matrix[in_range] + increase[in_range]  # Current value + incremental paint
-        )
+        # Ensure paint levels are within the valid range [0, 1]
+        self.paint_matrix = np.clip(self.paint_matrix, 0, 1)
 
     def _fade_paint(self):
         """Fades the paint in all cells."""
         self.paint_matrix = np.clip(self.paint_matrix - self.fade_rate, 0, 1)
+
+    def _fade_time(self):
+        """Fades the time spent in all cells to reduce the value of old areas."""
+        self.time_matrix = np.clip(self.time_matrix - (1.0 / self.tau), 0, None)
 
     def get_explore_rewards(self, position):
         """
@@ -169,7 +160,8 @@ class ExplorationRewardSystem:
 
         # Apply paint from the current position and fade all cells
         self._apply_paint(position)
-        self._fade_paint()
+        self._fade_paint()  # Fade paint after applying
+        self._fade_time()  # Fade time spent in cells
 
         # Calculate the total paint level after applying paint
         current_paint_level = np.sum(self.paint_matrix)
@@ -327,7 +319,7 @@ class TwoDEnv(gym.Env):
         self.exploration_reward_system = \
             ExplorationRewardSystem(grid_size=(self.max_distance_x, self.max_distance_y),
                                     max_transmission_distance=self.max_transmission_distance,
-                                    ploss_scale=self.ploss_scale / 3,
+                                    ploss_scale=self.ploss_scale,
                                     fade_rate=0.0005, tau=self.node_send_interval)
         self.exploration_reward_max = 0.1
 

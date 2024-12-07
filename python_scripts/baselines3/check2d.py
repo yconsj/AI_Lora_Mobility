@@ -14,7 +14,7 @@ for episode in range(episodes):
     obs = env.reset()
     while not done:
         
-        random_action = 0  # env.action_space.sample()
+        random_action = env.action_space.sample()
         obs, reward, done, truncated, info = env.step(random_action)
         print(reward)
         if counter % 10 == 0:
