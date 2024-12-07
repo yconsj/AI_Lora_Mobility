@@ -153,9 +153,9 @@ class ExplorationRewardSystem:
 
         # Calculate the increase in paint
         paint_increase = current_paint_level - previous_paint_level
-        paint_increase = np.maximum(0, paint_increase)  # Ensure paint_increase is non-negative
+        paint_increase = paint_increase  # Ensure paint_increase is non-negative
 
-        alpha = 0.2
+        alpha = 0.5
         # Normalize coverage by dividing the sum of paint by the maximum possible paint level
         coverage_bonus = np.sum(self.paint_matrix) / self.paint_matrix.size
 
@@ -309,7 +309,7 @@ class TwoDEnv(gym.Env):
         self.exploration_reward_max = 0.1
 
         self.total_reward = 0
-        self.max_misses = 15
+        self.max_misses = 20
         self.total_misses = 0
         self.total_received = 0
         self.width, self.height = 175, 175  # Size of the window
@@ -476,8 +476,10 @@ class TwoDEnv(gym.Env):
     def localization_stage(self, packet1, packet2):
         max_localization_stage = 4000
         reward = 0
-        if self.pos == self.prev_pos:
-            reward += -0.1  # Small penalty for inaction
+
+        # if self.pos == self.prev_pos:
+            # reward += -0.1  # Small penalty for inaction
+
         # continue giving a small part of exploration reward:
         explore_scale = 0.1
         reward += min(self.exploration_reward_system.get_explore_rewards(

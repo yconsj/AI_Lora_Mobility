@@ -103,7 +103,7 @@ def main():
 
     network_type = NETWORK_TYPE.CNN
     envs = 4
-    n_steps = 2048 * 2
+    n_steps = 2048 * 4
     total_steps = n_steps * envs  # 16,384
     # Batch size = total_steps / 8 (as a fraction)
     batch_size = total_steps // 8  # 2048
