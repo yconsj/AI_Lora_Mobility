@@ -77,7 +77,7 @@ class PacketReference:
 
 
 class ExplorationRewardSystem:
-    def __init__(self, grid_size, max_transmission_distance, ploss_scale, fade_rate=0.1, gamma=0.1):
+    def __init__(self, grid_size, max_transmission_distance, ploss_scale, fade_rate=0.1, tau=300, epsilon=0.01):
         """
         Initializes the exploration reward system.
 
@@ -86,13 +86,32 @@ class ExplorationRewardSystem:
             max_transmission_distance (float): Maximum transmission distance of the agent.
             fade_rate (float): Rate at which paint fades each step (default 0.1).
             ploss_scale (float): Scaling factor for distance-based intensity decay.
-            gamma (float): Ratio to determine alpha as a fraction of max intensity.
+            tau (int): Time until a cell should be fully painted.
+            epsilon (float): Fraction of intensity remaining unpainted after tau steps. For example, epsilon=0.01 means 99% of max intensity.
         """
         self.grid_size = grid_size
         self.max_transmission_distance = max_transmission_distance
         self.fade_rate = fade_rate
         self.ploss_scale = ploss_scale
-        self.gamma = gamma  # Determines how fast the paint accumulates
+
+        """
+        The paint level I_t evolves according to:
+            I_t = I_max * (1 - e^(-γ * t))
+        The goal is for I_t to approach I_max after t = τ. However, e^(-γ * t) asymptotically approaches 0, meaning I_t never exactly reaches I_max. 
+        To address this, we set a threshold ε such that:
+            I_τ ≥ (1 - ε) * I_max
+        This gives:
+            (1 - ε) * I_max = I_max * (1 - e^(-γ * τ))
+        Simplifying:
+            1 - ε = 1 - e^(-γ * τ)
+            e^(-γ * τ) = ε
+            -γ * τ = ln(ε)
+        Thus, γ = - ln(ε) / τ
+        """
+        self.epsilon = epsilon  # Define epsilon
+        self.tau = tau  # Duration before cell is painted fully
+        # Calculate gamma based on tau and epsilon
+        self.gamma = -np.log(self.epsilon) / self.tau
         self.paint_matrix = None  # Current paint levels
         self.reset()
 
@@ -163,7 +182,7 @@ class ExplorationRewardSystem:
 
         # Combine paint increase and coverage bonus into the reward
         alpha = 0.1
-        reward = (1 - alpha) * coverage_bonus + alpha * max(0, paint_increase)
+        reward = (1 - alpha) * coverage_bonus + alpha * paint_increase
 
         return reward
 
@@ -308,8 +327,8 @@ class TwoDEnv(gym.Env):
         self.exploration_reward_system = \
             ExplorationRewardSystem(grid_size=(self.max_distance_x, self.max_distance_y),
                                     max_transmission_distance=self.max_transmission_distance,
-                                    ploss_scale=self.ploss_scale,
-                                    fade_rate=0.0005, gamma=1.0/self.node_send_interval)
+                                    ploss_scale=self.ploss_scale / 3,
+                                    fade_rate=0.0005, tau=self.node_send_interval)
         self.exploration_reward_max = 0.1
 
         self.total_reward = 0
