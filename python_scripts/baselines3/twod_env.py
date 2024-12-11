@@ -18,17 +18,15 @@ class FrameSkip(gym.Wrapper):
     def __init__(self, env, skip=4):
         """Return only every `skip`-th frame."""
         super(FrameSkip, self).__init__(env)
-        env._skip = skip
         self._skip = skip
 
     def step(self, action):
         """Repeat action, sum reward, and return the last observation."""
         total_reward = 0.0
-        done = False
         for _ in range(self._skip):
             obs, reward, done, trunc, info = self.env.step(action)
             total_reward += reward
-            if done:
+            if done or trunc:
                 break
         # print(f"{total_reward = }")
         return obs, total_reward, done, trunc, info
@@ -102,7 +100,7 @@ class ExplorationRewardSystem:
             position (tuple): (x, y) position of the agent as integers.
         """
         x, y = position
-        x, y = x - 1, y - 1  # Investigate off-by-one issue if necessary
+        # x, y = x - 1, y - 1  # Investigate off-by-one issue if necessary
 
         # Create a meshgrid of coordinates for the grid
         x_coords, y_coords = np.meshgrid(
@@ -164,7 +162,7 @@ class ExplorationRewardSystem:
         coverage_bonus = np.sum(self.paint_matrix) / self.paint_matrix.size
 
         # Combine paint increase and coverage bonus into the reward
-        alpha = 0.5
+        alpha = 0.75
         reward = (1 - alpha) * coverage_bonus + alpha * paint_increase_ratio
         reward = min(1.0, max(reward, 0.0))
         return reward
@@ -228,9 +226,9 @@ def insert_best_pacref(prefs, p):
 
 
 class TwoDEnv(gym.Env):
-    def __init__(self, render_mode="none", history_length=3):
+    def __init__(self, render_mode="none", history_length=3, n_skips=10):
         super(TwoDEnv, self).__init__()
-        self._skip = 1
+        self.n_skips = n_skips
         self.history_length = history_length  # k
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
@@ -264,7 +262,7 @@ class TwoDEnv(gym.Env):
             [0] * 2 * self.history_length +
             [0] * 1 * self.history_length),
             high=np.array(
-                [1] * 32 + [self.max_steps] * 1 + [1] * 3 * self.history_length), dtype=np.float32)
+                [1] * 32 + [1] * 1 + [1] * 3 * self.history_length), dtype=np.float32)
         # Environment state
 
         unscaled_speed = 20  # meter per second
@@ -272,8 +270,8 @@ class TwoDEnv(gym.Env):
         self.max_distance_x = int(unscaled_max_distance / unscaled_speed)  # scaled by speed
         self.max_distance_y = int(unscaled_max_distance / unscaled_speed)
         self.max_cross_distance = math.dist((0, 0), (self.max_distance_x, self.max_distance_y))
-        x = random.randint(0, self.max_distance_x)
-        y = random.randint(0, self.max_distance_y)
+        x = self.max_distance_x // 2 # random.randint(0, self.max_distance_x)
+        y = self.max_distance_y // 2 # random.randint(0, self.max_distance_y)
         self.pos = x, y
         self.history_positions = deque([self.pos] * self.history_length, maxlen=self.history_length)
         self.history_prev_actions = deque([0] * self.history_length, maxlen=self.history_length)
@@ -307,21 +305,21 @@ class TwoDEnv(gym.Env):
 
         self.last_packet = 0
         self.pos_reward_min = 0.0
-        self.pos_reward_max = 0.1 / 4.0
-        self.packet_reward_max = 1000.0
+        self.pos_reward_max = 0.005
+        self.packet_reward_max = 5
         self.packet_reward_min = self.packet_reward_max / 10
-        self.miss_penalty_min = 0.0
-        self.miss_penalty_max = self.packet_reward_max / 16
+        self.miss_penalty_max = self.packet_reward_max / 5
+        self.miss_penalty_min = self.miss_penalty_max / 2
 
         self.exploration_reward_system = \
             ExplorationRewardSystem(grid_size=(self.max_distance_x, self.max_distance_y),
                                     max_transmission_distance=self.max_transmission_distance,
                                     ploss_scale=self.ploss_scale,
-                                    fade_rate=0.0001, tau=self.node_send_interval)
-        self.exploration_reward_max = 1
+                                    fade_rate=0.0001, tau=self.node_send_interval // 2)
+        self.exploration_reward_max = 0.05
 
         self.total_reward = 0
-        self.max_misses = 20
+        self.max_misses = 30
         self.total_misses = 0
         self.total_received = 0
         self.width, self.height = 175, 175  # Size of the window
@@ -339,11 +337,12 @@ class TwoDEnv(gym.Env):
             cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
     def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
         # Reset the.pos and steps counter
         self.last_packet = 0
         self.total_misses = 0
-        x = random.randint(0, self.max_distance_x)
-        y = random.randint(0, self.max_distance_y)
+        x = self.max_distance_x // 2  # random.randint(0, self.max_distance_x)
+        y = self.max_distance_y // 2  # random.randint(0, self.max_distance_y)
         self.pos = x, y
         self.history_positions = deque([self.pos] * self.history_length, maxlen=self.history_length)
         self.history_prev_actions = deque([0] * self.history_length, maxlen=self.history_length)
@@ -356,9 +355,9 @@ class TwoDEnv(gym.Env):
         # self.node2.pos = node2_pos
         self.steps = 0
         self.total_reward = 0
+        self.total_received = 0
         self.total_received1 = 0
         self.total_received2 = 0
-        self.total_received = 0
         self.exploration_reward_system.reset()
         self.pacrefs1 = (PacketReference(), PacketReference(), PacketReference())
         self.pacrefs2 = (PacketReference(), PacketReference(), PacketReference())
@@ -367,7 +366,9 @@ class TwoDEnv(gym.Env):
         self.stage = self.exploration_stage_index
 
         state = self.get_state()
-        return state, {}
+        info = {'total_received': self.total_received,
+                'total_misses': self.total_misses}
+        return state, info
 
     def get_state(self):
         """
@@ -387,7 +388,7 @@ class TwoDEnv(gym.Env):
             self.elapsed_time2 / self.max_steps,
             self.last_packet / 2,
             self.stage / self.reception_stage_index,
-            self.steps,
+            self.steps / self.max_steps,
         ]
 
         # Historical elements
@@ -489,14 +490,22 @@ class TwoDEnv(gym.Env):
         # if self.pos == self.prev_pos:
         #    reward += -0.1  # Small penalty for inaction
         time_scale = max(0.1, 1 - (self.steps / max_exploration_steps))
-        # reward += min(self.exploration_reward_system.get_explore_rewards(
-        #    self.pos) * self.exploration_reward_max * time_scale, self.exploration_reward_max)
+        reward += min(self.exploration_reward_system.get_explore_rewards(
+            self.pos) * self.exploration_reward_max * time_scale, self.exploration_reward_max)
         received1, _, _ = packet1
         received2, _, _ = packet2
         if (received1 == PACKET_STATUS.RECEIVED) and (self.total_received1 <= 1):
             reward += self.packet_reward_min
+        elif received1 == PACKET_STATUS.LOST:
+            penalty_multiplier = min(3, self.elapsed_time1 // self.node_send_interval)
+            reward -= self.miss_penalty_max * penalty_multiplier
+
         if (received2 == PACKET_STATUS.RECEIVED) and (self.total_received2 <= 1):
             reward += self.packet_reward_min
+            pass
+        elif received2 == PACKET_STATUS.LOST:
+            penalty_multiplier = min(3, self.elapsed_time2 // self.node_send_interval)
+            reward -= self.miss_penalty_max * penalty_multiplier
 
         # stage transition
         if (self.total_received1 >= 1) and (self.total_received2 >= 1):
@@ -523,10 +532,10 @@ class TwoDEnv(gym.Env):
         if (received2 == PACKET_STATUS.RECEIVED) and (self.total_received2 < 4):
             reward += self.packet_reward_min
         time_scale = max(0.1, 1 - self.steps / max_localization_stage)
-        if self.total_received1 < 4:
+        if self.total_received1 < 4 and self.last_packet == 2:
             reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1) * time_scale
             # self.get_pos_radius_reward(self.pos, self.pacrefs1, self.elapsed_time1)
-        if self.total_received2 < 4:
+        if self.total_received2 < 4 and self.last_packet == 1:
             reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2) * time_scale
             # reward += self.get_pos_radius_reward(self.pos, self.pacrefs2, self.elapsed_time2)
         # stage transition
@@ -553,22 +562,16 @@ class TwoDEnv(gym.Env):
             if self.last_packet == 2:
                 reward += self.packet_reward_max
         elif received1 == PACKET_STATUS.LOST:
-            miss_penalty = self.get_miss_penalty(self.pos, self.node1.pos)
-            # higher penalty for missing packets from the same node in a row
-            miss_penalty = miss_penalty * 2 if self.last_packet != 1 else miss_penalty
-            miss_penalty *= penalty_time_scale
-            reward += miss_penalty
+            penalty_multiplier = min(3, self.elapsed_time1 // self.node_send_interval)
+            reward -= self.miss_penalty_max * penalty_multiplier
 
         if received2 == PACKET_STATUS.RECEIVED:
             reward += self.packet_reward_max
             if self.last_packet == 1:
                 reward += self.packet_reward_max
         elif received2 == PACKET_STATUS.LOST:
-            miss_penalty = self.get_miss_penalty(self.pos, self.node2.pos)
-            # higher penalty for missing packets from the same node in a row
-            miss_penalty = miss_penalty * 2 if self.last_packet != 2 else miss_penalty
-            miss_penalty *= penalty_time_scale
-            reward += miss_penalty
+            penalty_multiplier = min(3, self.elapsed_time2 // self.node_send_interval)
+            reward -= self.miss_penalty_max * penalty_multiplier
 
         return reward
 
@@ -579,20 +582,27 @@ class TwoDEnv(gym.Env):
         self.steps += 1
 
         if action == 0:  # stand still
-            # nothing
-            pass
+            pass  # No penalty for standing still
         elif action == 1:  # left
             if self.pos[0] > 0:
                 self.pos = (self.pos[0] - 1, self.pos[1])
+            else:
+                reward -= 0.1  # Penalty for invalid move
         elif action == 2:  # right
-            if self.pos[0] < self.max_distance_x:
+            if self.pos[0] < self.max_distance_x - 1:  # arrays using on env has length of max_distance_x, max_distance_y
                 self.pos = (self.pos[0] + 1, self.pos[1])
+            else:
+                reward -= 0.1  # Penalty for invalid move
         elif action == 3:  # up
-            if self.pos[1] < self.max_distance_y:
+            if self.pos[1] < self.max_distance_y - 1:
                 self.pos = (self.pos[0], self.pos[1] + 1)
+            else:
+                reward -= 0.1  # Penalty for invalid move
         elif action == 4:  # down
             if self.pos[1] > 0:
                 self.pos = (self.pos[0], self.pos[1] - 1)
+            else:
+                reward -= 0.1  # Penalty for invalid move
         else:
             print("Invalid action!")
         packet1 = self.node1.send(self.steps, self.pos)
@@ -633,11 +643,17 @@ class TwoDEnv(gym.Env):
         elif self.stage == self.reception_stage_index:
             reward += self.reception_stage(packet1, packet2)
 
-        reward = min(self.packet_reward_max * 2, reward)
-        done = self.steps >= self.max_steps or self.total_misses >= self.max_misses
-        self.total_reward += reward
         state = self.get_state()
+        reward = min(self.packet_reward_max * 2, reward)
+        terminated = self.total_misses >= self.max_misses
+        truncated = self.steps >= self.max_steps
+        info = {'total_received': self.total_received,
+                'total_misses': self.total_misses}
 
+        self.total_reward += reward
+        if self.steps % self.n_skips == 0:
+            self.history_prev_actions.append(action)
+            self.history_positions.append(self.pos)
         debug = False
         if debug:
             print(f"""
@@ -660,12 +676,9 @@ class TwoDEnv(gym.Env):
                 Steps: {self.steps}
             """)
 
-        if self.steps % self._skip == 0:
-            self.history_prev_actions.append(action)
-            self.history_positions.append(self.pos)
-        info = {'total_received': self.total_received,
-                'total_misses': self.total_misses}
-        return state, reward, done, False, info
+
+
+        return state, reward, terminated, truncated, info
 
     def render(self):
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
@@ -741,20 +754,37 @@ class TwoDEnv(gym.Env):
         # Display the frame
         enlarged_image = cv2.resize(frame, (0, 0), fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
 
-        # Add text outside the main environment
-        text_offset_x = 10
-        text_offset_y = enlarged_image.shape[0] + 20  # Start below the enlarged frame
+        # Define stats list first
         stats = [
             f"Total received node1: {self.total_received1}",
             f"Total received node2: {self.total_received2}",
             f"Total misses: {self.total_misses}",
+            f"Total reward: {self.total_reward:.3f}",
             f"Stage: {self.stage}"
         ]
-        for i, text in enumerate(stats):
-            cv2.putText(enlarged_image, text, (text_offset_x, text_offset_y + (i * 20)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-        cv2.imshow(self.window_name, enlarged_image)
+        # Calculate text-related dimensions after defining stats
+        line_height = 25  # Spacing between text lines
+        num_lines = len(stats)  # Get the number of lines based on stats
+        text_height = num_lines * line_height + 20  # Total height reserved for text, with padding
+
+        # Create a canvas larger than the enlarged image to include space for text
+        canvas = np.zeros((enlarged_image.shape[0] + text_height, enlarged_image.shape[1], 3), dtype=np.uint8)
+
+        # Place the enlarged image on the canvas
+        canvas[:enlarged_image.shape[0], :, :] = enlarged_image
+
+        # Add text below the enlarged frame
+        text_offset_x = 10
+        text_offset_y = enlarged_image.shape[0] + 20  # Start below the enlarged image
+
+        for i, text in enumerate(stats):
+            cv2.putText(canvas, text, (text_offset_x, text_offset_y + (i * line_height)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+
+        # Display the canvas instead of the original enlarged image
+        cv2.imshow(self.window_name, canvas)
+
         cv2.waitKey(5)  # Wait a short time to create the animation effect
 
     def close(self):
@@ -876,7 +906,7 @@ class Node:
         # Decides whether a packet should be send and if it gets lost
         # Pobability of success is based of distance
         if time >= self.time_of_next_packet:
-            self.time_of_next_packet = max(time, time + self.generate_next_interval())
+            self.time_of_next_packet = max(time, time + self.send_interval)  #self.generate_next_interval())
             # f"time of next packet: {self.time_of_next_packet}" )
             is_received, rssi, snir = self.transmission(gpos)
             if is_received:

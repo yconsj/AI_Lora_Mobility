@@ -6,16 +6,18 @@ env = FrameSkip(env, skip=30)  # Frame skip for action repeat
 
 episodes = 1
 check_env(env, warn=True)
-
+use_random_action = False
 counter = 0
 for episode in range(episodes):
-    done = False 
+    done = False
     obs = env.reset()
     while not done:
-        
-        random_action = env.action_space.sample()
-        user_action = int(input("number from 0 to 4"))
-        obs, reward, done, truncated, info = env.step(user_action)
+
+        if use_random_action:
+            action = env.action_space.sample()
+        else:
+            action = int(input("number from 0 to 4"))
+        obs, reward, done, truncated, info = env.step(action)
         print(reward)
         if counter % 10 == 0:
             print(obs)
