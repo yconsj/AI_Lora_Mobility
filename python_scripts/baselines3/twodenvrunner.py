@@ -76,7 +76,6 @@ def main():
         env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
         model = PPO("MlpPolicy", env,
                     gamma=0.995,
-                    learning_rate=(10.0 ** -4),
                     ent_coef=0.02,
                     clip_range=0.2,
                     # Larger clip range to promote exploration during updates# Increase entropy coefficient to encourage exploration
@@ -98,7 +97,7 @@ def main():
     # model.policy = model.policy.to(device=th.device(device), dtype=th.float32, non_blocking=True)
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(600000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(800000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
 

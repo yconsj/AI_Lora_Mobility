@@ -100,7 +100,6 @@ class ExplorationRewardSystem:
             position (tuple): (x, y) position of the agent as integers.
         """
         x, y = position
-        # x, y = x - 1, y - 1  # Investigate off-by-one issue if necessary
 
         # Create a meshgrid of coordinates for the grid
         x_coords, y_coords = np.meshgrid(
@@ -305,7 +304,7 @@ class TwoDEnv(gym.Env):
 
         self.last_packet = 0
         self.pos_reward_min = 0.0
-        self.pos_reward_max = 0.005
+        self.pos_reward_max = 0.004
         self.packet_reward_max = 5
         self.packet_reward_min = self.packet_reward_max / 10
         self.miss_penalty_max = self.packet_reward_max / 5
@@ -314,7 +313,7 @@ class TwoDEnv(gym.Env):
         self.exploration_reward_system = \
             ExplorationRewardSystem(grid_size=(self.max_distance_x, self.max_distance_y),
                                     max_transmission_distance=self.max_transmission_distance,
-                                    ploss_scale=self.ploss_scale,
+                                    ploss_scale=self.ploss_scale / 2,
                                     fade_rate=0.0001, tau=self.node_send_interval // 2)
         self.exploration_reward_max = 0.05
 
@@ -489,7 +488,8 @@ class TwoDEnv(gym.Env):
         reward = 0
         # if self.pos == self.prev_pos:
         #    reward += -0.1  # Small penalty for inaction
-        time_scale = max(0.1, 1 - (self.steps / max_exploration_steps))
+        min_time_scale_value = 0.5
+        time_scale = max(min_time_scale_value, (1 - (self.steps / max_exploration_steps)) * min_time_scale_value)
         reward += min(self.exploration_reward_system.get_explore_rewards(
             self.pos) * self.exploration_reward_max * time_scale, self.exploration_reward_max)
         received1, _, _ = packet1
@@ -521,7 +521,7 @@ class TwoDEnv(gym.Env):
         # reward += -0.1  # Small penalty for inaction
 
         # continue giving a small part of exploration reward:
-        explore_scale = 0.1
+        explore_scale = 0.5
         reward += min(self.exploration_reward_system.get_explore_rewards(
             self.pos) * self.exploration_reward_max * explore_scale, self.exploration_reward_max)
 
@@ -529,8 +529,15 @@ class TwoDEnv(gym.Env):
         received2, _, _ = packet2
         if (received1 == PACKET_STATUS.RECEIVED) and (self.total_received1 < 4):
             reward += self.packet_reward_min
+        elif received1 == PACKET_STATUS.LOST:
+            penalty_multiplier = min(3, self.elapsed_time1 // self.node_send_interval)
+            reward -= self.miss_penalty_max * penalty_multiplier
         if (received2 == PACKET_STATUS.RECEIVED) and (self.total_received2 < 4):
             reward += self.packet_reward_min
+        elif received2 == PACKET_STATUS.LOST:
+            penalty_multiplier = min(3, self.elapsed_time2 // self.node_send_interval)
+            reward -= self.miss_penalty_max * penalty_multiplier
+
         time_scale = max(0.1, 1 - self.steps / max_localization_stage)
         if self.total_received1 < 4 and self.last_packet == 2:
             reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1) * time_scale
