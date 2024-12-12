@@ -69,9 +69,9 @@ class TwoDEnv(gym.Env):
         self.pos_reward_min = 0
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
-        self.miss_penalty_max = 2
+        self.miss_penalty_max = 5
         self.miss_penalty_min = 1
-        self.packet_reward_max = 5
+        self.packet_reward_max = 20
         
         speed = 20  # meter per second
         max_distance = 3000 # meter
@@ -85,7 +85,7 @@ class TwoDEnv(gym.Env):
         pos1 = (25, 25)
         pos2 = (self.max_distance_x-25, self.max_distance_y -25)
         self.node1 = node(pos1, time_to_first_packet=150, send_interval=450)
-        self.node2 = node(pos2, time_to_first_packet=300, send_interval=600)
+        self.node2 = node(pos2, time_to_first_packet=300, send_interval=450)
         while True:
             x2 = random.randint(0,150)
             y2 = random.randint(0,150) 
@@ -158,9 +158,9 @@ class TwoDEnv(gym.Env):
         self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
         self.elapsed_time1 = 0
         self.elapsed_time2 = 0
-        state = [ self.prev_action1 / 4, self.prev_action2 / 4,self.prev_action3 / 4,
+        state = [self.prev_action1 / 4, self.prev_action2 / 4,self.prev_action3 / 4,
             self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
-            *self.node1.pos, *self.node2.pos,
+            self.node1.pos[0] / self.max_distance_x, self.node1.pos[1] / self.max_distance_y , self.node2.pos[0] / self.max_distance_x, self.node2.pos[1] / self.max_distance_y,
             self.elapsed_time1 / self.max_steps,
             self.elapsed_time2 / self.max_steps
         ]
@@ -168,8 +168,10 @@ class TwoDEnv(gym.Env):
 
 
     def get_pos_reward(self, pos1, pos2, time):
-        scaled_time = (time / self.max_steps)
+        scaled_time = (time / self.max_steps) * 2
         distance = math.dist(pos1, pos2)
+        if distance > 75:
+            return 0
         scaled_distance = 1- distance / self.max_cross_distance
         scaled_distance_time = scaled_distance * scaled_time
         # Return reward based on scaled distance between a min and max reward
@@ -210,7 +212,7 @@ class TwoDEnv(gym.Env):
         penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
         return -penalty
     def get_explore_reward(self, pos, time):
-        base_reward  = 0.05
+        base_reward  = 0.001
         if pos not in self.visited_pos.keys():
             self.visited_pos[pos] = time
             multiplier = abs(pos[0] - int(self.max_distance_x / 2)) * abs(pos[1] - int(self.max_distance_y / 2)) / (self.max_cross_distance * 2)
@@ -274,9 +276,11 @@ class TwoDEnv(gym.Env):
         p1 = PacketReference(pos= self.pos,rssi= rssi1,snir=snir1)
         p2 = PacketReference(pos= self.pos, rssi=rssi2,snir=snir2)
         if received1 == PACKET_STATUS.RECEIVED:
-            reward = self.packet_reward_max * p1.rssi * (1- (self.elapsed_time1 / self.max_steps))
+            reward = self.packet_reward_max 
             if self.last_packet == 2:
                  reward += self.packet_reward_max
+            reward *= p1.rssi * (1- (self.elapsed_time1 / self.max_steps))
+            reward /= 1 + (self.loss_count2 / 10)
             self.last_packet = 1
             self.total_received += 1
             self.elapsed_time1 = 0
@@ -285,9 +289,12 @@ class TwoDEnv(gym.Env):
             if self.is_new_best_pref(self.prefs1, p1):
                 self.prefs1 = self.insert_best_pref(self.prefs1,p1)
         elif received2 == PACKET_STATUS.RECEIVED:
-            reward = self.packet_reward_max * p2.rssi * (1 - (self.elapsed_time2 / self.max_steps))
+            reward = self.packet_reward_max 
             if self.last_packet == 1:
               reward += self.packet_reward_max
+            reward *= p2.rssi * (1 - (self.elapsed_time2 / self.max_steps))
+            reward /= 1 + (self.loss_count1 / 10)
+
             self.last_packet = 2
             self.total_received += 1
             self.elapsed_time2 = 0
@@ -300,12 +307,12 @@ class TwoDEnv(gym.Env):
             self.total_misses += 1
             if (self.prefs1[0].rssi != -1 or self.prefs1[1].rssi != -1 or self.prefs1[2].rssi != -1) or True:
                 self.loss_count1 += 1
-                reward = self.get_miss_penalty(self.pos, self.node1.pos) #* self.loss_count1
+                reward = self.get_miss_penalty(self.pos, self.node1.pos) * self.loss_count1
         elif received2 == PACKET_STATUS.LOST:
             self.total_misses += 1
             if (self.prefs2[0].rssi != -1 or self.prefs2[1].rssi != -1 or self.prefs2[2].rssi != -1) or True: 
                 self.loss_count2 += 1
-                reward = self.get_miss_penalty(self.pos, self.node2.pos) #* self.loss_count2
+                reward = self.get_miss_penalty(self.pos, self.node2.pos) * self.loss_count2
 
         if self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1:
                 aprox_pos = self.trilateration(self.prefs1, self.initial_guess1)
@@ -321,9 +328,8 @@ class TwoDEnv(gym.Env):
             #reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
                 reward += self.get_pos_reward(self.pos,self.node2.pos, self.elapsed_time2)
 
-        reward+= self.get_explore_reward(self.pos, self.steps)
-        #reward += self.get_explore_reward(self.pos, self.steps)
-        done = self.steps >= self.max_steps or self.total_misses >= 20
+        reward += self.get_explore_reward(self.pos, self.steps)
+        done = self.steps >= self.max_steps or self.total_misses >= 30
         self.total_reward += reward
         state = [self.prev_action1 / 4, self.prev_action2 / 4,self.prev_action3 / 4,
             self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
@@ -441,7 +447,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_radius = 50
+        self.max_transmission_radius = 90
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
