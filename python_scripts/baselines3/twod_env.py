@@ -65,13 +65,13 @@ class TwoDEnv(gym.Env):
         # Environment state
         self.visited_pos = dict()
         self.last_packet = 0
-        self.pos_reward_max = 0.1                       
+        self.pos_reward_max = 0.01                       
         self.pos_reward_min = 0
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
-        self.miss_penalty_max = 5
-        self.miss_penalty_min = 1
-        self.packet_reward_max = 20
+        self.miss_penalty_max = 10
+        self.miss_penalty_min = 5
+        self.packet_reward_max = 10
         
         speed = 20  # meter per second
         max_distance = 3000 # meter
@@ -170,15 +170,16 @@ class TwoDEnv(gym.Env):
     def get_pos_reward(self, pos1, pos2, time):
         scaled_time = (time / self.max_steps) * 2
         distance = math.dist(pos1, pos2)
-        if distance > 75:
-            return 0
-        scaled_distance = 1- distance / self.max_cross_distance
-        scaled_distance_time = scaled_distance * scaled_time
+        scaled_distance = distance / self.max_cross_distance
+        scaled_distance_time = scaled_distance # * scaled_time
         # Return reward based on scaled distance between a min and max reward
-        reward = self.pos_reward_max - scaled_distance_time * (self.pos_reward_max - self.pos_reward_min)
+        reward = self.pos_reward_max - (scaled_distance_time * (self.pos_reward_max - self.pos_reward_min))
 
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
+
+        if distance < 30:
+            reward+= reward
         return reward
     
     def is_new_best_pref(self, pref, p):
@@ -279,8 +280,8 @@ class TwoDEnv(gym.Env):
             reward = self.packet_reward_max 
             if self.last_packet == 2:
                  reward += self.packet_reward_max
-            reward *= p1.rssi * (1- (self.elapsed_time1 / self.max_steps))
-            reward /= 1 + (self.loss_count2 / 10)
+            #reward *= p1.rssi * (1- (self.elapsed_time1 / self.max_steps))
+            #reward /= 1 + (self.loss_count2 / 10)
             self.last_packet = 1
             self.total_received += 1
             self.elapsed_time1 = 0
@@ -292,8 +293,8 @@ class TwoDEnv(gym.Env):
             reward = self.packet_reward_max 
             if self.last_packet == 1:
               reward += self.packet_reward_max
-            reward *= p2.rssi * (1 - (self.elapsed_time2 / self.max_steps))
-            reward /= 1 + (self.loss_count1 / 10)
+            #reward *= p2.rssi * (1 - (self.elapsed_time2 / self.max_steps))
+            #reward /= 1 + (self.loss_count1 / 10)
 
             self.last_packet = 2
             self.total_received += 1
@@ -307,12 +308,12 @@ class TwoDEnv(gym.Env):
             self.total_misses += 1
             if (self.prefs1[0].rssi != -1 or self.prefs1[1].rssi != -1 or self.prefs1[2].rssi != -1) or True:
                 self.loss_count1 += 1
-                reward = self.get_miss_penalty(self.pos, self.node1.pos) * self.loss_count1
+                reward = self.get_miss_penalty(self.pos, self.node1.pos) #* self.loss_count1
         elif received2 == PACKET_STATUS.LOST:
             self.total_misses += 1
             if (self.prefs2[0].rssi != -1 or self.prefs2[1].rssi != -1 or self.prefs2[2].rssi != -1) or True: 
                 self.loss_count2 += 1
-                reward = self.get_miss_penalty(self.pos, self.node2.pos) * self.loss_count2
+                reward = self.get_miss_penalty(self.pos, self.node2.pos) #* self.loss_count2
 
         if self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1:
                 aprox_pos = self.trilateration(self.prefs1, self.initial_guess1)
@@ -321,10 +322,10 @@ class TwoDEnv(gym.Env):
                 aprox_pos = self.trilateration(self.prefs2, self.initial_guess2)
                 self.initial_guess2 = aprox_pos
                 
-        if self.elapsed_time1 > self.elapsed_time2:# and (self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1): 
+        if self.node1.time_of_next_packet < self.node2.time_of_next_packet: # and (self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1): 
             #reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
                 reward += self.get_pos_reward(self.pos,self.node1.pos, self.elapsed_time1)
-        elif self.elapsed_time1 <= self.elapsed_time2:# and (self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1):
+        elif self.node1.time_of_next_packet > self.node2.time_of_next_packet:# and (self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1):
             #reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
                 reward += self.get_pos_reward(self.pos,self.node2.pos, self.elapsed_time2)
 
@@ -447,7 +448,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_radius = 90
+        self.max_transmission_radius = 60
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
