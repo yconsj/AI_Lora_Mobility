@@ -32,6 +32,15 @@ class FrameSkip(gym.Wrapper):
         return obs, total_reward, done, trunc, info
 
 
+def jains_fairness_index(delivery_rates):
+    n = len(delivery_rates)
+    temp = sum([(x ** 2) for x in delivery_rates])
+    if temp == 0:
+        return 0.0
+    jains_index = sum(delivery_rates) ** 2 / (n * temp)
+    return jains_index
+
+
 def _generate_color_frame(grid):
     """Generate the color frame from the reception grid."""
     # Vectorized intensity calculation
@@ -62,7 +71,6 @@ class TwoDEnv(gym.Env):
 
         # Environment state
         self.visited_pos = dict()
-        self.last_packet = 0
         self.pos_reward_max = 0.05
         self.pos_reward_min = 0.0
         self.pos_penalty_max = 3
@@ -70,6 +78,7 @@ class TwoDEnv(gym.Env):
         self.miss_penalty_max = 5.0
         self.miss_penalty_min = 2.0
         self.packet_reward_max = 10
+        self.fairness_reward = 0.5
 
         speed = 20  # meter per second
         max_distance = 3000  # meter
@@ -119,6 +128,8 @@ class TwoDEnv(gym.Env):
         self.total_reward = 0
         self.total_misses = 0
         self.total_received = 0
+        self.received_per_node = [0] * len(self.nodes)
+        self.misses_per_node = [0] * len(self.nodes)
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.loss_count1 = 0
         self.loss_count2 = 0
@@ -175,7 +186,6 @@ class TwoDEnv(gym.Env):
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.prev_pos = self.pos
         self.visited_pos = dict()
-        self.last_packet = 0
         self.total_misses = 0
         self.pos = (random.randint(0, 150), random.randint(0, 150))
 
@@ -183,6 +193,8 @@ class TwoDEnv(gym.Env):
             self.nodes[i].reset()
             self.elapsed_times[i] = 0
             self.loss_counts[i] = 0
+            self.received_per_node[i] = 0
+            self.misses_per_node[i] = 0
         self.steps = 0
         self.total_reward = 0
         self.total_received = 0
@@ -230,7 +242,7 @@ class TwoDEnv(gym.Env):
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
 
         if distance < 30:
-            reward+= reward
+            reward += reward
         return reward
 
     def get_miss_penalty(self, pos1, pos2):
@@ -279,6 +291,12 @@ class TwoDEnv(gym.Env):
             if self.pos[1] > 0:
                 self.pos = (self.pos[0], self.pos[1] - 1)
 
+        delivery_rates = [
+            0 if (self.received_per_node[i] + self.misses_per_node[i]) == 0 else
+            self.received_per_node[i] / (self.received_per_node[i] + self.misses_per_node[i])
+            for i in range(len(self.nodes))
+        ]
+        fairness_prior = jains_fairness_index(delivery_rates)
         for i in range(len(self.nodes)):
             received, rssi, snir = self.nodes[i].send(self.steps, self.pos)
             self.elapsed_times[i] = min(self.max_steps, self.elapsed_times[i] + 1)
@@ -288,13 +306,14 @@ class TwoDEnv(gym.Env):
                     reward += self.packet_reward_max
                 # reward *= p1.rssi * (1- (self.elapsed_times[i] / self.max_steps))
                 # reward /= 1 + (self.loss_count2 / 10)
-                self.last_packet = 1
                 self.total_received += 1
+                self.received_per_node[i] += 1
                 self.elapsed_times[i] = 0
                 self.loss_counts[i] = 0
                 self.last_packet_index = i
             if received == PACKET_STATUS.LOST:
                 self.total_misses += 1
+                self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
                 reward += self.get_miss_penalty(self.pos, self.nodes[i].pos) * self.loss_counts[i]
 
@@ -304,6 +323,15 @@ class TwoDEnv(gym.Env):
                     is_next_to_send = False
             if is_next_to_send:
                 reward += self.get_pos_reward(self.pos, self.nodes[i].pos, self.elapsed_times[i])
+        delivery_rates = [
+            0 if (self.received_per_node[i] + self.misses_per_node[i]) == 0 else
+            self.received_per_node[i] / (self.received_per_node[i] + self.misses_per_node[i])
+            for i in range(len(self.nodes))
+        ]
+        fairness_after = jains_fairness_index(delivery_rates)
+        #print(f"{self.received_per_node = }\n{self.misses_per_node = }\n{delivery_rates = }\n{fairness = }")
+        fairness_diff = max(0.0, fairness_after - fairness_prior)
+        reward += fairness_diff * self.fairness_reward
 
         # reward += self.get_explore_reward(self.pos, self.steps)
         done = self.steps >= self.max_steps or self.total_misses >= 30
@@ -313,7 +341,8 @@ class TwoDEnv(gym.Env):
         if self.steps % self.timeskip == 0:
             self.prev_actions.append(action)
         info = {'total_received': self.total_received,
-                'total_misses': self.total_misses}
+                'total_misses': self.total_misses,
+                'fairness': fairness_after}
         return np.array(state, dtype=np.float32), reward, done, False, info
 
     def render(self):
@@ -338,8 +367,8 @@ class TwoDEnv(gym.Env):
         # Create a new frame (background) and place the padded color frame into it
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
         frame[
-            :padded_color_frame.shape[0],
-            :padded_color_frame.shape[1]
+        :padded_color_frame.shape[0],
+        :padded_color_frame.shape[1]
         ] = \
             padded_color_frame[
             :self.height,

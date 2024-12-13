@@ -38,9 +38,15 @@ class TensorboardCallback(BaseCallback):
         dones = self.locals["dones"]
         for i, done in enumerate(dones):
             if done:
+                fairness = infos[i].get('fairness', 0)
                 total_received_values = infos[i].get("total_received", 0)
                 total_misses_values = infos[i].get('total_misses', 0)
-                packet_delivery_rate = total_received_values / (total_received_values + total_misses_values)
+                packets_sent = (total_received_values + total_misses_values)
+                if packets_sent == 0:
+                    packet_delivery_rate = 0
+                else:
+                    packet_delivery_rate = total_received_values / packets_sent
+                self.logger.record("custom_logs/fairness", fairness)
                 self.logger.record("custom_logs/total_received", total_received_values)
                 self.logger.record("custom_logs/total_misses", total_misses_values)
                 self.logger.record("custom_logs/delivery_rate", packet_delivery_rate)
