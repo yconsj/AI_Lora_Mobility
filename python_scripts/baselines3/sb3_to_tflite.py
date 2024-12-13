@@ -1,13 +1,12 @@
 import os
-import subprocess
 
 import torch
 import tensorflow as tf
-from stable_baselines3 import PPO, SAC
+from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 
 # Define a PyTorch-to-TensorFlow compatible policy
-from baselines3.simple_env import SimpleBaseEnv
+from baselines3.basecase.simple_env import SimpleBaseEnv
 
 # Define a TensorFlow model that matches the PPO structure
 from tf_exporter import rewrite_policy_net_header
@@ -152,20 +151,6 @@ def tf_to_tflite(tf_model, export_path):
 
 def sb3_to_tflite_pipeline(relative_model_path):
     model = PPO.load(relative_model_path, print_system_info=True)
-    env = make_vec_env(SimpleBaseEnv, n_envs=1, env_kwargs=dict())
-
-    tf_model = sb3_to_tensorflow(model, env)
-
-    config = load_config("config.json")
-    gen_model = config['model_path']
-    export_model_path = gen_model
-    tf_to_tflite(tf_model, export_model_path)
-
-
-if __name__ == '__main__':
-    # model = PPO.load("stable-model.zip")
-    model = PPO.load("stable-model-best/best_model", print_system_info=True)
-
     env = make_vec_env(SimpleBaseEnv, n_envs=1, env_kwargs=dict())
 
     tf_model = sb3_to_tensorflow(model, env)
