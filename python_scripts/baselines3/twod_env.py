@@ -1,5 +1,6 @@
 import math
 import random
+from collections import deque
 from enum import Enum
 
 import cv2
@@ -9,6 +10,7 @@ from gymnasium import spaces
 from scipy.stats import truncnorm
 
 
+# TODO: add fairness reward, based on similar Packet-delivery-rate between each node.
 # Define a custom FrameSkip wrapper
 class FrameSkip(gym.Wrapper):
     def __init__(self, env, skip):
@@ -31,26 +33,26 @@ class FrameSkip(gym.Wrapper):
 
 
 class TwoDEnv(gym.Env):
-    def __init__(self, render_mode="none", timeskip=1):
+    def __init__(self, render_mode="none", timeskip=1, action_history_length=3):
         super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
         self.action_space = spaces.Discrete(5, start=0)
         self.timeskip = timeskip
-        self.timeskip_counter = 0
+        self.action_history_length = action_history_length
         # The observation space is a single value (our current "position")
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
         self.max_steps = 20000  # Maximum steps per episode
         # Observation_space = 
-        #                     prev_actin (x,y),             3
-        #                     (x1,x2), rssi, snir * 3       12
-        #                     (x1,x2), rssi, snir * 3       12
-        #                     elapsed_time1, elapsed_time2  2
-        #                                                   28
+        #                     prev_action (gw.x, gw.y),    |3
+        #                     (x1,x2)             * 3      |12
+        #                     (x1,x2), rssi, snir * 3      |12
+        #                     elapsed_time1, elapsed_time2 |2
+        #                                                  |28
         self.observation_space = spaces.Box(low=np.array(
-            [0] * (3 + 2 + (4 * 2) + 4)), high=np.array(
+            [0] * (action_history_length + 2 + (4 * 2) + 4)), high=np.array(
             [1] * (3 + 2 + (4 * 2) + 4)), dtype=np.float32)
         # Environment state
         self.visited_pos = dict()
@@ -72,17 +74,17 @@ class TwoDEnv(gym.Env):
         self.prev_pos = self.pos
         self.target = 5  # The target value we want to reach
         self.steps = 0
-        self.ploss_scale = 300 # adjusts the dropoff of transmission probability by distance
+        self.ploss_scale = 300  # adjusts the dropoff of transmission probability by distance
 
         pos1 = (25, 25)
         pos2 = (self.max_distance_x - 25, self.max_distance_y - 25)
         pos3 = (25, self.max_distance_y - 25)
         pos4 = (self.max_distance_x - 25, 25)
         transmission_model1 = TransmissionModel(max_transmission_distance=50,
-                                               ploss_scale=self.ploss_scale)
+                                                ploss_scale=self.ploss_scale)
         self.node1 = Node(pos1, transmission_model1, time_to_first_packet=75, send_interval=450)
         transmission_model2 = TransmissionModel(max_transmission_distance=50,
-                                               ploss_scale=self.ploss_scale)
+                                                ploss_scale=self.ploss_scale)
         self.node2 = Node(pos2, transmission_model2, time_to_first_packet=150, send_interval=450)
         transmission_model3 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
@@ -113,9 +115,7 @@ class TwoDEnv(gym.Env):
         self.point_radius = 1
         self.point_color = (0, 0, 255)  # Red color
         self.line_color = (255, 0, 0)  # Blue color
-        self.prev_action1 = 0
-        self.prev_action2 = 0
-        self.prev_action3 = 0
+        self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.loss_count1 = 0
         self.loss_count2 = 0
 
@@ -127,10 +127,7 @@ class TwoDEnv(gym.Env):
         # Reset the.pos and steps counter
         self.loss_count1 = 0
         self.loss_count2 = 0
-        self.timeskip_counter = 0
-        self.prev_action1 = 0
-        self.prev_action2 = 0
-        self.prev_action3 = 0
+        self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.prev_pos = self.pos
         self.visited_pos = dict()
         self.last_packet = 0
@@ -145,16 +142,24 @@ class TwoDEnv(gym.Env):
         self.total_reward = 0
         self.total_received = 0
 
-        state = [self.prev_action1 / 4, self.prev_action2 / 4, self.prev_action3 / 4,
-                 self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
-                 self.node1.pos[0] / self.max_distance_x, self.node1.pos[1] / self.max_distance_y,
-                 self.node2.pos[0] / self.max_distance_x, self.node2.pos[1] / self.max_distance_y,
-                 self.node3.pos[0] / self.max_distance_x, self.node3.pos[1] / self.max_distance_y,
-                 self.node4.pos[0] / self.max_distance_x, self.node4.pos[1] / self.max_distance_y,
-                 self.elapsed_times[0] / self.max_steps, self.elapsed_times[1] / self.max_steps,
-                 self.elapsed_times[1] / self.max_steps, self.elapsed_times[3] / self.max_steps,
-                 ]
+        state = self.get_state()
         return np.array(state, dtype=np.float32), {}
+
+    def get_state(self):
+        normalized_actions = [action / 4 for action in self.prev_actions]
+        normalized_node_positions = [
+            position
+            for node in self.nodes
+            for position in (node.pos[0] / self.max_distance_x, node.pos[1] / self.max_distance_y)
+        ]
+
+        normalized_elapsed_times = [elapsed_time / self.max_steps for elapsed_time in self.elapsed_times]
+        state = [*normalized_actions,
+                 self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
+                 *normalized_node_positions,
+                 *normalized_elapsed_times
+                 ]
+        return state
 
     def get_pos_reward(self, pos1, pos2, time):
         scaled_time = (time / self.max_steps) * 2
@@ -233,101 +238,80 @@ class TwoDEnv(gym.Env):
                 self.loss_counts[i] += 1
                 reward += self.get_miss_penalty(self.pos, self.nodes[i].pos) * self.loss_counts[i]
 
-            b = True
+            is_next_to_send = True
             for node in self.nodes:
                 if self.nodes[i].time_of_next_packet > node.time_of_next_packet:
-                    b = False
-            if b:
+                    is_next_to_send = False
+            if is_next_to_send:
                 reward += self.get_pos_reward(self.pos, self.nodes[i].pos, self.elapsed_times[i])
 
         # reward += self.get_explore_reward(self.pos, self.steps)
         done = self.steps >= self.max_steps or self.total_misses >= 30
         self.total_reward += reward
-        state = [self.prev_action1 / 4, self.prev_action2 / 4, self.prev_action3 / 4,
-                 self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
-                 self.node1.pos[0] / self.max_distance_x, self.node1.pos[1] / self.max_distance_y,
-                 self.node2.pos[0] / self.max_distance_x, self.node2.pos[1] / self.max_distance_y,
-                 self.node3.pos[0] / self.max_distance_x, self.node3.pos[1] / self.max_distance_y,
-                 self.node4.pos[0] / self.max_distance_x, self.node4.pos[1] / self.max_distance_y,
-                 self.elapsed_times[0] / self.max_steps, self.elapsed_times[1] / self.max_steps,
-                 self.elapsed_times[1] / self.max_steps, self.elapsed_times[3] / self.max_steps,
-                 ]
-        if self.timeskip_counter == 0:
-            self.prev_action3 = self.prev_action2
-            self.prev_action2 = self.prev_action1
-            self.prev_action1 = action
-        self.timeskip_counter = (self.timeskip_counter + 1) % self.timeskip
+        state = self.get_state()
+
+        if self.steps % self.timeskip == 0:
+            self.prev_actions.append(action)
         info = {'total_received': self.total_received,
                 'total_misses': self.total_misses}
         return np.array(state, dtype=np.float32), reward, done, False, info
 
     def render(self):
-
         # Map the position [0, 1] to the x-coordinate along the line [50, 550]
         x = int(self.pos[0])
         y = int(self.pos[1])
+
         # Create a new black image
         offset_x = int((self.width - self.max_distance_x) / 2)
         offset_y = int((self.height - self.max_distance_y) / 2)
 
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
-        # Draw the line and moving point
-        cv2.line(frame, pt1=(offset_x, offset_y + int(self.max_distance_y / 2)),
-                 pt2=(offset_x + self.max_distance_x, offset_y + int(self.max_distance_y / 2)), color=self.line_color)
-        cv2.line(frame, pt1=(offset_x + int(self.max_distance_x / 2), offset_y),
-                 pt2=(offset_x + int(self.max_distance_x / 2), self.max_distance_y + offset_y), color=self.line_color)
+        # Draw the moving point
         cv2.rectangle(frame, pt1=(offset_x + x - 2, offset_y + y - 2), pt2=(offset_x + x + 2, offset_y + y + 2),
                       color=self.point_color)
 
-        # Draw nodes
+        # Draw nodes and their transmission circles
         for node in self.nodes:
             cv2.rectangle(frame, pt1=(offset_x + node.pos[0] - 1, offset_y + node.pos[1] - 1),
                           pt2=(offset_x + node.pos[0] + 1, offset_y + node.pos[1] + 1), color=self.point_color)
-            # Draw the maximum transmission distance circle
-            cv2.circle(
-                frame,  # img: the image to draw on
-                center=(offset_x + node.pos[0], offset_y + node.pos[1]),  # center: the circle's center
-                radius=int(node.transmission_model.max_transmission_distance),  # radius: max transmission distance
-                color=(255, 0, 0),  # color: blue (B, G, R)
-                thickness=1  # thickness: 1 for outline
-            )
-        # cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
-        # cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
+            cv2.circle(frame, center=(offset_x + node.pos[0], offset_y + node.pos[1]),
+                       radius=int(node.transmission_model.max_transmission_distance), color=(255, 0, 0), thickness=1)
 
-
-
-        # Display the frame
+        # Resize frame for better visualization
         enlarged_image = cv2.resize(frame, (0, 0), fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
 
-        # Define stats list first
+        # Define stats list
         stats = [
             f"Total received node: {self.total_received}",
             f"Total misses: {self.total_misses}",
             f"Total reward: {self.total_reward:.3f}",
         ]
 
-        # Calculate text-related dimensions after defining stats
+        # Calculate text-related dimensions
         line_height = 25  # Spacing between text lines
-        num_lines = len(stats)  # Get the number of lines based on stats
-        text_height = num_lines * line_height + 20  # Total height reserved for text, with padding
+        num_lines = len(stats)
+        text_height = num_lines * line_height + 20  # Padding for text
 
-        # Create a canvas larger than the enlarged image to include space for text
+        # Create a canvas larger than the image to include space for stats
         canvas = np.zeros((enlarged_image.shape[0] + text_height, enlarged_image.shape[1], 3), dtype=np.uint8)
 
         # Place the enlarged image on the canvas
         canvas[:enlarged_image.shape[0], :, :] = enlarged_image
 
-        # Add text below the enlarged frame
+        # Add stats below the image
         text_offset_x = 10
-        text_offset_y = enlarged_image.shape[0] + 20  # Start below the enlarged image
-
+        text_offset_y = enlarged_image.shape[0] + 20
         for i, text in enumerate(stats):
             cv2.putText(canvas, text, (text_offset_x, text_offset_y + (i * line_height)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
 
-        cv2.imshow(self.window_name, enlarged_image)
-        cv2.waitKey(5)  # Wait a short time to create the animation effect
+        # Enable resizable window and update the content dynamically
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)  # Make the window resizable
+        cv2.imshow(self.window_name, canvas)
+
+        # Wait for resizing to reflect (fullscreen updates dynamically)
+        cv2.waitKey(5)
 
     def close(self):
         cv2.destroyAllWindows()
