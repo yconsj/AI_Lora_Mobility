@@ -32,6 +32,20 @@ class FrameSkip(gym.Wrapper):
         return obs, total_reward, done, trunc, info
 
 
+def _generate_color_frame(grid):
+    """Generate the color frame from the reception grid."""
+    # Vectorized intensity calculation
+    green = np.clip(grid * 255, 0, 255).astype(np.uint8)  # Green intensity
+    red = np.clip((1 - grid) * 255, 0, 255).astype(np.uint8)  # Red intensity
+
+    # Create the color frame using stacking (0 for blue, green and red as calculated)
+    color_frame = np.dstack((np.zeros_like(red), green, red))
+
+    # Transpose rows/columns for correct orientation
+    color_frame = color_frame.transpose((1, 0, 2))  # Swap axes (height <-> width)
+    return color_frame
+
+
 class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none", timeskip=1, action_history_length=3):
         super(TwoDEnv, self).__init__()
@@ -111,17 +125,40 @@ class TwoDEnv(gym.Env):
         self.total_reward = 0
         self.total_misses = 0
         self.total_received = 0
-        self.width, self.height = 175, 175  # Size of the window
-        self.point_radius = 1
-        self.point_color = (0, 0, 255)  # Red color
-        self.line_color = (255, 0, 0)  # Blue color
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.loss_count1 = 0
         self.loss_count2 = 0
 
-        if render_mode == "cv2":
-            self.window_name = "RL Animation"
-            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        # rendering attributes
+        self.width, self.height = 175, 175  # Size of the window
+        self.offset_x = int((self.width - self.max_distance_x) / 2)
+        self.offset_y = int((self.height - self.max_distance_y) / 2)
+        self.point_radius = 1
+        self.point_color = (255, 255, 255)  # Red color
+        self.line_color = (255, 0, 0)  # Blue color
+
+        self.window_name = None
+        self.reception_grid = None
+        self.background_frame = None
+
+    def _compute_reception_grid(self):
+        """ Compute the reception grid based on node positions and transmission range. """
+        grid = np.zeros((self.max_distance_y, self.max_distance_x), dtype=np.float32)
+
+        for y in range(self.max_distance_y):
+            for x in range(self.max_distance_x):
+                reception = 0.0
+                for node in self.nodes:
+                    # Calculate distance to the node
+                    distance = np.sqrt((x - node.pos[0]) ** 2 + (y - node.pos[1]) ** 2)
+                    if distance <= node.transmission_model.max_transmission_distance:
+                        # Reception is a function of distance
+                        reception += (1 - distance / node.transmission_model.max_transmission_distance)
+
+                # Normalize to between 0 and 1
+                grid[y, x] = min(reception, 1.0)
+
+        return grid
 
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
@@ -141,6 +178,13 @@ class TwoDEnv(gym.Env):
         self.steps = 0
         self.total_reward = 0
         self.total_received = 0
+
+        if self.render_mode == "cv2":
+            self.window_name = "RL Animation"
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+            # Precompute the reception-based background
+            self.reception_grid = self._compute_reception_grid()
+            self.background_frame = _generate_color_frame(self.reception_grid)
 
         state = self.get_state()
         return np.array(state, dtype=np.float32), {}
@@ -257,25 +301,46 @@ class TwoDEnv(gym.Env):
         return np.array(state, dtype=np.float32), reward, done, False, info
 
     def render(self):
-        # Map the position [0, 1] to the x-coordinate along the line [50, 550]
+        """Render the environment with reception-based background and dynamic elements."""
         x = int(self.pos[0])
         y = int(self.pos[1])
 
-        # Create a new black image
-        offset_x = int((self.width - self.max_distance_x) / 2)
-        offset_y = int((self.height - self.max_distance_y) / 2)
+        # Create the color frame (background frame)
+        color_frame = self.background_frame.copy()
 
+        # Calculate padding for top, left, bottom, and right
+        pad_top, pad_left = self.offset_y, self.offset_x
+        pad_bottom, pad_right = pad_top // 2, pad_left // 2
+
+        # Add padding to the color frame using np.pad
+        padded_color_frame = np.pad(
+            self.background_frame,
+            ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
+            mode='constant', constant_values=0
+        )
+
+        # Create a new frame (background) and place the padded color frame into it
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+        frame[
+            :padded_color_frame.shape[0],
+            :padded_color_frame.shape[1]
+        ] = \
+            padded_color_frame[
+            :self.height,
+            :self.width
+            ]
 
         # Draw the moving point
-        cv2.rectangle(frame, pt1=(offset_x + x - 2, offset_y + y - 2), pt2=(offset_x + x + 2, offset_y + y + 2),
+        cv2.rectangle(frame, pt1=(self.offset_x + x - 2, self.offset_y + y - 2),
+                      pt2=(self.offset_x + x + 2, self.offset_y + y + 2),
                       color=self.point_color)
 
         # Draw nodes and their transmission circles
         for node in self.nodes:
-            cv2.rectangle(frame, pt1=(offset_x + node.pos[0] - 1, offset_y + node.pos[1] - 1),
-                          pt2=(offset_x + node.pos[0] + 1, offset_y + node.pos[1] + 1), color=self.point_color)
-            cv2.circle(frame, center=(offset_x + node.pos[0], offset_y + node.pos[1]),
+            cv2.rectangle(frame, pt1=(self.offset_x + node.pos[0] - 1, self.offset_y + node.pos[1] - 1),
+                          pt2=(self.offset_x + node.pos[0] + 1, self.offset_y + node.pos[1] + 1),
+                          color=self.point_color)
+            cv2.circle(frame, center=(self.offset_x + node.pos[0], self.offset_y + node.pos[1]),
                        radius=int(node.transmission_model.max_transmission_distance), color=(255, 0, 0), thickness=1)
 
         # Resize frame for better visualization
@@ -331,12 +396,16 @@ class TransmissionModel:
         self.snir_min = snir_min
         self.snir_max = snir_max
 
+    def get_reception_prob(self, distance):
+        # P(Reception) = probability of receiving packet.
+        # Probability of receiving packet decreases with distance
+        if distance > self.max_transmission_distance:
+            return 0.0
+        return np.exp(- distance / self.ploss_scale)
+
     def is_transmission_success(self, distance):
-        if distance < self.max_transmission_distance:
-            ploss_probability = np.exp(- distance / self.ploss_scale)
-            ploss_choice = np.random.rand() < ploss_probability
-            return ploss_choice
-        return False
+        preceive_choice = self.get_reception_prob(distance) > np.random.rand()
+        return preceive_choice
 
     def generate_rssi(self, distance):
         if distance < 0:
@@ -391,7 +460,6 @@ class Node:
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_radius = 50
         self.transmission_model = transmission_model
 
     def reset(self):
