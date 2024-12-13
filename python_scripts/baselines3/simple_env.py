@@ -1,3 +1,5 @@
+import json
+
 from stable_baselines3 import A2C, PPO
 from stable_baselines3.common.callbacks import BaseCallback
 import numpy as np
@@ -29,7 +31,7 @@ class FrameSkip(gym.Wrapper):
 
 
 class SimpleBaseEnv(gym.Env):
-    def __init__(self, render_mode="none"):
+    def __init__(self, render_mode="none", do_logging=False, log_file="env_log.json"):
         super(SimpleBaseEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
@@ -38,7 +40,7 @@ class SimpleBaseEnv(gym.Env):
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
-        self.max_steps = 10000  # Maximum steps per episode
+        self.max_steps = (60 * 60 * 12.0)  # Maximum steps per episode
         # Observation_space = pos, current_pos1, current_pos2, pos1, rssi1, snir1, timestamp1, pos2,rssi2, snir2, timestamp2
         # Pos is the position when packet was received, timestamp is the time SINCE packet received
         self.observation_space = spaces.Box(low=np.array([0, -1, -1, 0, 0]), high=np.array([1, 1, 1, 1, 1]),
@@ -63,8 +65,8 @@ class SimpleBaseEnv(gym.Env):
         self.steps = 0
         pos1 = 0
         pos2 = self.max_distance
-        self.node1 = node(pos1, time_to_first_packet=50, send_interval=300)
-        self.node2 = node(pos2, time_to_first_packet=125, send_interval=300)
+        self.node1 = node(pos1, time_to_first_packet=5000, send_interval=5000)
+        self.node2 = node(pos2, time_to_first_packet=7500, send_interval=5000)
         self.p_received1 = pos1
         self.p_received2 = pos2
 
@@ -86,6 +88,10 @@ class SimpleBaseEnv(gym.Env):
         self.point_radius = 1
         self.point_color = (0, 0, 255)  # Red color
         self.line_color = (255, 0, 0)  # Blue color
+
+        self.do_logging = do_logging
+        self.log_file = log_file
+        self.log_data = []  # Store logs before writing to the file
 
         if render_mode == "cv2":
             self.window_name = "RL Animation"
@@ -231,6 +237,22 @@ class SimpleBaseEnv(gym.Env):
                  self.timestamp2 / self.max_steps]
         info = {'total_received': self.total_received,
                 'total_misses': self.total_misses}
+
+        # Add logging for each step
+        if self.do_logging:
+            transmission_occurred = self.received1 == PACKET_STATUS.RECEIVED or \
+                                    self.received1 == PACKET_STATUS.LOST or \
+                                    self.received2 == PACKET_STATUS.RECEIVED or \
+                                    self.received2 == PACKET_STATUS.LOST
+
+            self.log_step(gw_pos_x=self.pos, step_time=self.steps, packets_received=self.total_received,
+                          packets_sent=self.total_received + self.total_misses,
+                          transmission_occurred=transmission_occurred)
+            if done:
+                # Write to the JSON file at the end of simulation.
+                with open(self.log_file, 'w') as file:
+                    json.dump(self.log_data, file, indent=4)
+
         return np.array(state, dtype=np.float32), reward, done, False, info
 
     def render(self):
@@ -273,9 +295,21 @@ class SimpleBaseEnv(gym.Env):
         cv2.imshow(self.window_name, enlarged_image)
         cv2.waitKey(5)  # Wait a short time to create the animation effect
 
+    def log_step(self, gw_pos_x, step_time, packets_received, packets_sent, transmission_occurred):
+        """
+        Logs a single step's data into the log buffer.
+        """
+        log_entry = {
+            "gw_pos_x": gw_pos_x,
+            "step_time": step_time,
+            "packets_received": packets_received,
+            "packets_sent": packets_sent,
+            "transmission_occurred": transmission_occurred
+        }
+        self.log_data.append(log_entry)
+
     def close(self):
         cv2.destroyAllWindows()
-
 
 class SignalModel:
     def __init__(self, rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
@@ -315,7 +349,7 @@ class PACKET_STATUS(Enum):
     NOT_SENT = 3
 
 
-class node():
+class node:
     def __init__(self, pos=10, time_to_first_packet=10, send_interval=10, send_std=2):
         self.pos = pos
         self.last_packet_time = 0
