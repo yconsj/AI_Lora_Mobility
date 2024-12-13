@@ -59,15 +59,7 @@ class TwoDEnv(gym.Env):
         # Environment.pos
         self.steps = 0
         self.max_steps = 20000  # Maximum steps per episode
-        # Observation_space = 
-        #                     prev_action (gw.x, gw.y),    |3
-        #                     (x1,x2)             * 3      |12
-        #                     (x1,x2), rssi, snir * 3      |12
-        #                     elapsed_time1, elapsed_time2 |2
-        #                                                  |28
-        self.observation_space = spaces.Box(low=np.array(
-            [0] * (action_history_length + 2 + (4 * 2) + 4)), high=np.array(
-            [1] * (3 + 2 + (4 * 2) + 4)), dtype=np.float32)
+
         # Environment state
         self.visited_pos = dict()
         self.last_packet = 0
@@ -94,18 +86,19 @@ class TwoDEnv(gym.Env):
         pos2 = (self.max_distance_x - 25, self.max_distance_y - 25)
         pos3 = (25, self.max_distance_y - 25)
         pos4 = (self.max_distance_x - 25, 25)
+        self.send_intervals = [450, 450, 450, 450]
         transmission_model1 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node1 = Node(pos1, transmission_model1, time_to_first_packet=75, send_interval=450)
+        self.node1 = Node(pos1, transmission_model1, time_to_first_packet=75, send_interval=self.send_intervals[0])
         transmission_model2 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node2 = Node(pos2, transmission_model2, time_to_first_packet=150, send_interval=450)
+        self.node2 = Node(pos2, transmission_model2, time_to_first_packet=150, send_interval=self.send_intervals[1])
         transmission_model3 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node3 = Node(pos3, transmission_model3, time_to_first_packet=225, send_interval=450)
+        self.node3 = Node(pos3, transmission_model3, time_to_first_packet=225, send_interval=self.send_intervals[2])
         transmission_model4 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node4 = Node(pos4, transmission_model4, time_to_first_packet=300, send_interval=450)
+        self.node4 = Node(pos4, transmission_model4, time_to_first_packet=300, send_interval=self.send_intervals[3])
         self.nodes = [self.node1, self.node2, self.node3, self.node4]
         # while True:
         #     x2 = random.randint(0,150)
@@ -129,6 +122,19 @@ class TwoDEnv(gym.Env):
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.loss_count1 = 0
         self.loss_count2 = 0
+
+        # Observation_space =
+        #                     prev_actions (gw.x, gw.y),   |k + 2
+        #                     (x,y)  per node              |2n
+        #                     elapsed_time per node        |n
+        #                     send_interval per node       |n
+        #                                                  |k + 4n + 2
+
+        self.observation_space = spaces.Box(low=np.array(
+            [0] * (action_history_length + 2 + (len(self.nodes) * 2)
+                   + len(self.nodes) + len(self.nodes)), dtype=np.float32), high=np.array(
+            [1] * (action_history_length + 2 + (len(self.nodes) * 2)
+                   + len(self.nodes) + len(self.nodes)), dtype=np.float32))
 
         # rendering attributes
         self.width, self.height = 175, 175  # Size of the window
@@ -198,12 +204,16 @@ class TwoDEnv(gym.Env):
             for node in self.nodes
             for position in (node.pos[0] / self.max_distance_x, node.pos[1] / self.max_distance_y)
         ]
+        normalized_send_intervals = [
+            send_interval / self.max_steps for send_interval in self.send_intervals
+        ]
 
         normalized_elapsed_times = [elapsed_time / self.max_steps for elapsed_time in self.elapsed_times]
         state = [*normalized_actions,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
                  *normalized_node_positions,
-                 *normalized_elapsed_times
+                 *normalized_elapsed_times,
+                 *normalized_send_intervals
                  ]
         return state
 

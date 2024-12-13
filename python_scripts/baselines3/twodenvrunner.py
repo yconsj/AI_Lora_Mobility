@@ -34,16 +34,13 @@ class TensorboardCallback(BaseCallback):
     def _on_step(self) -> bool:
         # Ensure this callback is only triggered during evaluation
 
-        # If evaluation is happening, log to TensorBoard
-        # if self.eval_callback.n_calls % self.eval_callback.eval_freq == 0:
         infos = self.locals['infos']
         dones = self.locals["dones"]
         for i, done in enumerate(dones):
             if done:
-                # print(f"INFO: {infos[i]}")  # Check what is inside the info
                 total_received_values = infos[i].get("total_received", 0)
                 total_misses_values = infos[i].get('total_misses', 0)
-                packet_delivery_rate = total_received_values + (total_received_values + total_misses_values)
+                packet_delivery_rate = total_received_values + (total_received_values / total_misses_values)
                 self.logger.record("custom_logs/total_received", total_received_values)
                 self.logger.record("custom_logs/total_misses", total_misses_values)
                 self.logger.record("custom_logs/delivery_rate", packet_delivery_rate)
