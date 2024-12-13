@@ -35,8 +35,8 @@ class TensorboardCallback(BaseCallback):
         dones = self.locals["dones"]
         for i, done in enumerate(dones):
             if done:
-                total_received_values = infos[i].get_scaled("total_received", 0)
-                total_misses_values = infos[i].get_scaled('total_misses', 0)
+                total_received_values = infos[i].get("total_received", 0)
+                total_misses_values = infos[i].get('total_misses', 0)
                 self.logger.record("total_received", total_received_values)
                 self.logger.record("total_misses", total_misses_values)
         return True
@@ -48,7 +48,7 @@ def main():
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=20, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1, best_model_save_path="stable-model-best")
     print("Learning started")
-    model = PPO("MlpPolicy", env, gamma=0.9, tensorboard_log="./tensorboard/").learn(1000000,callback=[eval_callback, TensorboardCallback()])
+    model = PPO("MlpPolicy", env, gamma=0.9, tensorboard_log="./tensorboard/").learn(250000,callback=[eval_callback, TensorboardCallback()])
 
     model.save("stable-model")
 

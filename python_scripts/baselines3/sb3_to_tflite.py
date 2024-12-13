@@ -11,7 +11,7 @@ from baselines3.simple_env import SimpleBaseEnv
 
 # Define a TensorFlow model that matches the PPO structure
 from tf_exporter import rewrite_policy_net_header
-from utilities import load_config
+from utilities import load_config, export_training_info, InputMembers
 
 """
 THIS CODE IS BASED ON THE SIMPLE CONVERTER FOR Stable-basleines3 MODELS TO TfLite FOUND HERE:
@@ -97,8 +97,8 @@ def sb3_to_tensorflow(sb3_model, env):
         print(f"layer {i}: {sb3_layer}")
         if isinstance(sb3_layer, torch.nn.Linear):
             # Transfer weights and biases
-            weights = sb3_layer.weight.detach().numpy().T  # Transpose to match TensorFlow layer format
-            bias = sb3_layer.bias.detach().numpy()
+            weights = sb3_layer.weight.detach().cpu().numpy().T  # Transpose to match TensorFlow layer format
+            bias = sb3_layer.bias.detach().cpu().numpy()
             # print(f"{weights = }\n{bias = }")
             tf_model.dense_layers[i].set_weights([weights, bias])
             # print(f"tf_model layer {i}: {tf_model.dense_layers[i] = }."
@@ -108,6 +108,17 @@ def sb3_to_tensorflow(sb3_model, env):
 
 
 def tf_to_tflite(tf_model, export_path):
+    # normalization factors for state data
+    sim_time_duration = (60 * 60 * 12.0)
+    norm_factors = {InputMembers.LATEST_PACKET_RSSI.value: 1.0 / 255.0,
+                    InputMembers.LATEST_PACKET_SNIR.value: 1.0 / 100.0,
+                    InputMembers.LATEST_PACKET_TIMESTAMP.value: 1.0 / sim_time_duration,
+                    # max received packets: half a day in seconds, 500 seconds between each transmission, 2 nodes
+                    InputMembers.NUM_RECEIVED_PACKETS.value: 1.0 / (sim_time_duration / 500.0) * 2.0,
+                    InputMembers.CURRENT_TIMESTAMP.value: 1.0 / sim_time_duration,
+                    InputMembers.COORD_X.value: 1.0 / 3000.0,
+                    }
+
     try:
         # Define a concrete function with an input signature
         concrete_func = tf_model.get_concrete_function()
@@ -118,18 +129,21 @@ def tf_to_tflite(tf_model, export_path):
             # [tf.lite.Optimize.DEFAULT] THIS OPTIMIZATION DID NOT WORK
             tflite_model = converter.convert()
             # Save the converted model to the specified .tflite file path
-            try:
-                with open(export_path, "wb") as f:
-                    f.write(tflite_model)
-                print(f"Model successfully converted and saved to {export_path}")
-                header_file_name = "policy_net_model.h"
-                export_dir = os.path.dirname(export_path)
-                header_path = os.path.join(export_dir, header_file_name)
-                g_model_length = len(tflite_model)  # Calculate g_model length
-                print(f"{g_model_length = }")
-                rewrite_policy_net_header(header_path, export_path, g_model_length, episode_num=0)
-            except IOError as e:
-                print(f"Error saving the TFLite model to file: {e}")
+
+            with open(export_path, "wb") as f:
+                f.write(tflite_model)
+            print(f"Model successfully converted and saved to {export_path}")
+            header_file_name = "policy_net_model.h"
+            export_dir = os.path.dirname(export_path)
+            header_path = os.path.join(export_dir, header_file_name)
+            g_model_length = len(tflite_model)  # Calculate g_model length
+            print(f"{g_model_length = }")
+            rewrite_policy_net_header(header_path, export_path, g_model_length, episode_num=0)
+            training_info_export_path = config["training_info_path"]
+
+            export_training_info(training_info_export_path, current_episode_num=1, max_episode_num=1,
+                                 packet_reward=0,
+                                 exploration_reward=0, random_choice_probability=0, normalization_factors=norm_factors)
         except Exception as e:
             print(f"Error during TFLite conversion: {e}")
     except Exception as e:

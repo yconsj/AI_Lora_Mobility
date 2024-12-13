@@ -1,6 +1,6 @@
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import DQN, PPO
-from twod_env import TwoDEnv, FrameSkip, FrameStack
+from twod_env import TwoDEnv, FrameSkip
 from twodenvrunner import NETWORK_TYPE
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
@@ -12,29 +12,19 @@ def make_skipped_env():
     return env
 
 
-def make_framestacked_env():
-    env = TwoDEnv(render_mode="cv2")
-    env = FrameSkip(env, skip=15)
-    env = FrameStack(env, stack_size=5)
-    return env
-
-
-network_type = NETWORK_TYPE.CNN
-if network_type == NETWORK_TYPE.CNN or network_type == NETWORK_TYPE.CNN_DQN:
-    vec_env = make_vec_env(make_framestacked_env, n_envs=1, env_kwargs=dict())
-elif network_type == NETWORK_TYPE.MLP_LSTM:
+vec_env = None
+network_type = NETWORK_TYPE.MLP
+if network_type == NETWORK_TYPE.MLP_LSTM:
     vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
     model = RecurrentPPO("MlpLstmPolicy", vec_env)
     model.set_parameters("stable-model")
     lstm_states = None
-else:  # Mlp
+elif network_type == NETWORK_TYPE.MLP:
     vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
 
 test_best = False
 
-if network_type == NETWORK_TYPE.CNN_DQN:
-    model = DQN.load("stable-model-2d-best/best_model", print_system_info=True)
-elif test_best:
+if test_best:
     model = PPO.load("stable-model-2d-best/best_model", print_system_info=True)
 else:
     model = PPO.load("stable-model", print_system_info=True)
@@ -56,14 +46,14 @@ def get_action_probs(input_state, model):
 done = False
 counter = 0
 while not done:
-    action, _ = model.predict(obs, deterministic=False)
+    action, _ = model.predict(obs, deterministic=True)
     obs, reward, done, info = vec_env.step(action)
 
     if counter % 100 == 0:
-        #action_probabilities = get_action_probs(obs, model)
-        print(f"State: {obs}")
+        # action_probabilities = get_action_probs(obs, model)
+        # print(f"State: {obs}")
         print(f"Action: {action}")
-        #print(f"Action Probabilities: {action_probabilities}")
+        # print(f"Action Probabilities: {action_probabilities}")
     counter += 1
 
     if done:
