@@ -60,50 +60,56 @@ class TwoDEnv(gym.Env):
         #                     elapsed_time1, elapsed_time2  2
         #                                                   28
         self.observation_space = spaces.Box(low=np.array(
-            [0]*5 + [-1]*4 + [0]*2), high=np.array(
-            [1]*11), dtype=np.float32)
+            [0]*(3+2+(4*2)+4)), high=np.array(
+            [1]*(3+2+(4*2)+4)), dtype=np.float32)
         # Environment state
         self.visited_pos = dict()
         self.last_packet = 0
-        self.pos_reward_max = 0.1                       
+        self.pos_reward_max = 0.05                       
         self.pos_reward_min = 0
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
-        self.miss_penalty_max = 5
-        self.miss_penalty_min = 1
-        self.packet_reward_max = 20
+        self.miss_penalty_max = 10
+        self.miss_penalty_min = 5
+        self.packet_reward_max = 10
         
         speed = 20  # meter per second
         max_distance = 3000 # meter
         self.max_distance_x = int(max_distance / speed)  # scaled by speed
         self.max_distance_y = int(max_distance / speed)
         self.max_cross_distance = math.dist((0,0), (self.max_distance_x, self.max_distance_y))
-        self.pos = ( int(self.max_distance_x / 2), int(self.max_distance_y / 2))
+        self.pos = ( random.randint(0,150), random.randint(0,150))
         self.prev_pos = self.pos
         self.target = 5  # The target value we want to reach
         self.steps = 0
         pos1 = (25, 25)
         pos2 = (self.max_distance_x-25, self.max_distance_y -25)
-        self.node1 = node(pos1, time_to_first_packet=150, send_interval=450)
-        self.node2 = node(pos2, time_to_first_packet=300, send_interval=450)
-        while True:
-            x2 = random.randint(0,150)
-            y2 = random.randint(0,150) 
-            if math.dist((x2, y2), self.pos) >= 65:
-                self.node1.pos = (x2, y2)
-                break
-        while True:
-            x2 = random.randint(0,150)
-            y2 = random.randint(0,150)
-            if math.dist((x2,y2), self.node1.pos) >= 65 and math.dist((x2, y2), self.pos) >= 65:
-                self.node2.pos= (x2, y2)
-                break
+        pos3 = (25, self.max_distance_y -25)
+        pos4 = (self.max_distance_x-25, 25)
+        self.node1 = node(pos1, time_to_first_packet=75, send_interval=450)
+        self.node2 = node(pos2, time_to_first_packet=150, send_interval=450)
+        self.node3 = node(pos3, time_to_first_packet=225, send_interval=450)
+        self.node4 = node(pos4, time_to_first_packet=300, send_interval=450)
+        self.nodes = [self.node1, self.node2, self.node3, self.node4]
+        # while True:
+        #     x2 = random.randint(0,150)
+        #     y2 = random.randint(0,150) 
+        #     if math.dist((x2, y2), self.pos) >= 65:
+        #         self.node1.pos = (x2, y2)
+        #         break
+        # while True:
+        #     x2 = random.randint(0,150)
+        #     y2 = random.randint(0,150)
+        #     if math.dist((x2,y2), self.node1.pos) >= 120 and math.dist((x2, y2), self.pos) >= 65:
+        #         self.node2.pos= (x2, y2)
+        #         break
         self.prefs1 = (PacketReference(), PacketReference(), PacketReference())
         self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
-        self.elapsed_time1 = 0
-        self.elapsed_time2 = 0
         self.initial_guess1 = self.pos
         self.initial_guess2 = self.pos
+        self.elapsed_times = [0,0,0,0]
+        self.loss_counts = [0,0,0,0]
+
         self.total_reward = 0
         self.total_misses = 0
         self.total_received = 0
@@ -132,37 +138,28 @@ class TwoDEnv(gym.Env):
         self.visited_pos = dict()
         self.last_packet = 0
         self.total_misses = 0
-        self.pos = (int(self.max_distance_x / 2), int(self.max_distance_y / 2))
+        self.pos =( random.randint(0,150), random.randint(0,150))
         self.initial_guess1 = self.pos
         self.initial_guess2 = self.pos
-        self.node1.reset()
-        self.node2.reset()
-        x1 = random.randint(0,150)
-        y1 = random.randint(0,150)
-        while True:
-            x2 = random.randint(0,150)
-            y2 = random.randint(0,150) 
-            if math.dist((x2, y2), self.pos) >= 65:
-                self.node1.pos = (x2, y2)
-                break
-        while True:
-            x2 = random.randint(0,150)
-            y2 = random.randint(0,150)
-            if math.dist((x2,y2), self.node1.pos) >= 65 and math.dist((x2, y2), self.pos) >= 65:
-                self.node2.pos= (x2, y2)
-                break
+
+        for i in range(len(self.nodes)):
+            self.nodes[i].reset() 
+            self.elapsed_times[i] = 0
+            self.loss_counts[i] = 0
         self.steps = 0
         self.total_reward = 0
         self.total_received = 0
         self.prefs1 = (PacketReference(), PacketReference(), PacketReference())
         self.prefs2 = (PacketReference(), PacketReference(), PacketReference())
-        self.elapsed_time1 = 0
-        self.elapsed_time2 = 0
+
         state = [self.prev_action1 / 4, self.prev_action2 / 4,self.prev_action3 / 4,
             self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
-            self.node1.pos[0] / self.max_distance_x, self.node1.pos[1] / self.max_distance_y , self.node2.pos[0] / self.max_distance_x, self.node2.pos[1] / self.max_distance_y,
-            self.elapsed_time1 / self.max_steps,
-            self.elapsed_time2 / self.max_steps
+            self.node1.pos[0] / self.max_distance_x, self.node1.pos[1] / self.max_distance_y,
+            self.node2.pos[0] / self.max_distance_x, self.node2.pos[1] / self.max_distance_y,
+            self.node3.pos[0] / self.max_distance_x, self.node3.pos[1] / self.max_distance_y,
+            self.node4.pos[0] / self.max_distance_x, self.node4.pos[1] / self.max_distance_y,
+            self.elapsed_times[0] / self.max_steps, self.elapsed_times[1] / self.max_steps,
+            self.elapsed_times[1] / self.max_steps, self.elapsed_times[3] / self.max_steps,
         ]
         return np.array(state, dtype=np.float32), {}
 
@@ -170,10 +167,9 @@ class TwoDEnv(gym.Env):
     def get_pos_reward(self, pos1, pos2, time):
         scaled_time = (time / self.max_steps) * 2
         distance = math.dist(pos1, pos2)
-        if distance > 75:
-            return 0
-        scaled_distance = 1- distance / self.max_cross_distance
-        scaled_distance_time = scaled_distance * scaled_time
+
+        scaled_distance = distance / self.max_cross_distance
+        scaled_distance_time = scaled_distance #* scaled_time
         # Return reward based on scaled distance between a min and max reward
         reward = self.pos_reward_max - scaled_distance_time * (self.pos_reward_max - self.pos_reward_min)
 
@@ -269,73 +265,43 @@ class TwoDEnv(gym.Env):
             if self.pos[1]  > 0 :
                 self.pos = (self.pos[0], self.pos[1]-1) 
 
-        received1, rssi1, snir1 = self.node1.send(self.steps, self.pos)
-        received2, rssi2, snir2 = self.node2.send(self.steps, self.pos)
-        self.elapsed_time1 = min(self.max_steps,self.elapsed_time1+1)
-        self.elapsed_time2 = min(self.max_steps,self.elapsed_time2+1)
-        p1 = PacketReference(pos= self.pos,rssi= rssi1,snir=snir1)
-        p2 = PacketReference(pos= self.pos, rssi=rssi2,snir=snir2)
-        if received1 == PACKET_STATUS.RECEIVED:
-            reward = self.packet_reward_max 
-            if self.last_packet == 2:
-                 reward += self.packet_reward_max
-            reward *= p1.rssi * (1- (self.elapsed_time1 / self.max_steps))
-            reward /= 1 + (self.loss_count2 / 10)
-            self.last_packet = 1
-            self.total_received += 1
-            self.elapsed_time1 = 0
-            self.loss_count1 = 0
-            # TODO: insert packet if best
-            if self.is_new_best_pref(self.prefs1, p1):
-                self.prefs1 = self.insert_best_pref(self.prefs1,p1)
-        elif received2 == PACKET_STATUS.RECEIVED:
-            reward = self.packet_reward_max 
-            if self.last_packet == 1:
-              reward += self.packet_reward_max
-            reward *= p2.rssi * (1 - (self.elapsed_time2 / self.max_steps))
-            reward /= 1 + (self.loss_count1 / 10)
 
-            self.last_packet = 2
-            self.total_received += 1
-            self.elapsed_time2 = 0
-            self.loss_count2 = 0
+        for i in range(len(self.nodes)):
+            received, rssi, snir = self.nodes[i].send(self.steps, self.pos)
+            self.elapsed_times[i] = min(self.max_steps,self.elapsed_times[i]+1)
+            if received == PACKET_STATUS.RECEIVED:
+                reward += self.packet_reward_max 
+                if self.last_packet == 2:
+                    reward += self.packet_reward_max
+                #reward *= p1.rssi * (1- (self.elapsed_times[i] / self.max_steps))
+                #reward /= 1 + (self.loss_count2 / 10)
+                self.last_packet = 1
+                self.total_received += 1
+                self.elapsed_times[i] = 0
+                self.loss_counts[i] = 0
+            if received == PACKET_STATUS.LOST:
+                self.total_misses += 1
+                self.loss_counts[i] += 1
+                reward += self.get_miss_penalty(self.pos, self.nodes[i].pos) * self.loss_counts[i]
+            
+            b = True
+            for node in self.nodes:
+                if self.nodes[i].time_of_next_packet > node.time_of_next_packet:
+                    b = False
+            if b:
+                reward += self.get_pos_reward(self.pos,self.nodes[i].pos, self.elapsed_times[i])
 
-            if self.is_new_best_pref(self.prefs2, p2):
-                self.prefs2 = self.insert_best_pref(self.prefs2,p2)
-
-        elif received1 == PACKET_STATUS.LOST:
-            self.total_misses += 1
-            if (self.prefs1[0].rssi != -1 or self.prefs1[1].rssi != -1 or self.prefs1[2].rssi != -1) or True:
-                self.loss_count1 += 1
-                reward = self.get_miss_penalty(self.pos, self.node1.pos) * self.loss_count1
-        elif received2 == PACKET_STATUS.LOST:
-            self.total_misses += 1
-            if (self.prefs2[0].rssi != -1 or self.prefs2[1].rssi != -1 or self.prefs2[2].rssi != -1) or True: 
-                self.loss_count2 += 1
-                reward = self.get_miss_penalty(self.pos, self.node2.pos) * self.loss_count2
-
-        if self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1:
-                aprox_pos = self.trilateration(self.prefs1, self.initial_guess1)
-                self.initial_guess1 = aprox_pos
-        if self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1:
-                aprox_pos = self.trilateration(self.prefs2, self.initial_guess2)
-                self.initial_guess2 = aprox_pos
-                
-        if self.elapsed_time1 > self.elapsed_time2:# and (self.prefs1[0].rssi != -1 and self.prefs1[1].rssi != -1 and self.prefs1[2].rssi != -1): 
-            #reward += self.get_pos_reward(self.pos, self.node1.pos, self.elapsed_time1)
-                reward += self.get_pos_reward(self.pos,self.node1.pos, self.elapsed_time1)
-        elif self.elapsed_time1 <= self.elapsed_time2:# and (self.prefs2[0].rssi != -1 and self.prefs2[1].rssi != -1 and self.prefs2[2].rssi != -1):
-            #reward += self.get_pos_reward(self.pos, self.node2.pos, self.elapsed_time2)
-                reward += self.get_pos_reward(self.pos,self.node2.pos, self.elapsed_time2)
-
-        reward += self.get_explore_reward(self.pos, self.steps)
+        #reward += self.get_explore_reward(self.pos, self.steps)
         done = self.steps >= self.max_steps or self.total_misses >= 30
         self.total_reward += reward
         state = [self.prev_action1 / 4, self.prev_action2 / 4,self.prev_action3 / 4,
             self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y, 
-            self.node1.pos[0] / self.max_distance_x, self.node1.pos[1] / self.max_distance_y , self.node2.pos[0] / self.max_distance_x, self.node2.pos[1] / self.max_distance_y,
-            self.elapsed_time1 / self.max_steps,
-            self.elapsed_time2 / self.max_steps
+            self.node1.pos[0] / self.max_distance_x, self.node1.pos[1] / self.max_distance_y,
+            self.node2.pos[0] / self.max_distance_x, self.node2.pos[1] / self.max_distance_y,
+            self.node3.pos[0] / self.max_distance_x, self.node3.pos[1] / self.max_distance_y,
+            self.node4.pos[0] / self.max_distance_x, self.node4.pos[1] / self.max_distance_y,
+            self.elapsed_times[0] / self.max_steps, self.elapsed_times[1] / self.max_steps,
+            self.elapsed_times[1] / self.max_steps, self.elapsed_times[3] / self.max_steps,
         ]
         if self.timeskip_counter == 0:
             self.prev_action3 = self.prev_action2
@@ -343,8 +309,7 @@ class TwoDEnv(gym.Env):
             self.prev_action1 = action
         self.timeskip_counter = (self.timeskip_counter +1) % self.timeskip
         info = {'total_received': self.total_received,
-                'total_misses': self.total_misses,
-                "true_node_positions": np.array([self.node1.pos[0], self.node1.pos[1], self.node2.pos[0],self.node2.pos[1]])}
+                'total_misses': self.total_misses}
         return np.array(state, dtype=np.float32), reward, done, False, info
     
 
@@ -365,20 +330,10 @@ class TwoDEnv(gym.Env):
         cv2.rectangle(frame,pt1= (offset_x + x-2, offset_y + y-2), pt2= (offset_x + x+2, offset_y + y+2), color=self.point_color)
 
         # Draw nodes
-        cv2.rectangle(frame,pt1= (offset_x + self.node1.pos[0]-1, offset_y + self.node1.pos[1]-1), pt2= (offset_x + self.node1.pos[0]+1, offset_y + self.node1.pos[1]+1), color=self.point_color)
-        cv2.rectangle(frame,pt1= (offset_x + self.node2.pos[0]-1, offset_y + self.node2.pos[1]-1), pt2= (offset_x + self.node2.pos[0]+1, offset_y + self.node2.pos[1]+1), color=self.point_color)
+        for node in self.nodes:
+            cv2.rectangle(frame,pt1= (offset_x + node.pos[0]-1, offset_y + node.pos[1]-1), pt2= (offset_x + node.pos[0]+1, offset_y + node.pos[1]+1), color=self.point_color)
 
-        # Draw packet refs
-        for pr in self.prefs1:
-            if pr.pos == (-1, -1):
-                continue
-            cv2.rectangle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), pt2= (offset_x + pr.pos[0], offset_y + pr.pos[1]), color=(0, 128, 0))
-        for pr in self.prefs2:
-            if pr.pos == (-1, -1):
-                continue
-            cv2.rectangle(frame, (offset_x + pr.pos[0], offset_y + pr.pos[1]), pt2= (offset_x + pr.pos[0], offset_y + pr.pos[1]), color=(128, 128, 0))
-        cv2.rectangle(frame, (offset_x + self.initial_guess1[0], offset_y + self.initial_guess1[1]), pt2= (offset_x + self.initial_guess1[0] +1, offset_y + self.initial_guess1[1] +1), color=(0, 128, 0))
-        cv2.rectangle(frame, (offset_x + self.initial_guess2[0], offset_y + self.initial_guess2[1]), pt2= (offset_x + self.initial_guess2[0] +1, offset_y + self.initial_guess2[1]+1), color=(128, 128, 0))
+        
         # cv2.rectangle(frame,pt1= (offset + self.node1.pos-2, y-2), pt2= (offset + self.node1.pos+2, y+2), color=self.point_color)
         # cv2.rectangle(frame,pt1= (offset + self.node2.pos-2, y-2), pt2= (offset + self.node2.pos+2, y+2), color=self.point_color)
         # Display the frame
@@ -447,7 +402,7 @@ class node():
         self.lower_bound_send_time = send_interval / 2
         self.upper_bound_send_time = send_interval * 2
 
-        self.max_transmission_radius = 90
+        self.max_transmission_radius = 50
         self.transmission_model = SignalModel(rssi_ref=-30, path_loss_exponent=2.7, noise_floor=-100,
                                               rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30)
 
