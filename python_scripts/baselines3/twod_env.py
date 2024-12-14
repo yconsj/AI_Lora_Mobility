@@ -78,7 +78,7 @@ class TwoDEnv(gym.Env):
         self.miss_penalty_max = 5.0
         self.miss_penalty_min = 2.0
         self.packet_reward_max = 10
-        self.fairness_reward = 0.5
+        self.fairness_reward = 0.25
 
         speed = 20  # meter per second
         max_distance = 3000  # meter
@@ -502,8 +502,9 @@ class Node:
         self.time_of_next_packet = time_to_first_packet
         self.send_interval = send_interval
         self.send_std = send_std  # standard deviation
-        self.lower_bound_send_time = send_interval / 2
-        self.upper_bound_send_time = send_interval * 2
+        interval_bound_scale = 0.01
+        self.lower_bound_send_time = send_interval - send_interval * interval_bound_scale
+        self.upper_bound_send_time = send_interval + send_interval * interval_bound_scale
 
         self.transmission_model = transmission_model
 
