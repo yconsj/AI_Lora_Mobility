@@ -1,3 +1,4 @@
+import json
 import math
 import random
 from collections import deque
@@ -56,7 +57,7 @@ def _generate_color_frame(grid):
 
 
 class TwoDEnv(gym.Env):
-    def __init__(self, render_mode="none", timeskip=1, action_history_length=3):
+    def __init__(self, render_mode="none", timeskip=1, action_history_length=3, do_logging=False, log_file=None):
         super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
@@ -159,6 +160,11 @@ class TwoDEnv(gym.Env):
         self.reception_grid = None
         self.background_frame = None
 
+        # logging attributes
+        self.do_logging = do_logging
+        self.log_file = log_file
+        self.log_data = []  # Store logs before writing to the file
+
     def _compute_reception_grid(self):
         """ Compute the reception grid based on node positions and transmission range. """
         grid = np.zeros((self.max_distance_y, self.max_distance_x), dtype=np.float32)
@@ -206,6 +212,7 @@ class TwoDEnv(gym.Env):
             self.reception_grid = self._compute_reception_grid()
             self.background_frame = _generate_color_frame(self.reception_grid)
 
+        self.log_data = []
         state = self.get_state()
         return np.array(state, dtype=np.float32), {}
 
@@ -297,10 +304,14 @@ class TwoDEnv(gym.Env):
             for i in range(len(self.nodes))
         ]
         fairness_prior = jains_fairness_index(delivery_rates)
+        # Track transmissions for each node
+        transmission_occured_per_node = [True] * len(self.nodes)
         for i in range(len(self.nodes)):
             received, rssi, snir = self.nodes[i].send(self.steps, self.pos)
             self.elapsed_times[i] = min(self.max_steps, self.elapsed_times[i] + 1)
-            if received == PACKET_STATUS.RECEIVED:
+            if received == PACKET_STATUS.NOT_SENT:
+                transmission_occured_per_node[i] = False
+            elif received == PACKET_STATUS.RECEIVED:
                 reward += self.packet_reward_max
                 if self.last_packet_index != i:
                     reward += self.packet_reward_max
@@ -311,7 +322,7 @@ class TwoDEnv(gym.Env):
                 self.elapsed_times[i] = 0
                 self.loss_counts[i] = 0
                 self.last_packet_index = i
-            if received == PACKET_STATUS.LOST:
+            elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
@@ -343,7 +354,43 @@ class TwoDEnv(gym.Env):
         info = {'total_received': self.total_received,
                 'total_misses': self.total_misses,
                 'fairness': fairness_after}
+
+        # Add logging for each step
+        if self.do_logging:
+            self.log_step(
+                transmissions_per_node=transmission_occured_per_node
+            )
+            if done:
+                # Write to JSON file if the episode ends
+                with open(self.log_file, 'w') as file:
+                    json.dump(self.log_data, file, indent=4)
+
         return np.array(state, dtype=np.float32), reward, done, False, info
+
+    def log_step(self, transmissions_per_node):
+        """
+        Logs a single step's data into the log buffer, including details for each node.
+        Args:
+            transmissions_per_node: List of booleans indicating if transmission occurred for each node.
+        """
+        # Compute the distance from the gateway to each node
+        node_distances = [math.dist(self.pos, node.pos) for node in self.nodes]
+
+        # Log entry for this step
+        log_entry = {
+            "gw_pos_x": self.pos[0],
+            "gw_pos_y": self.pos[1],
+            "step_time": self.steps,
+            "packets_received": self.total_received,
+            "packets_sent": self.total_received + self.total_misses,
+            "transmissions_per_node": transmissions_per_node.copy(),
+            "packets_received_per_node": self.received_per_node.copy(),
+            "packets_sent_per_node": [
+                self.received_per_node[i] + self.misses_per_node[i] for i in range(len(self.nodes))
+            ],
+            "node_distances": node_distances  # Add node distances to the log entry
+        }
+        self.log_data.append(log_entry)
 
     def render(self):
         """Render the environment with reception-based background and dynamic elements."""
@@ -449,8 +496,8 @@ class TransmissionModel:
         return np.exp(- distance / self.ploss_scale)
 
     def is_transmission_success(self, distance):
-        preceive_choice = self.get_reception_prob(distance) > np.random.rand()
-        return preceive_choice
+        receive_choice = self.get_reception_prob(distance) > np.random.rand()
+        return receive_choice
 
     def generate_rssi(self, distance):
         if distance < 0:

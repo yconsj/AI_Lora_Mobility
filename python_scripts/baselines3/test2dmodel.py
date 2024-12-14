@@ -1,20 +1,30 @@
 from stable_baselines3 import PPO
+from baselines3.advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced
 from twod_env import TwoDEnv, FrameSkip
 from stable_baselines3.common.env_util import make_vec_env
 
+do_logging = True
+if do_logging:
+    logfile = "env_log.json"
+    render_mode = None
+else:
+    logfile = ""
+    render_mode = "cv2"
+
 
 def make_skipped_env():
-    env = TwoDEnv(render_mode="cv2", timeskip=10)
+    env = TwoDEnv(render_mode=render_mode, timeskip=10, do_logging=do_logging, log_file=logfile)
     env = FrameSkip(env, skip=10)  # Frame skip for action repeat
     return env
 
+
 vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
-test_best = False
+test_best = True
 
 if test_best:
-    model = PPO.load("stable-model-2d-best/best_model", print_system_info=True)
+    model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
 else:
-    model = PPO.load("stable-model", print_system_info=True)
+    model = PPO.load("stable-model", device="cpu", print_system_info=True)
 
 print(model.policy)
 obs = vec_env.reset()
@@ -46,4 +56,7 @@ while not done:
         # Note that the VecEnv resets automatically
         # when a done signal is encountered
         break
+if do_logging:
+    plot_mobile_gateway_with_nodes_advanced(logfile)
+
 

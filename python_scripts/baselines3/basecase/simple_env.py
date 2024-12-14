@@ -121,6 +121,8 @@ class SimpleBaseEnv(gym.Env):
         state = [self.pos / self.max_distance, self.p1_stamp, self.p2_stamp,
                  self.timestamp1 / self.max_steps,
                  self.timestamp2 / self.max_steps]
+        self.log_data = []
+
         return np.array(state, dtype=np.float32), {}
 
     def get_pos_reward(self, pos1, pos2, time):
