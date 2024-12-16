@@ -167,10 +167,11 @@ class TwoDEnv(gym.Env):
 
     def _compute_reception_grid(self):
         """ Compute the reception grid based on node positions and transmission range. """
-        grid = np.zeros((self.max_distance_y, self.max_distance_x), dtype=np.float32)
+        # grid of 0 to max_distance y & x, max_distance inclusive
+        grid = np.zeros((self.max_distance_y + 1, self.max_distance_x + 1), dtype=np.float32)
 
-        for y in range(self.max_distance_y):
-            for x in range(self.max_distance_x):
+        for y in range(grid.shape[1]):
+            for x in range(grid.shape[0]):
                 reception = 0.0
                 for node in self.nodes:
                     # Calculate distance to the node
@@ -396,9 +397,6 @@ class TwoDEnv(gym.Env):
         """Render the environment with reception-based background and dynamic elements."""
         x = int(self.pos[0])
         y = int(self.pos[1])
-
-        # Create the color frame (background frame)
-        color_frame = self.background_frame.copy()
 
         # Calculate padding for top, left, bottom, and right
         pad_top, pad_left = self.offset_y, self.offset_x

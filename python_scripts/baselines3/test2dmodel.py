@@ -1,14 +1,23 @@
 from stable_baselines3 import PPO
-from baselines3.advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced
+from baselines3.advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap
 from twod_env import TwoDEnv, FrameSkip
 from stable_baselines3.common.env_util import make_vec_env
+
+
+def get_action_probs(input_state, input_model):
+    obs = input_model.policy.obs_to_tensor(input_state)[0]
+    dis = input_model.policy.get_distribution(obs)
+    probs = dis.distribution.probs
+    probs_np = probs.detach().cpu().numpy()
+    return probs_np
+
 
 do_logging = True
 if do_logging:
     logfile = "env_log.json"
     render_mode = None
 else:
-    logfile = ""
+    logfile = None
     render_mode = "cv2"
 
 
@@ -30,20 +39,11 @@ print(model.policy)
 obs = vec_env.reset()
 print(obs)
 
-
 # test trained model
-def get_action_probs(input_state, input_model):
-    obs = input_model.policy.obs_to_tensor(input_state)[0]
-    dis = input_model.policy.get_distribution(obs)
-    probs = dis.distribution.probs
-    probs_np = probs.detach().cpu().numpy()
-    return probs_np
-
-
-done = False
+done = True
 counter = 0
 while not done:
-    action, _ = model.predict(obs, deterministic=True)
+    action, _ = model.predict(obs, deterministic=False)
     obs, reward, done, info = vec_env.step(action)
     print(reward)
     if counter % 100 == 0:
@@ -52,11 +52,7 @@ while not done:
         print(f"Action: {action}")
         print(f"Action Probabilities: {action_probabilities}")
     counter += 1
-    if done:
-        # Note that the VecEnv resets automatically
-        # when a done signal is encountered
-        break
+
 if do_logging:
     plot_mobile_gateway_with_nodes_advanced(logfile)
-
-
+    plot_heatmap(log_file=logfile, grid_size_x=151, grid_size_y=151)
