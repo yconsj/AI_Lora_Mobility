@@ -40,7 +40,7 @@ obs = vec_env.reset()
 print(obs)
 
 # test trained model
-done = True
+done = False
 counter = 0
 while not done:
     action, _ = model.predict(obs, deterministic=False)
