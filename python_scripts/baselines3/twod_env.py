@@ -76,9 +76,9 @@ class TwoDEnv(gym.Env):
         self.pos_reward_min = 0.0
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
-        self.miss_penalty_max = 5.0
-        self.miss_penalty_min = 2.0
-        self.packet_reward_max = 10
+        self.miss_penalty_max = 2.0
+        self.miss_penalty_min = 1.0
+        self.packet_reward_max = 2
         self.fairness_reward = 0.25
 
         speed = 20  # meter per second
@@ -96,19 +96,19 @@ class TwoDEnv(gym.Env):
         pos2 = (self.max_distance_x - 25, self.max_distance_y - 25)
         pos3 = (25, self.max_distance_y - 25)
         pos4 = (self.max_distance_x - 25, 25)
-        self.send_intervals = [450, 450, 450, 450]
+        self.send_intervals = [800,800,800,800]
         transmission_model1 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node1 = Node(pos1, transmission_model1, time_to_first_packet=75, send_interval=self.send_intervals[0])
+        self.node1 = Node(pos1, transmission_model1, time_to_first_packet=200, send_interval=self.send_intervals[0])
         transmission_model2 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node2 = Node(pos2, transmission_model2, time_to_first_packet=150, send_interval=self.send_intervals[1])
+        self.node2 = Node(pos2, transmission_model2, time_to_first_packet=400, send_interval=self.send_intervals[1])
         transmission_model3 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node3 = Node(pos3, transmission_model3, time_to_first_packet=225, send_interval=self.send_intervals[2])
+        self.node3 = Node(pos3, transmission_model3, time_to_first_packet=600, send_interval=self.send_intervals[2])
         transmission_model4 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node4 = Node(pos4, transmission_model4, time_to_first_packet=300, send_interval=self.send_intervals[3])
+        self.node4 = Node(pos4, transmission_model4, time_to_first_packet=800, send_interval=self.send_intervals[3])
         self.nodes = [self.node1, self.node2, self.node3, self.node4]
         # while True:
         #     x2 = random.randint(0,150)
@@ -323,6 +323,10 @@ class TwoDEnv(gym.Env):
                 self.elapsed_times[i] = 0
                 self.loss_counts[i] = 0
                 self.last_packet_index = i
+
+                fairness_after = jains_fairness_index(delivery_rates)
+                fairness_diff = max(0.0, fairness_after - fairness_prior)
+                reward += fairness_diff * self.fairness_reward
             elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
@@ -346,7 +350,7 @@ class TwoDEnv(gym.Env):
         reward += fairness_diff * self.fairness_reward
 
         # reward += self.get_explore_reward(self.pos, self.steps)
-        done = self.steps >= self.max_steps or self.total_misses >= 30
+        done = self.steps >= self.max_steps or self.total_misses >= 20
         self.total_reward += reward
         state = self.get_state()
 
@@ -427,15 +431,16 @@ class TwoDEnv(gym.Env):
 
         # Draw nodes and their transmission circles
         for node in self.nodes:
-            cv2.rectangle(frame, pt1=(self.offset_x + node.pos[0] - 1, self.offset_y + node.pos[1] - 1),
-                          pt2=(self.offset_x + node.pos[0] + 1, self.offset_y + node.pos[1] + 1),
-                          color=self.point_color)
             cv2.circle(frame, center=(self.offset_x + node.pos[0], self.offset_y + node.pos[1]),
                        radius=int(node.transmission_model.max_transmission_distance), color=(255, 0, 0), thickness=1)
+        i=0
+        for node in self.nodes:
+            cv2.putText(frame, str(i), (node.pos[0], self.offset_y + node.pos[1]),
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            i+=1
 
         # Resize frame for better visualization
         enlarged_image = cv2.resize(frame, (0, 0), fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
-
         # Define stats list
         stats = [
             f"Total received node: {self.total_received}",
@@ -460,7 +465,14 @@ class TwoDEnv(gym.Env):
         for i, text in enumerate(stats):
             cv2.putText(canvas, text, (text_offset_x, text_offset_y + (i * line_height)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-
+            
+        text_offset_x = 300
+        text_offset_y = enlarged_image.shape[0]
+        i = 0
+        for node in self.nodes:
+            cv2.putText(canvas, str(i) + ": " + str(round(node.time_of_next_packet - self.steps)), (text_offset_x, text_offset_y + (i * line_height)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            i+=1
         # Enable resizable window and update the content dynamically
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)  # Make the window resizable
         cv2.imshow(self.window_name, canvas)
