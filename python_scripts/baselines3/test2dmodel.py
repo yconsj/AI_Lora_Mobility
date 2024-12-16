@@ -1,5 +1,5 @@
 from stable_baselines3 import PPO
-from baselines3.advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap
+from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap
 from twod_env import TwoDEnv, FrameSkip
 from stable_baselines3.common.env_util import make_vec_env
 
@@ -13,12 +13,9 @@ def get_action_probs(input_state, input_model):
 
 
 do_logging = True
-if do_logging:
-    logfile = "env_log.json"
-    render_mode = None
-else:
-    logfile = None
-    render_mode = "cv2"
+logfile = "env_log.json"
+#render_mode = None
+render_mode = "cv2"
 
 
 def make_skipped_env():

@@ -59,7 +59,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     # --- First subplot: Distance from Gateway to each node over time ---
     # Plot distances for each node
     for idx, color in enumerate(node_colors):
-        axs[0].plot(timestamps, [dist[idx] for dist in node_distances], label=f"Distance to Node {idx + 1}",
+        axs[0].plot(timestamps, [dist[idx] for dist in node_distances], label=f"Distance to Node {idx}",
                     color=color, linestyle="-")
 
         # Plot transmission times for each node (vertical lines)
@@ -68,11 +68,11 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
 
     # Custom legend for node-specific distances and transmission times
     custom_transmission_lines = [
-        lines.Line2D([], [], color=color, linestyle='--', label=f"Node {i + 1} Transmission")
+        lines.Line2D([], [], color=color, linestyle='--', label=f"Node {i} Transmission")
         for i, color in enumerate(node_colors)
     ]
     custom_distance_lines = [
-        lines.Line2D([], [], color=color, linestyle='-', label=f"Node {i + 1} Distance")
+        lines.Line2D([], [], color=color, linestyle='-', label=f"Node {i} Distance")
         for i, color in enumerate(node_colors)
     ]
     axs[0].legend(
@@ -94,7 +94,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
 
     # Plot packets received and sent for each node
     for node_idx, color in enumerate(node_colors):
-        axs[1].plot(timestamps, packets_received_per_node[node_idx], label=f"Node {node_idx + 1} Packets Received",
+        axs[1].plot(timestamps, packets_received_per_node[node_idx], label=f"Node {node_idx} Packets Received",
                     color=color, linestyle='-')
         # Plot transmission times for each node (vertical lines)
         for time in transmissions_per_node[node_idx]:
@@ -129,7 +129,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
         borderaxespad=0.0,
         ncol=2  # Two columns for better spacing
     )
-
+    # TODO: Add fairness metric?
     # Set labels for the secondary axis
     ax2.set_ylabel("PDR", color="black")
     ax2.set_ylim(0, 1)
