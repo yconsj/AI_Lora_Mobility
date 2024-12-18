@@ -51,7 +51,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
         load_json_log(log_file)
 
     # Colors for different nodes
-    node_colors = ["red", "blue", "green", "purple"]
+    node_colors = ["tab:red", "xkcd:bluish", "xkcd:dark grass green", "tab:orange"]
 
     # Initialize figure with 2 subplots
     fig, axs = plt.subplots(1, 2, figsize=(16, 6))
@@ -60,7 +60,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     # Plot distances for each node
     for idx, color in enumerate(node_colors):
         axs[0].plot(timestamps, [dist[idx] for dist in node_distances], label=f"Distance to Node {idx}",
-                    color=color, linestyle="-")
+                    color=color, linestyle="-", linewidth=1.5, alpha=0.9)
 
         # Plot transmission times for each node (vertical lines)
         for time in transmissions_per_node[idx]:
@@ -78,7 +78,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     axs[0].legend(
         handles=custom_transmission_lines + custom_distance_lines,
         loc="upper center",  # Position the legend outside the plot area
-        bbox_to_anchor=(0.5, -0.1),  # Move legend below the plot
+        bbox_to_anchor=(0.5, -0.15),  # Move legend below the plot
         borderaxespad=0.0,
         ncol=2  # Two columns for better spacing
     )
@@ -92,10 +92,10 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     axs[1].plot(timestamps, packets_received, label="Total Packets Received", color="black", linestyle='-', linewidth=2)
     axs[1].plot(timestamps, packets_sent, label="Total Packets Sent", color="black", linestyle='--', linewidth=2)
 
-    # Plot packets received and sent for each node
+    # Plot packets received for each node
     for node_idx, color in enumerate(node_colors):
         axs[1].plot(timestamps, packets_received_per_node[node_idx], label=f"Node {node_idx} Packets Received",
-                    color=color, linestyle='-')
+                    color=color, linestyle='-', alpha=0.9, linewidth=3)
         # Plot transmission times for each node (vertical lines)
         for time in transmissions_per_node[node_idx]:
             axs[1].axvline(x=time, color=color, linestyle="--", alpha=0.7)
@@ -115,17 +115,17 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
         lines.Line2D([], [], color="black", linestyle=':', label="Total PDR")
     ]
     custom_transmission_lines = [
-        lines.Line2D([], [], color=color, linestyle='--', label=f"Node {i + 1} Transmission")
+        lines.Line2D([], [], color=color, linestyle='--', label=f"Node {i} Transmission")
         for i, color in enumerate(node_colors)
     ]
     custom_receive_lines = [
-        lines.Line2D([], [], color=color, linestyle='-', label=f"Node {i + 1} Packets Received")
+        lines.Line2D([], [], color=color, linestyle='-', label=f"Node {i} Packets Received")
         for i, color in enumerate(node_colors)
     ]
     axs[1].legend(
         handles=custom_lines + custom_transmission_lines + custom_receive_lines,
         loc="upper center",  # Place legend below the second subplot
-        bbox_to_anchor=(0.5, -0.1),  # Position the legend below the plot
+        bbox_to_anchor=(0.5, -0.15),  # Position the legend below the plot
         borderaxespad=0.0,
         ncol=2  # Two columns for better spacing
     )
@@ -162,7 +162,6 @@ def create_heatmap(positions, step_times, grid_size_x, grid_size_y):
             grid[grid_y, grid_x] += 1
         else:
             print(f"err, at {grid_x, grid_y =}")
-    print(f"{np.max(grid) = }")
     grid += 0.1  # make sure each cell has a value greater than 0, so we can use log
     grid = np.log(grid)
     grid += abs(np.min(grid))  # make sure all values are at least 0
@@ -178,7 +177,7 @@ def _plot_heatmap(grid):
     """
     plt.figure(figsize=(10, 8))
     plt.imshow(grid, origin='lower', cmap='hot')
-    plt.colorbar(label='Fraction of Total Time Spent')
+    plt.colorbar(label='log(Time Spent)')
     plt.title('Mobile Gateway Heatmap')
     plt.xlabel('Grid X')
     plt.ylabel('Grid Y')
