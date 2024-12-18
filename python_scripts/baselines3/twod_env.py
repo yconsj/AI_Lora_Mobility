@@ -109,18 +109,21 @@ class TwoDEnv(gym.Env):
         pos3 = (25, self.max_distance_y - 25)
         pos4 = (self.max_distance_x - 25, 25)
         self.send_intervals = [1000, 1000, 1000, 1000]
+        self.first_packets = [250, 500, 750, 1000]
+        random.shuffle(self.send_intervals)
+        # random.shuffle(self.first_packets)
         transmission_model1 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node1 = Node(pos1, transmission_model1, time_to_first_packet=250, send_interval=self.send_intervals[0])
+        self.node1 = Node(pos1, transmission_model1, time_to_first_packet=self.first_packets[0], send_interval=self.send_intervals[0])
         transmission_model2 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node2 = Node(pos2, transmission_model2, time_to_first_packet=500, send_interval=self.send_intervals[1])
+        self.node2 = Node(pos2, transmission_model2, time_to_first_packet=self.first_packets[1], send_interval=self.send_intervals[1])
         transmission_model3 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node3 = Node(pos3, transmission_model3, time_to_first_packet=750, send_interval=self.send_intervals[2])
+        self.node3 = Node(pos3, transmission_model3, time_to_first_packet=self.first_packets[2], send_interval=self.send_intervals[2])
         transmission_model4 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node4 = Node(pos4, transmission_model4, time_to_first_packet=1000, send_interval=self.send_intervals[3])
+        self.node4 = Node(pos4, transmission_model4, time_to_first_packet=self.first_packets[3], send_interval=self.send_intervals[3])
         self.nodes = [self.node1, self.node2, self.node3, self.node4]
         # while True:
         #     x2 = random.randint(0,150)
@@ -146,8 +149,6 @@ class TwoDEnv(gym.Env):
         self.received_per_node = [0] * len(self.nodes)
         self.misses_per_node = [0] * len(self.nodes)
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
-        self.loss_count1 = 0
-        self.loss_count2 = 0
 
         # Observation_space =
         #                     prev_actions (gw.x, gw.y),   |k + 2
@@ -155,21 +156,26 @@ class TwoDEnv(gym.Env):
         #                     elapsed_time per node        |n
         #                     send_interval per node       |n
         #                     packets received per node    |n
-        #                                                  |k + 5n + 2
+        #                     last_packet_index            |1
+        #                                                  |k + 5n + 3
 
-        self.observation_space = spaces.Box(low=np.array(
-            [0] * (action_history_length + 2 +
-                   (len(self.nodes) * 2) +
-                   len(self.nodes) +
-                   len(self.nodes) +
-                   len(self.nodes)
-                   ), dtype=np.float32), high=np.array(
-            [1] * (action_history_length + 2 +
-                   (len(self.nodes) * 2) +
-                   len(self.nodes) +
-                   len(self.nodes) +
-                   len(self.nodes)
-                   ), dtype=np.float32))
+        self.observation_space = spaces.Box(
+            low=np.array(
+                [0] * (action_history_length + 2 +
+                       (len(self.nodes) * 2) +
+                       len(self.nodes) +
+                       len(self.nodes) +
+                       len(self.nodes)
+                       ) +
+                [-1], dtype=np.float32),
+            high=np.array(
+                [1] * (action_history_length + 2 +
+                       (len(self.nodes) * 2) +
+                       len(self.nodes) +
+                       len(self.nodes) +
+                       len(self.nodes) +
+                       1
+                       ), dtype=np.float32))
 
         # rendering attributes
         self.width, self.height = 175, 175  # Size of the window
@@ -211,15 +217,17 @@ class TwoDEnv(gym.Env):
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
         self.last_packet_index = -1
-        self.loss_count1 = 0
-        self.loss_count2 = 0
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.prev_pos = self.pos
         self.visited_pos = dict()
         self.total_misses = 0
         self.pos = (random.randint(0, 150), random.randint(0, 150))
 
+        random.shuffle(self.send_intervals)
+        # random.shuffle(self.first_packets)
         for i in range(len(self.nodes)):
+            self.nodes[i].send_interval = self.send_intervals[i]
+            self.nodes[i].time_to_first_packet = self.first_packets[i]
             self.nodes[i].reset()
             self.elapsed_times[i] = 0
             self.loss_counts[i] = 0
@@ -248,18 +256,26 @@ class TwoDEnv(gym.Env):
             for node in self.nodes
             for position in (node.pos[0] / self.max_distance_x, node.pos[1] / self.max_distance_y)
         ]
-        normalized_send_intervals = [
-            send_interval / self.max_steps for send_interval in self.send_intervals
+        normalized_elapsed_times = [
+            elapsed_time / self.max_steps
+            for elapsed_time in self.elapsed_times
         ]
-        normalized_elapsed_times = [elapsed_time / self.max_steps for elapsed_time in self.elapsed_times]
-        normalized_received_packets = [num_received_packets / self.expected_max_packets_sent
-                                       for num_received_packets in self.received_per_node]
+        normalized_send_intervals = [
+            send_interval / self.max_steps
+            for send_interval in self.send_intervals
+        ]
+        normalized_received_packets = [
+            num_received_packets / self.expected_max_packets_sent
+            for num_received_packets in self.received_per_node
+        ]
+        normalized_last_packet = self.last_packet_index / len(self.nodes)
         state = [*normalized_actions,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
                  *normalized_node_positions,
                  *normalized_elapsed_times,
                  *normalized_send_intervals,
-                 *normalized_received_packets
+                 *normalized_received_packets,
+                 normalized_last_packet
                  ]
         return state
 
@@ -275,7 +291,7 @@ class TwoDEnv(gym.Env):
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
 
-        if distance < 30:
+        if distance < 50:
             reward += reward
         return reward
 
@@ -356,6 +372,7 @@ class TwoDEnv(gym.Env):
             for node in self.nodes:
                 if self.nodes[i].time_of_next_packet > node.time_of_next_packet:
                     is_next_to_send = False
+                    break
             if is_next_to_send:
                 reward += self.get_pos_reward(self.pos, self.nodes[i].pos, self.elapsed_times[i])
 
@@ -363,7 +380,7 @@ class TwoDEnv(gym.Env):
 
         # reward += self.get_explore_reward(self.pos, self.steps)
 
-        done = self.steps >= self.max_steps or self.total_misses >= 20
+        done = self.steps >= self.max_steps or self.total_misses >= 30
         self.total_reward += reward
         state = self.get_state()
 
@@ -429,11 +446,11 @@ class TwoDEnv(gym.Env):
         # Create a new frame (background) and place the padded color frame into it
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
         frame[
-            :padded_color_frame.shape[0],
-            :padded_color_frame.shape[1]
+        :padded_color_frame.shape[0],
+        :padded_color_frame.shape[1]
         ] = padded_color_frame[
-                :self.height,
-                :self.width
+            :self.height,
+            :self.width
             ]
 
         # Draw the moving point
