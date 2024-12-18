@@ -14,8 +14,8 @@ def get_action_probs(input_state, input_model):
 
 do_logging = True
 logfile = "env_log.json"
-#render_mode = None
-render_mode = "cv2"
+render_mode = None
+#render_mode = "cv2"
 
 
 def make_skipped_env():
