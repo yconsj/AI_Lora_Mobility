@@ -81,7 +81,7 @@ class TwoDEnv(gym.Env):
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
-        self.max_steps = 20000  # Maximum steps per episode
+        self.max_steps = 40000  # Maximum steps per episode
 
         # Environment state
         self.visited_pos = dict()
@@ -94,37 +94,38 @@ class TwoDEnv(gym.Env):
         self.packet_reward_max = 2
         self.fairness_reward = 0.25
 
-        speed = 20  # meter per second
-        max_distance = 3000  # meter
-        self.max_distance_x = int(max_distance / speed)  # scaled by speed
-        self.max_distance_y = int(max_distance / speed)
+        unscaled_speed = 11  # meter per second based on this article http://unmannedcargo.org/chinese-supermarket-delivery-drone/
+        unscaled_max_distance = 3000  # meters
+        self.max_distance = 300  # env grid size
+        self.scaled_speed = unscaled_speed * (self.max_distance / unscaled_max_distance)
+        self.max_distance_x = int(self.max_distance)  # scaled by speed
+        self.max_distance_y = int(self.max_distance)
         self.max_cross_distance = math.dist((0, 0), (self.max_distance_x, self.max_distance_y))
-        self.pos = (random.randint(0, 150), random.randint(0, 150))
+        self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
         self.prev_pos = self.pos
         self.steps = 0
         self.ploss_scale = 300  # adjusts the dropoff of transmission probability by distance
+        self.node_max_transmission_distance = 100
+        node_pos = [
+            (self.max_distance_x // 6, self.max_distance_y // 6),
+            (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y - (self.max_distance_y // 6)),
+            (self.max_distance_x // 6, self.max_distance_y - (self.max_distance_y // 6)),
+            (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
+        ]
 
-        pos1 = (25, 25)
-        pos2 = (self.max_distance_x - 25, self.max_distance_y - 25)
-        pos3 = (25, self.max_distance_y - 25)
-        pos4 = (self.max_distance_x - 25, 25)
-        self.send_intervals = [1000, 1000, 1000, 1000]
-        self.first_packets = [250, 500, 750, 1000]
+        self.send_intervals = [4000, 4000, 8000, 8000]
+        self.first_packets = [1000, 2000, 3000, 4000]
         random.shuffle(self.send_intervals)
         # random.shuffle(self.first_packets)
-        transmission_model1 = TransmissionModel(max_transmission_distance=50,
-                                                ploss_scale=self.ploss_scale)
-        self.node1 = Node(pos1, transmission_model1, time_to_first_packet=self.first_packets[0], send_interval=self.send_intervals[0])
-        transmission_model2 = TransmissionModel(max_transmission_distance=50,
-                                                ploss_scale=self.ploss_scale)
-        self.node2 = Node(pos2, transmission_model2, time_to_first_packet=self.first_packets[1], send_interval=self.send_intervals[1])
-        transmission_model3 = TransmissionModel(max_transmission_distance=50,
-                                                ploss_scale=self.ploss_scale)
-        self.node3 = Node(pos3, transmission_model3, time_to_first_packet=self.first_packets[2], send_interval=self.send_intervals[2])
-        transmission_model4 = TransmissionModel(max_transmission_distance=50,
-                                                ploss_scale=self.ploss_scale)
-        self.node4 = Node(pos4, transmission_model4, time_to_first_packet=self.first_packets[3], send_interval=self.send_intervals[3])
-        self.nodes = [self.node1, self.node2, self.node3, self.node4]
+        self.nodes = [
+            Node(node_pos[i],
+                 TransmissionModel(max_transmission_distance=self.node_max_transmission_distance,
+                                   ploss_scale=self.ploss_scale),
+                 time_to_first_packet=self.first_packets[i],
+                 send_interval=self.send_intervals[i])
+            for i in range(len(node_pos))
+        ]
+
         # while True:
         #     x2 = random.randint(0,150)
         #     y2 = random.randint(0,150) 
@@ -151,26 +152,35 @@ class TwoDEnv(gym.Env):
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
 
         # Observation_space =
-        #                     prev_actions (gw.x, gw.y),   |k + 2
+        #                     (recent)prev_actions         |k
+        #                     (gw.x, gw.y)                 |2
+        #                     current step                 |1
         #                     (x,y)  per node              |2n
+        #                     distance from gw to each node|n
         #                     elapsed_time per node        |n
         #                     send_interval per node       |n
         #                     packets received per node    |n
         #                     last_packet_index            |1
-        #                                                  |k + 5n + 3
+        #                                                  |k + 6n + 4
 
         self.observation_space = spaces.Box(
             low=np.array(
-                [0] * (action_history_length + 2 +
+                [0] * (action_history_length +
+                       2 +
+                       1 +
                        (len(self.nodes) * 2) +
+                       len(self.nodes) +
                        len(self.nodes) +
                        len(self.nodes) +
                        len(self.nodes)
                        ) +
                 [-1], dtype=np.float32),
             high=np.array(
-                [1] * (action_history_length + 2 +
+                [1] * (action_history_length +
+                       2 +
+                       1 +
                        (len(self.nodes) * 2) +
+                       len(self.nodes) +
                        len(self.nodes) +
                        len(self.nodes) +
                        len(self.nodes) +
@@ -178,7 +188,7 @@ class TwoDEnv(gym.Env):
                        ), dtype=np.float32))
 
         # rendering attributes
-        self.width, self.height = 175, 175  # Size of the window
+        self.width, self.height = self.max_distance_x + 50, self.max_distance_y + 50  # Size of the window
         self.offset_x = int((self.width - self.max_distance_x) / 2)
         self.offset_y = int((self.height - self.max_distance_y) / 2)
         self.point_radius = 1
@@ -221,7 +231,7 @@ class TwoDEnv(gym.Env):
         self.prev_pos = self.pos
         self.visited_pos = dict()
         self.total_misses = 0
-        self.pos = (random.randint(0, 150), random.randint(0, 150))
+        self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
 
         random.shuffle(self.send_intervals)
         # random.shuffle(self.first_packets)
@@ -256,6 +266,10 @@ class TwoDEnv(gym.Env):
             for node in self.nodes
             for position in (node.pos[0] / self.max_distance_x, node.pos[1] / self.max_distance_y)
         ]
+        normalized_node_distances = [
+            math.dist(self.pos, node.pos) / self.max_cross_distance
+            for node in self.nodes
+        ]
         normalized_elapsed_times = [
             elapsed_time / self.max_steps
             for elapsed_time in self.elapsed_times
@@ -271,11 +285,13 @@ class TwoDEnv(gym.Env):
         normalized_last_packet = self.last_packet_index / len(self.nodes)
         state = [*normalized_actions,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
+                 self.steps / self.max_steps,
                  *normalized_node_positions,
+                 *normalized_node_distances,
                  *normalized_elapsed_times,
                  *normalized_send_intervals,
                  *normalized_received_packets,
-                 normalized_last_packet
+                 normalized_last_packet,
                  ]
         return state
 
@@ -329,17 +345,13 @@ class TwoDEnv(gym.Env):
             # nothing
             pass
         elif action == 1:  # left
-            if self.pos[0] > 0:
-                self.pos = (self.pos[0] - 1, self.pos[1])
+            self.pos = max((self.pos[0] - self.scaled_speed), 0), self.pos[1]
         elif action == 2:  # right
-            if self.pos[0] < self.max_distance_x:
-                self.pos = (self.pos[0] + 1, self.pos[1])
+            self.pos = min(self.pos[0] + self.scaled_speed, self.max_distance_x), self.pos[1]
         elif action == 3:  # up
-            if self.pos[1] < self.max_distance_y:
-                self.pos = (self.pos[0], self.pos[1] + 1)
+            self.pos = self.pos[0], min(self.pos[1] + self.scaled_speed, self.max_distance_y),
         elif action == 4:  # down
-            if self.pos[1] > 0:
-                self.pos = (self.pos[0], self.pos[1] - 1)
+            self.pos = self.pos[0], max((self.pos[1] - self.scaled_speed), 0),
 
         # Track transmissions for each node
         transmission_occurred_per_node = [True] * len(self.nodes)
@@ -380,7 +392,7 @@ class TwoDEnv(gym.Env):
 
         # reward += self.get_explore_reward(self.pos, self.steps)
 
-        done = self.steps >= self.max_steps or self.total_misses >= 30
+        done = self.steps >= self.max_steps or self.total_misses >= 5
         self.total_reward += reward
         state = self.get_state()
 
@@ -434,7 +446,8 @@ class TwoDEnv(gym.Env):
 
         # Calculate padding for top, left, bottom, and right
         pad_top, pad_left = self.offset_y, self.offset_x
-        pad_bottom, pad_right = pad_top // 2, pad_left // 2
+        pad_bottom, pad_right = pad_top, pad_left  # // 2
+        # print(f"{pad_top, pad_left, pad_bottom, pad_right = }")
 
         # Add padding to the color frame using np.pad
         padded_color_frame = np.pad(
@@ -461,15 +474,15 @@ class TwoDEnv(gym.Env):
         # Draw nodes and their transmission circles
         for node in self.nodes:
             cv2.circle(frame, center=(self.offset_x + node.pos[0], self.offset_y + node.pos[1]),
-                       radius=int(node.transmission_model.max_transmission_distance), color=(255, 0, 0), thickness=1)
+                       radius=int(node.transmission_model.max_transmission_distance), color=(255, 0, 0), thickness=2)
         i = 0
         for node in self.nodes:
             cv2.putText(frame, str(i), (node.pos[0], self.offset_y + node.pos[1]),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=1)
             i += 1
 
         # Resize frame for better visualization
-        enlarged_image = cv2.resize(frame, (0, 0), fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
+        enlarged_image = cv2.resize(frame, (0, 0), fx=1.5, fy=1.5, interpolation=cv2.INTER_NEAREST)
         # Define stats list
         stats = [
             f"Total received: {self.total_received}",
@@ -493,7 +506,7 @@ class TwoDEnv(gym.Env):
         text_offset_y = enlarged_image.shape[0] + 20
         for i, text in enumerate(stats):
             cv2.putText(canvas, text, (text_offset_x, text_offset_y + (i * line_height)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=(255, 255, 255), thickness=1)
 
         text_offset_x = 300
         text_offset_y = enlarged_image.shape[0]
@@ -501,7 +514,7 @@ class TwoDEnv(gym.Env):
         for node in self.nodes:
             cv2.putText(canvas, str(i) + ": " + str(round(node.time_of_next_packet - self.steps)),
                         (text_offset_x, text_offset_y + (i * line_height)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=(255, 255, 255), thickness=1)
             i += 1
         # Enable resizable window and update the content dynamically
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)  # Make the window resizable

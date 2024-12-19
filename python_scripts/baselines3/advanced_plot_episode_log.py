@@ -192,5 +192,5 @@ def plot_heatmap(log_file, grid_size_x, grid_size_y):
 if __name__ == '__main__':
     # Parameters
     log_file = "env_log.json"
-    grid_size_x, grid_size_y = 151, 151  # Define the grid size (e.g., 150x150)
+    grid_size_x, grid_size_y = 300, 300  # Define the grid size (e.g., 150x150)
     plot_heatmap(log_file, grid_size_x, grid_size_y)
