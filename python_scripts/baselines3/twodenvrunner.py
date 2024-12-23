@@ -60,11 +60,11 @@ def main():
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=200, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=3e-3, gamma=0.85, ent_coef=0.005, n_steps=4096, tensorboard_log="./tensorboard/")
+    model = PPO("MlpPolicy", env, device="cpu", gamma=0.85, ent_coef=0.005, n_steps=4096, tensorboard_log="./tensorboard/")
     # TODO: learning_rate=1e-3, learning steps = 500000
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(2000000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(5000000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
 

@@ -112,7 +112,8 @@ class TwoDEnv(gym.Env):
             (self.max_distance_x // 6, self.max_distance_y - (self.max_distance_y // 6)),
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
         ]
-
+        # TODO: decide a random base value for send intervals (2000, 3000, 4000),
+        #  then choose 2 random nodes to have double the send time
         self.send_intervals = [4000, 4000, 8000, 8000]
         self.first_packets = [1000, 2000, 3000, 4000]
         random.shuffle(self.send_intervals)
@@ -274,6 +275,7 @@ class TwoDEnv(gym.Env):
             elapsed_time / self.max_steps
             for elapsed_time in self.elapsed_times
         ]
+        # TODO: Normalize send intervals by largest send interval
         normalized_send_intervals = [
             send_interval / self.max_steps
             for send_interval in self.send_intervals
@@ -285,7 +287,7 @@ class TwoDEnv(gym.Env):
         normalized_last_packet = self.last_packet_index / len(self.nodes)
         state = [*normalized_actions,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
-                 self.steps / self.max_steps,
+                 self.steps / self.max_steps,  # TODO: Normalize by modulo&division of largest send interval
                  *normalized_node_positions,
                  *normalized_node_distances,
                  *normalized_elapsed_times,
