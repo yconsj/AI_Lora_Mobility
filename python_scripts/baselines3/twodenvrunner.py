@@ -64,7 +64,7 @@ def main():
     # TODO: learning_rate=1e-3, learning steps = 500000
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(5000000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(50000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
 

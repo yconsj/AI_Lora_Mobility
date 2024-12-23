@@ -11,7 +11,6 @@ from gymnasium import spaces
 from scipy.stats import truncnorm
 
 
-# TODO: add fairness reward, based on similar Packet-delivery-rate between each node.
 # Define a custom FrameSkip wrapper
 class FrameSkip(gym.Wrapper):
     def __init__(self, env, skip):
@@ -112,10 +111,16 @@ class TwoDEnv(gym.Env):
             (self.max_distance_x // 6, self.max_distance_y - (self.max_distance_y // 6)),
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
         ]
-        # TODO: decide a random base value for send intervals (2000, 3000, 4000),
-        #  then choose 2 random nodes to have double the send time
-        self.send_intervals = [4000, 4000, 8000, 8000]
-        self.first_packets = [1000, 2000, 3000, 4000]
+
+        base_send_interval = random.choice([2000.0, 3000.0, 4000.0])
+        self.send_intervals = [base_send_interval, base_send_interval, base_send_interval * 2, base_send_interval * 2]
+
+        self.first_packets = [min(self.send_intervals) * fraction / len(self.send_intervals)
+                              for fraction in range(1, len(self.send_intervals) + 1)]
+        # example of above code can be seen as:
+        # if send_intervals is [2000,2000,4000,4000], then self.first_packets will be
+        # [2000 * 1/4, 2000 * 2/4, 2000 * 3/4, 2000*4/4]
+
         random.shuffle(self.send_intervals)
         # random.shuffle(self.first_packets)
         self.nodes = [
@@ -234,6 +239,8 @@ class TwoDEnv(gym.Env):
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
 
+        base_send_interval = random.choice([2000.0, 3000.0, 4000.0])
+        self.send_intervals = [base_send_interval, base_send_interval, base_send_interval * 2, base_send_interval * 2]
         random.shuffle(self.send_intervals)
         # random.shuffle(self.first_packets)
         for i in range(len(self.nodes)):
@@ -275,9 +282,8 @@ class TwoDEnv(gym.Env):
             elapsed_time / self.max_steps
             for elapsed_time in self.elapsed_times
         ]
-        # TODO: Normalize send intervals by largest send interval
         normalized_send_intervals = [
-            send_interval / self.max_steps
+            send_interval / max(self.send_intervals)
             for send_interval in self.send_intervals
         ]
         normalized_received_packets = [
@@ -287,7 +293,7 @@ class TwoDEnv(gym.Env):
         normalized_last_packet = self.last_packet_index / len(self.nodes)
         state = [*normalized_actions,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
-                 self.steps / self.max_steps,  # TODO: Normalize by modulo&division of largest send interval
+                 (self.steps % max(self.send_intervals)) / max(self.send_intervals),
                  *normalized_node_positions,
                  *normalized_node_distances,
                  *normalized_elapsed_times,
@@ -394,7 +400,7 @@ class TwoDEnv(gym.Env):
 
         # reward += self.get_explore_reward(self.pos, self.steps)
 
-        done = self.steps >= self.max_steps or self.total_misses >= 5
+        done = self.steps >= self.max_steps or self.total_misses >= 10
         self.total_reward += reward
         state = self.get_state()
 
