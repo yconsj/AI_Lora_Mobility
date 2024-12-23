@@ -52,4 +52,4 @@ while not done:
 
 if do_logging:
     plot_mobile_gateway_with_nodes_advanced(logfile)
-    plot_heatmap(log_file=logfile, grid_size_x=300, grid_size_y=300)
+    plot_heatmap(log_file=logfile, grid_size_x=301, grid_size_y=301)
