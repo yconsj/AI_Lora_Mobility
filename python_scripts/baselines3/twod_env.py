@@ -111,19 +111,19 @@ class TwoDEnv(gym.Env):
 
         positions =[pos1, pos2,pos3, pos4] 
         random.shuffle(positions)
-        self.send_intervals = [4000, 4000, 4000,4000]
+        self.send_intervals = [2000, 2000, 2000,2000]
         transmission_model1 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node1 = Node(positions[0], transmission_model1, time_to_first_packet=1000, send_interval=self.send_intervals[0])
+        self.node1 = Node(positions[0], transmission_model1, time_to_first_packet=500, send_interval=self.send_intervals[0])
         transmission_model2 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node2 = Node(positions[1], transmission_model2, time_to_first_packet=1000 * 2, send_interval=self.send_intervals[1])
+        self.node2 = Node(positions[1], transmission_model2, time_to_first_packet=500 * 2, send_interval=self.send_intervals[1])
         transmission_model3 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node3 = Node(positions[2], transmission_model3, time_to_first_packet=1000 * 3 , send_interval=self.send_intervals[2])
+        self.node3 = Node(positions[2], transmission_model3, time_to_first_packet=500 * 3 , send_interval=self.send_intervals[2])
         transmission_model4 = TransmissionModel(max_transmission_distance=50,
                                                 ploss_scale=self.ploss_scale)
-        self.node4 = Node(positions[3], transmission_model4, time_to_first_packet=1000 * 4, send_interval=self.send_intervals[3])
+        self.node4 = Node(positions[3], transmission_model4, time_to_first_packet=500 * 4, send_interval=self.send_intervals[3])
         self.nodes = [self.node1, self.node2, self.node3, self.node4]
         # while True:
         #     x2 = random.randint(0,150)
@@ -164,16 +164,16 @@ class TwoDEnv(gym.Env):
             [0] * (action_history_length + 2 +
                    (len(self.nodes) * 2) +
                    len(self.nodes) +
-                   len(self.nodes) +
-                   len(self.nodes) +
-                   (len(self.nodes) * 2)
+                   len(self.nodes)
+                   #len(self.nodes) +
+                   #(len(self.nodes) * 2)
                    ), dtype=np.float32), high=np.array(
             [1] * (action_history_length + 2 +
                    (len(self.nodes) * 2) +
                    len(self.nodes) +
-                   len(self.nodes) +
-                   len(self.nodes)+
-                   (len(self.nodes) * 2)
+                   len(self.nodes)
+                   #len(self.nodes)+
+                   #(len(self.nodes) * 2)
                    ), dtype=np.float32))
 
         # rendering attributes
@@ -265,10 +265,10 @@ class TwoDEnv(gym.Env):
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
                  *normalized_node_positions,
                  *normalized_elapsed_times,
-                 *normalized_send_intervals,
+                # *normalized_send_intervals,
                  *normalized_received_packets,
-                 *normalized_distances_x,
-                 *normalized_distances_y
+                # *normalized_distances_x,
+                # *normalized_distances_y
                  ]
         return state
 
