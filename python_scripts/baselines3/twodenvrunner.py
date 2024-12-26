@@ -63,7 +63,7 @@ def main():
     model = PPO("MlpPolicy", env, gamma=0.9, ent_coef=0, tensorboard_log="./tensorboard/")
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(3000000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(5000000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
 
