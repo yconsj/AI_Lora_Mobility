@@ -89,8 +89,8 @@ class TwoDEnv(gym.Env):
         self.pos_reward_min = 0.0
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
-        self.miss_penalty_max = 2.0
-        self.miss_penalty_min = 1.0
+        self.miss_penalty_max = 3.0
+        self.miss_penalty_min = 2.0
         self.packet_reward_max = 2
         self.fairness_reward = 0.25
 
@@ -370,7 +370,7 @@ class TwoDEnv(gym.Env):
 
         # print(f"{self.received_per_node = }\n{self.misses_per_node = }\n\n{self.fairness = }")
 
-        # reward += self.get_explore_reward(self.pos, self.steps)
+        reward += self.get_explore_reward(self.pos, self.steps)
 
         done = self.steps >= self.max_steps or self.total_misses >= 10
         self.total_reward += reward
