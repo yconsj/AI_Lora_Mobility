@@ -1,4 +1,6 @@
 from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import VecNormalize
+
 from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap
 from twod_env import TwoDEnv, FrameSkip
 from stable_baselines3.common.env_util import make_vec_env
@@ -19,12 +21,14 @@ render_mode = "cv2"
 
 
 def make_skipped_env():
-    env = TwoDEnv(render_mode=render_mode, timeskip=10, do_logging=do_logging, log_file=logfile)
-    env = FrameSkip(env, skip=10)  # Frame skip for action repeat
+    env = TwoDEnv(render_mode=render_mode, timeskip=15, do_logging=do_logging, log_file=logfile)
+    env = FrameSkip(env, skip=15)  # Frame skip for action repeat
     return env
 
 
 vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
+
+vec_env = VecNormalize.load("model_normalization_stats", vec_env)
 test_best = True
 
 if test_best:
@@ -42,6 +46,7 @@ counter = 0
 while not done:
     action, _ = model.predict(obs, deterministic=False)
     obs, reward, done, info = vec_env.step(action)
+
     print(reward)
     if counter % 100 == 0:
         action_probabilities = get_action_probs(obs, model)
