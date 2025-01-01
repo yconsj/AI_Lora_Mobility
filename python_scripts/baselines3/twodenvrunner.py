@@ -18,9 +18,9 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
 def make_skipped_env():
-    time_skip = 15
-    env = TwoDEnv(render_mode="none", timeskip=time_skip )
-    env = FrameSkip(env, skip=time_skip )  # Frame skip for action repeat
+    time_skip = 10
+    env = TwoDEnv(render_mode="none", timeskip=time_skip, use_deterministic_transmissions=False )  # TODO: use_deterministic_transmissions=False
+    env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
 
@@ -78,14 +78,14 @@ def main():
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
     env = VecNormalize(env)
 
-    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=200, min_evals=100, verbose=1)
+    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
         features_extractor_kwargs=dict(features_dim=64)
     )
-    model = PPO("MlpPolicy", env, device="cpu", gamma=0.85, ent_coef=0.01, n_steps=4096,
+    model = PPO("MlpPolicy", env, device="cpu", gamma=0.8, ent_coef=0.0075, n_steps=8192,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",
                 )

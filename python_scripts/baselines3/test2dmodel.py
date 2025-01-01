@@ -19,17 +19,23 @@ logfile = "env_log.json"
 # render_mode = None
 render_mode = "cv2"
 
+grid_size_x, grid_size_y = 0, 0
+
 
 def make_skipped_env():
-    env = TwoDEnv(render_mode=render_mode, timeskip=15, do_logging=do_logging, log_file=logfile)
-    env = FrameSkip(env, skip=15)  # Frame skip for action repeat
+    time_skip = 10
+    global grid_size_x, grid_size_y
+    env = TwoDEnv(render_mode=render_mode, timeskip=time_skip, do_logging=do_logging, log_file=logfile)
+    grid_size_x = env.max_distance_x
+    grid_size_y = env.max_distance_y
+    env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
 
 vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
 
 vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-test_best = True
+test_best = False
 
 if test_best:
     model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
@@ -57,4 +63,4 @@ while not done:
 
 if do_logging:
     plot_mobile_gateway_with_nodes_advanced(logfile)
-    plot_heatmap(log_file=logfile, grid_size_x=301, grid_size_y=301)
+    plot_heatmap(log_file=logfile, grid_size_x=grid_size_x + 1, grid_size_y=grid_size_y + 1)

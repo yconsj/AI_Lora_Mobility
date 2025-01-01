@@ -238,7 +238,7 @@ class TwoDEnv(gym.Env):
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
 
-        base_send_interval = 4000 # random.choice([2000, 3000, 4000])
+        base_send_interval = 4000  # random.choice([2000, 3000, 4000])
         self.send_intervals = [base_send_interval, base_send_interval, base_send_interval * 2, base_send_interval * 2]
         random.shuffle(self.send_intervals)
         # random.shuffle(self.first_packets)
@@ -375,8 +375,8 @@ class TwoDEnv(gym.Env):
                 transmission_occurred_per_node[i] = False
             elif received == PACKET_STATUS.RECEIVED:
                 reward += self.packet_reward_max
-                if self.last_packet_index != i:
-                    reward += self.packet_reward_max
+                #if self.last_packet_index != i:
+                #    reward += self.packet_reward_max
                 # reward *= p1.rssi * (1- (self.elapsed_times[i] / self.max_steps))
                 # reward /= 1 + (self.loss_count2 / 10)
                 self.total_received += 1
