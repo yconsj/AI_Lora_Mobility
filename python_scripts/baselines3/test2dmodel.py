@@ -50,7 +50,7 @@ print(obs)
 done = False
 counter = 0
 while not done:
-    action, _ = model.predict(obs, deterministic=False)
+    action, _ = model.predict(obs, deterministic=True)
     obs, reward, done, info = vec_env.step(action)
 
     print(reward)

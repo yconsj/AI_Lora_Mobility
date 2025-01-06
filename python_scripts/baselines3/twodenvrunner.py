@@ -20,48 +20,45 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 def make_skipped_env():
     time_skip = 10
     # TODO: use_deterministic_transmissions=False
-    env = TwoDEnv(render_mode="none", timeskip=time_skip, use_deterministic_transmissions=True)
+    env = TwoDEnv(render_mode="none", timeskip=time_skip, use_deterministic_transmissions=False)
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
 
 class CustomPolicyNetwork(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=64):
+    def __init__(self, observation_space, features_dim=64, num_blocks=8):
         super(CustomPolicyNetwork, self).__init__(observation_space, features_dim)
         input_dim = observation_space.shape[0]
 
-        # Define layers for residual blocks
-        self.linear1 = nn.Linear(input_dim, 64)
-        self.linear2 = nn.Linear(64, 64)
-        self.linear3 = nn.Linear(64, 64)
-        self.output_layer = nn.Linear(64, features_dim)
+        # Define the input layer
+        self.input_layer = nn.Linear(input_dim, 64)
+
+        # Create residual blocks dynamically
+        self.residual_blocks = nn.ModuleList([nn.Linear(64, 64) for _ in range(num_blocks)])
 
         # Define activation and dropout
         self.activation = nn.ReLU()
         self.dropout = nn.Dropout(p=0.2)
 
+        # Define the output layer
+        self.output_layer = nn.Linear(64, features_dim)
+
     def forward(self, observations):
-        # Residual block 1
-        x = self.linear1(observations)
+        # Initial input layer
+        x = self.input_layer(observations)
         x = self.activation(x)
         x = self.dropout(x)
 
-        # Residual block 2
-        residual = x  # Save input for skip connection
-        x = self.linear2(x)
-        x = self.activation(x)
-        x = x + residual  # Add residual (skip connection)
-
-        # Residual block 3
-        residual = x
-        x = self.linear3(x)
-        x = self.activation(x)
-        x = x + residual  # Add residual (skip connection)
+        # Apply residual blocks
+        for layer in self.residual_blocks:
+            residual = x  # Save input for skip connection
+            x = layer(x)
+            x = self.activation(x)
+            # x = x + residual  # Add residual (skip connection) #TODO: reactivate this?
 
         # Final output layer
         x = self.output_layer(x)
         return x
-
 
 ## tensorboard --logdir ./tensorboard/; ##
 # http://localhost:6006/
@@ -101,21 +98,23 @@ def main():
     env = VecNormalize(env)
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=150, min_evals=100, verbose=1)
-    eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback,
+    eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
-        features_extractor_kwargs=dict(features_dim=16)
+        features_extractor_kwargs=dict(features_dim=16),
+        net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
-    model = PPO("MlpPolicy", env, device="cpu", gamma=0.8, ent_coef=0.005, n_steps=8192, batch_size=8192,
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=3e-5, gamma=0.9, ent_coef=0.01, batch_size=256,
+                clip_range=0.15, n_steps=8192*2, n_epochs=20,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",
                 )
     # TODO: remove ent_coef from above, and change model learn steps
-    # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}?
+    # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=8192,?
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(6_000_000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
     env.training = False

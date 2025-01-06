@@ -85,14 +85,14 @@ class TwoDEnv(gym.Env):
 
         # Environment state
         self.visited_pos = dict()
-        self.pos_reward_max = 0.1
-        self.pos_reward_min = -0.05
+        self.pos_reward_max = 0.05
+        self.pos_reward_min = -0.025
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
         self.miss_penalty_max = 2.0
         self.miss_penalty_min = 1.0
-        self.packet_reward_max = 2
-        self.packet_reward_min = 0
+        self.packet_reward_max = 4.0
+        self.packet_reward_min = 0.0
         self.fairness_reward = 0.25
 
         unscaled_speed = 11  # meter per second based on this article http://unmannedcargo.org/chinese-supermarket-delivery-drone/
@@ -322,8 +322,8 @@ class TwoDEnv(gym.Env):
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
 
-        if distance < self.node_max_transmission_distance:
-            reward *= 2
+        #if distance < self.node_max_transmission_distance:
+        #    reward *= 2
         return reward
 
     def get_miss_penalty(self, pos1, pos2):
@@ -393,7 +393,7 @@ class TwoDEnv(gym.Env):
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
-                reward += self.get_miss_penalty(self.pos, self.nodes[i].pos) * self.loss_counts[i]
+                reward += self.get_miss_penalty(self.pos, self.nodes[i].pos)  # * self.loss_counts[i]
 
             is_next_to_send = True
             for node in self.nodes:
@@ -407,7 +407,7 @@ class TwoDEnv(gym.Env):
 
         # reward += self.get_explore_reward(self.pos, self.steps)
 
-        terminated = self.total_misses >= 5
+        terminated = self.total_misses >= 20
         truncated = self.steps >= self.max_steps
         done = truncated or terminated
         self.total_reward += reward
@@ -615,7 +615,7 @@ class PACKET_STATUS(Enum):
 
 class Node:
     def __init__(self, pos: tuple[int, int], transmission_model: TransmissionModel, time_to_first_packet: int,
-                 send_interval: int, use_deterministic_transmissions=False, send_std=2):
+                 send_interval: int, use_deterministic_transmissions=False, send_std=10):
         self.pos = pos
         self.last_packet_time = 0
         self.time_to_first_packet = time_to_first_packet
