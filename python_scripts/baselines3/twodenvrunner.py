@@ -26,7 +26,7 @@ def make_skipped_env():
 
 
 class CustomPolicyNetwork(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=64, num_blocks=8):
+    def __init__(self, observation_space, features_dim=64, num_blocks=5):
         super(CustomPolicyNetwork, self).__init__(observation_space, features_dim)
         input_dim = observation_space.shape[0]
 
@@ -54,7 +54,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
             residual = x  # Save input for skip connection
             x = layer(x)
             x = self.activation(x)
-            # x = x + residual  # Add residual (skip connection) #TODO: reactivate this?
+            x = x + residual  # Add residual (skip connection) #TODO: reactivate this?
 
         # Final output layer
         x = self.output_layer(x)
@@ -105,7 +105,7 @@ def main():
         features_extractor_kwargs=dict(features_dim=16),
         net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=3e-5, gamma=0.9, ent_coef=0.01, batch_size=256,
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=1e-4, gamma=0.9, ent_coef=0.01, batch_size=256,
                 clip_range=0.15, n_steps=8192*2, n_epochs=20,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",

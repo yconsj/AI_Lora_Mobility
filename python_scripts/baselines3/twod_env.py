@@ -326,11 +326,13 @@ class TwoDEnv(gym.Env):
         #    reward *= 2
         return reward
 
-    def get_miss_penalty(self, pos1, pos2):
-        distance = math.dist(pos1, pos2)
+    def get_miss_penalty(self, node: 'Node'):
+        distance = math.dist(self.pos, node.pos)
+        failure_probability = 1 - node.transmission_model.get_reception_prob(distance)
         scaled_distance = distance / self.max_cross_distance
-        # Return reward based on scaled distance between a min and max reward
-        penalty = self.miss_penalty_min + scaled_distance * (self.miss_penalty_max - self.miss_penalty_min)
+        weight = (scaled_distance + failure_probability) / 2
+
+        penalty = self.miss_penalty_min + weight * (self.miss_penalty_max - self.miss_penalty_min)
 
         # Ensure reward is within bounds in case of rounding errors
         penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
@@ -393,7 +395,8 @@ class TwoDEnv(gym.Env):
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
-                reward += self.get_miss_penalty(self.pos, self.nodes[i].pos)  # * self.loss_counts[i]
+                miss_penalty = self.get_miss_penalty(self.nodes[i])  # * self.loss_counts[i]
+                reward += miss_penalty
 
             is_next_to_send = True
             for node in self.nodes:
