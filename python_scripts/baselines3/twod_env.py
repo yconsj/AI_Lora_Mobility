@@ -371,8 +371,9 @@ class TwoDEnv(gym.Env):
         # print(f"{self.received_per_node = }\n{self.misses_per_node = }\n\n{self.fairness = }")
 
         #reward += self.get_explore_reward(self.pos, self.steps)
-
-        done = self.steps >= self.max_steps or self.total_misses >= 10
+        terminated = self.total_misses >= 20
+        truncated = self.steps >= self.max_steps
+        done = truncated or terminated
         self.total_reward += reward
         state = self.get_state()
 
@@ -392,7 +393,7 @@ class TwoDEnv(gym.Env):
                 with open(self.log_file, 'w') as file:
                     json.dump(self.log_data, file, indent=4)
 
-        return np.array(state, dtype=np.float32), reward, done, False, info
+        return np.array(state, dtype=np.float32), reward, terminated, truncated, info
 
     def log_step(self, transmissions_per_node):
         """
