@@ -86,7 +86,7 @@ class TwoDEnv(gym.Env):
         # Environment state
         self.visited_pos = dict()
         self.pos_reward_max = 0.05
-        self.pos_reward_min = -0.025
+        self.pos_reward_min = -0.05 
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
         self.miss_penalty_max = 2.0
@@ -541,7 +541,7 @@ class TwoDEnv(gym.Env):
         cv2.imshow(self.window_name, canvas)
 
         # Wait for resizing to reflect (fullscreen updates dynamically)
-        cv2.waitKey(5)
+        cv2.waitKey(2)
 
     def close(self):
         cv2.destroyAllWindows()

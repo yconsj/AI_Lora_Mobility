@@ -33,9 +33,9 @@ def make_skipped_env():
 
 
 vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
-
-vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-test_best = False
+# vec_env = VecMonitor(vec_env)
+# vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+test_best = True
 
 if test_best:
     model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)

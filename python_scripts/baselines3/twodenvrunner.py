@@ -7,7 +7,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecMonitor
 
 from twod_env import TwoDEnv, FrameSkip
 
@@ -26,7 +26,7 @@ def make_skipped_env():
 
 
 class CustomPolicyNetwork(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=64, num_blocks=5):
+    def __init__(self, observation_space, features_dim=64, num_blocks=4):
         super(CustomPolicyNetwork, self).__init__(observation_space, features_dim)
         input_dim = observation_space.shape[0]
 
@@ -50,6 +50,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
         x = self.dropout(x)
 
         # Apply residual blocks
+        # https://en.wikipedia.org/wiki/Residual_neural_network
         for layer in self.residual_blocks:
             residual = x  # Save input for skip connection
             x = layer(x)
@@ -95,17 +96,21 @@ class TensorboardCallback(BaseCallback):
 def main():
     envs = 4
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
-    env = VecNormalize(env)
+    # TODO: try VecNormalize with this VecMonitor inbetween. Remember to do the same in test2dmodel
+    #  (https://www.reddit.com/r/reinforcementlearning/comments/1c9krih/dummyvecenv_vecnormalize_makes_the_reward_chart/)
+    #
+    # env = VecMonitor(env)
+    # env = VecNormalize(env)
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=150, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
-        features_extractor_kwargs=dict(features_dim=16),
+        features_extractor_kwargs=dict(features_dim=32),
         net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=1e-4, gamma=0.9, ent_coef=0.01, batch_size=256,
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=1e-4, gamma=0.85, ent_coef=0.01, batch_size=256,
                 clip_range=0.15, n_steps=8192*2, n_epochs=20,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",
@@ -118,7 +123,7 @@ def main():
     print("Learning finished")
     model.save("stable-model")
     env.training = False
-    env.save("model_normalization_stats")
+    #env.save("model_normalization_stats")
 
 
 if __name__ == '__main__':
