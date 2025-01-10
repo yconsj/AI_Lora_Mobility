@@ -1,5 +1,5 @@
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import VecNormalize
+from stable_baselines3.common.vec_env import VecNormalize, VecMonitor
 
 from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap
 from twod_env import TwoDEnv, FrameSkip
@@ -16,8 +16,8 @@ def get_action_probs(input_state, input_model):
 
 do_logging = True
 logfile = "env_log.json"
-# render_mode = None
-render_mode = "cv2"
+render_mode = None
+#render_mode = "cv2"
 
 grid_size_x, grid_size_y = 0, 0
 
@@ -33,8 +33,8 @@ def make_skipped_env():
 
 
 vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
-# vec_env = VecMonitor(vec_env)
-# vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+vec_env = VecMonitor(vec_env)
+vec_env = VecNormalize.load("model_normalization_stats", vec_env)
 test_best = True
 
 if test_best:

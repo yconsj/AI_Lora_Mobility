@@ -74,10 +74,11 @@ class TwoDEnv(gym.Env):
         super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
-        self.action_space = spaces.Discrete(5, start=0)
+        self.action_space = spaces.Discrete(5, start=-2)
         self.timeskip = timeskip
         self.action_history_length = action_history_length
-        # The observation space is a single value (our current "position")
+
+        self.recent_packets_length = 3
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
@@ -150,9 +151,9 @@ class TwoDEnv(gym.Env):
         self.received_per_node = [0] * len(self.nodes)
         self.misses_per_node = [0] * len(self.nodes)
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
-
+        self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
         # Observation_space =
-        #                     (recent)prev_actions                             |k
+        #                     k (recent)prev_actions                           |k
         #                     (gw.x, gw.y)                                     |2
         #                     step / max step                                  |1
         #                     next transmission time for each node             |n
@@ -160,8 +161,8 @@ class TwoDEnv(gym.Env):
         #                     distance from gw to each node                    |n
         #                     elapsed_time per node                            |n
         #                     packets received per node                        |n
-        #                     last_packet_index (initialized to -1)            |1
-        #                                                                      |k + 6n + 4
+        #                     m recent_packets (initialized to -1)             |m
+        #                                                                      |k + 6n + m + 3
 
         self.observation_space = spaces.Box(
             low=np.array(
@@ -174,7 +175,7 @@ class TwoDEnv(gym.Env):
                        len(self.nodes) +
                        len(self.nodes)
                        ) +
-                [-1], dtype=np.float32),
+                [-1] * self.recent_packets_length, dtype=np.float32),
             high=np.array(
                 [1] * (action_history_length +
                        2 +
@@ -184,7 +185,7 @@ class TwoDEnv(gym.Env):
                        len(self.nodes) +
                        len(self.nodes) +
                        len(self.nodes) +
-                       1
+                       self.recent_packets_length
                        ), dtype=np.float32))
 
         # rendering attributes
@@ -226,9 +227,8 @@ class TwoDEnv(gym.Env):
         return grid
 
     def reset(self, seed=None, options=None):
-        # Reset the.pos and steps counter
-        self.last_packet_index = -1
-        self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
+        self.prev_actions = deque([-2] * self.action_history_length, maxlen=self.action_history_length)
+        self.recent_packets = deque([0] * self.recent_packets_length, maxlen=self.recent_packets_length)
         self.prev_pos = self.pos
         self.visited_pos = dict()
         self.total_misses = 0
@@ -291,7 +291,11 @@ class TwoDEnv(gym.Env):
             num_received_packets / self.expected_max_packets_sent
             for num_received_packets in self.received_per_node
         ]
-        normalized_last_packet = self.last_packet_index / len(self.nodes)
+        normalized_recent_packets = [
+            node_id / len(self.nodes)
+            for node_id in self.recent_packets
+        ]
+        # normalized_last_packet = self.last_packet_index / len(self.nodes)
         # (self.steps % max(self.send_intervals)) / max(self.send_intervals),  # TODO: GCD instead of max
         state = [*normalized_actions,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
@@ -301,7 +305,7 @@ class TwoDEnv(gym.Env):
                  *normalized_node_distances,
                  *normalized_elapsed_times,
                  *normalized_received_packets,
-                 normalized_last_packet,
+                 *normalized_recent_packets
                  ]
         return state
 
@@ -352,7 +356,15 @@ class TwoDEnv(gym.Env):
 
         return 0
 
-    def step(self, action):
+    def step(self, input_action):
+        min_input_action = -2
+        max_input_action = 2
+        min_scaled_action = 0
+        max_scaled_action = 4
+        # Scaling formula
+        action = min_scaled_action + ((input_action - min_input_action) / (max_input_action - min_input_action)) * (
+                    max_scaled_action - min_scaled_action)
+
         if self.render_mode == "cv2":
             self.render()
         reward = 0
@@ -387,7 +399,7 @@ class TwoDEnv(gym.Env):
                 self.received_per_node[i] += 1
                 self.elapsed_times[i] = 0
                 self.loss_counts[i] = 0
-                self.last_packet_index = i
+                self.recent_packets.append(i)
 
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
                 reward += self.fairness * self.fairness_reward
