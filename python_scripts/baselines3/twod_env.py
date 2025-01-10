@@ -86,15 +86,14 @@ class TwoDEnv(gym.Env):
 
         # Environment state
         self.visited_pos = dict()
-        self.pos_reward_max = 0.05
-        self.pos_reward_min = -0.05 
-        self.pos_penalty_max = 3
-        self.pos_penalty_min = 0
-        self.miss_penalty_max = 2.0
-        self.miss_penalty_min = 1.0
-        self.packet_reward_max = 4.0
+        # Scaled reward values preserving relative ratios
+        self.pos_reward_max = 0.0125
+        self.pos_reward_min = -0.0125
+        self.miss_penalty_max = 0.5
+        self.miss_penalty_min = 0.25
+        self.packet_reward_max = 1.0
         self.packet_reward_min = 0.0
-        self.fairness_reward = 0.25
+        self.fairness_reward = 0.0625
 
         unscaled_speed = 11  # meter per second based on this article http://unmannedcargo.org/chinese-supermarket-delivery-drone/
         unscaled_max_distance = 3000  # meters

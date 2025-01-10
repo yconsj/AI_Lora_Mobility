@@ -34,7 +34,9 @@ def make_skipped_env():
 
 vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
 vec_env = VecMonitor(vec_env)
-vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+# vec_env = VecNormalize.load("model_normalization_stats", vec_env); vec_env.training = False
+
+
 test_best = True
 
 if test_best:

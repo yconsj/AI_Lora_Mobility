@@ -100,18 +100,18 @@ def main():
     #  (https://www.reddit.com/r/reinforcementlearning/comments/1c9krih/dummyvecenv_vecnormalize_makes_the_reward_chart/)
     #
     #env = VecMonitor(env)
-    gamma =0.80
-    env = VecNormalize(env, gamma= gamma)
+    gamma = 0.80
+    env = VecNormalize(env, gamma=gamma, norm_reward=True)
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=150, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
-        features_extractor_kwargs=dict(features_dim=32),
+        features_extractor_kwargs=dict(features_dim=64),
         net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=1e-4, gamma=gamma, ent_coef=0.1, batch_size=256*4,
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=3e-4, gamma=gamma, ent_coef=0.01, batch_size=256,
                 clip_range=0.15, n_steps=8192*2, n_epochs=20,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",
@@ -124,7 +124,7 @@ def main():
     print("Learning finished")
     model.save("stable-model")
     env.training = False
-    #env.save("model_normalization_stats")
+    env.save("model_normalization_stats")
 
 
 if __name__ == '__main__':
