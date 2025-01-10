@@ -86,11 +86,11 @@ class TwoDEnv(gym.Env):
         # Environment state
         self.visited_pos = dict()
         self.pos_reward_max = 0.05
-        self.pos_reward_min = 0.0
+        self.pos_reward_min = -0.05
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
-        self.miss_penalty_max = 2.0
-        self.miss_penalty_min = 1.0
+        self.miss_penalty_max = 3.0
+        self.miss_penalty_min = 2.0
         self.packet_reward_max = 2
         self.fairness_reward = 0.25
 
@@ -161,18 +161,22 @@ class TwoDEnv(gym.Env):
         #                                                  |k + 5n + 2
 
         self.observation_space = spaces.Box(low=np.array(
-            [0] * (action_history_length + 2 +
+            [0] * (action_history_length +
+                   2 +
                    (len(self.nodes) * 2) +
+                   #len(self.nodes) +
                    len(self.nodes) +
                    len(self.nodes) +
                    len(self.nodes) 
                    #(len(self.nodes) * 2)
                    ), dtype=np.float32), high=np.array(
-            [1] * (action_history_length + 2 +
+            [1] * (action_history_length + 
+                   2 +
                    (len(self.nodes) * 2) +
+                   #len(self.nodes) +
                    len(self.nodes) +
                    len(self.nodes) +
-                   len(self.nodes)
+                   len(self.nodes) 
                    #(len(self.nodes) * 2)
                    ), dtype=np.float32))
 
@@ -267,11 +271,11 @@ class TwoDEnv(gym.Env):
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
                  *normalized_node_positions,
                  *normalized_elapsed_times,
-                # *normalized_send_intervals,
+                 #*normalized_send_intervals,
 				 *normalized_received_packets,
-                 *normalized_packet_index
-                # *normalized_distances_x,
-                # *normalized_distances_y
+                 *normalized_packet_index,
+                 #*normalized_distances_x,
+                 #*normalized_distances_y
                  ]
         return state
 
@@ -355,9 +359,8 @@ class TwoDEnv(gym.Env):
                 self.elapsed_times[i] = 0
                 self.loss_counts[i] = 0
                 self.last_packet_index = [i+1] + self.last_packet_index[:-1]
-
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
-                reward += self.packet_reward_max * self.fairness * self.fairness_reward
+                reward += self.fairness * self.fairness_reward
             elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
