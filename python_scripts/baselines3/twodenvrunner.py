@@ -5,7 +5,7 @@ import tensorflow as tf
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 from twod_env import TwoDEnv, FrameSkip
 
@@ -56,14 +56,16 @@ class TensorboardCallback(BaseCallback):
 def main():
     envs = 8
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
-
+    env = VecNormalize(env)
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=300, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
-    model = PPO("MlpPolicy", env, gamma=0.9, ent_coef=0, tensorboard_log="./tensorboard/")
+    
+    model = PPO("MlpPolicy", env, n_steps=2048*2, gamma=0.9, ent_coef=0.01, tensorboard_log="./tensorboard/")
+    print(model.policy)
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(5000000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(50000000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
 

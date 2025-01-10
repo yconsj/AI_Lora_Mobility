@@ -89,7 +89,7 @@ class TwoDEnv(gym.Env):
         self.pos_reward_min = -0.05
         self.pos_penalty_max = 3
         self.pos_penalty_min = 0
-        self.miss_penalty_max = 3.0
+        self.miss_penalty_max = 4.0
         self.miss_penalty_min = 2.0
         self.packet_reward_max = 2
         self.fairness_reward = 0.25
