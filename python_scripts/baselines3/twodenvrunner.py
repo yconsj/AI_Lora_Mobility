@@ -131,7 +131,6 @@ def main():
     model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
-    env.training = False
     env.save("model_normalization_stats")
 
 
