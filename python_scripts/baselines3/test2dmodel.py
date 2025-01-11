@@ -1,3 +1,5 @@
+import multiprocessing
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecNormalize, VecMonitor, SubprocVecEnv
 
@@ -14,13 +16,7 @@ def get_action_probs(input_state, input_model):
     return probs_np
 
 
-do_logging = True
-logfile = "env_log.json"
-render_mode = None
-# render_mode = "cv2"
-
 grid_size_x, grid_size_y = 0, 0
-
 
 def make_skipped_env():
     time_skip = 10
@@ -32,40 +28,51 @@ def make_skipped_env():
     return env
 
 
-vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict(), vec_env_cls=SubprocVecEnv)
-# vec_env = VecMonitor(vec_env)
+if __name__ == '__main__':
+    # Protect the entry point for multiprocessing
+    multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
 
-# Load the saved statistics, but do not update them at test time and disable reward normalization.
-vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-vec_env.training = False
-vec_env.norm_reward = False
+    do_logging = False
+    logfile = "env_log.json"
+    render_mode = None
+    # render_mode = "cv2"
 
-test_best = True
 
-if test_best:
-    model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
-else:
-    model = PPO.load("stable-model", device="cpu", print_system_info=True)
 
-print(model.policy)
-obs = vec_env.reset()
-print(obs)
+    vec_env = make_vec_env(make_skipped_env, n_envs=1, vec_env_cls=SubprocVecEnv)
+    # vec_env = VecMonitor(vec_env)
 
-# test trained model
-done = False
-counter = 0
-while not done:
-    action, _ = model.predict(obs, deterministic=True)
-    obs, reward, done, info = vec_env.step(action)
+    # Load the saved statistics, but do not update them at test time and disable reward normalization.
+    vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+    vec_env.training = False
+    vec_env.norm_reward = False
 
-    print(reward)
-    if counter % 100 == 0:
-        action_probabilities = get_action_probs(obs, model)
-        print(f"State: {obs}")
-        print(f"Action: {action}")
-        print(f"Action Probabilities: {action_probabilities}")
-    counter += 1
+    test_best = True
 
-if do_logging:
-    plot_mobile_gateway_with_nodes_advanced(logfile)
-    plot_heatmap(log_file=logfile, grid_size_x=grid_size_x + 1, grid_size_y=grid_size_y + 1)
+    if test_best:
+        model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
+    else:
+        model = PPO.load("stable-model", device="cpu", print_system_info=True)
+
+    print(model.policy)
+    obs = vec_env.reset()
+    print(obs)
+
+    # test trained model
+    done = False
+    counter = 0
+    while not done:
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, done, info = vec_env.step(action)
+
+        print(reward)
+        if counter % 100 == 0:
+            action_probabilities = get_action_probs(obs, model)
+            print(f"State: {obs}")
+            print(f"Action: {action}")
+            print(f"Action Probabilities: {action_probabilities}")
+        counter += 1
+
+    if do_logging:
+        plot_mobile_gateway_with_nodes_advanced(logfile)
+        plot_heatmap(log_file=logfile, grid_size_x=grid_size_x + 1, grid_size_y=grid_size_y + 1)

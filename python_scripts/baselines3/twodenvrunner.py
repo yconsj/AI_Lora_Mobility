@@ -114,13 +114,16 @@ def main():
     )
 
     def learn_rate_schedule(x: float):
-        initial_learn_rate = 5e-4
-        final_learn_rate = 1e-4
-        return initial_learn_rate + (final_learn_rate - initial_learn_rate) * x
+        initial_learn_rate = 5e-2
+        final_learn_rate = 1e-3
+        progress_so_far = 1.0 - x
+        return initial_learn_rate + (final_learn_rate - initial_learn_rate) * progress_so_far
 
     model = PPO("MlpPolicy", env, device="cpu", learning_rate=learn_rate_schedule, gamma=gamma, ent_coef=0.01,
                 batch_size=256,
-                clip_range=0.15, n_steps=8192 * 2, n_epochs=20,
+                clip_range=0.15,
+                n_steps=4096 * 4, # one episode is roughly 4000 steps, when using time_skip=10
+                n_epochs=20,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",
                 )

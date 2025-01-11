@@ -74,7 +74,7 @@ class TwoDEnv(gym.Env):
         super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
-        self.action_space = spaces.Discrete(5, start=-2)
+        self.action_space = spaces.Discrete(5, start=0)
         self.timeskip = timeskip
         self.action_history_length = action_history_length
 
@@ -87,6 +87,7 @@ class TwoDEnv(gym.Env):
         # Environment state
         self.visited_pos = dict()
         # Scaled reward values preserving relative ratios
+        self.good_action_reward = 0.025
         self.pos_reward_max = 0.0125
         self.pos_reward_min = -0.0125
         self.miss_penalty_max = 0.5
@@ -218,15 +219,15 @@ class TwoDEnv(gym.Env):
                     if distance <= node.transmission_model.max_transmission_distance:
                         # Reception is a function of distance
                         reception += node.transmission_model.get_reception_prob((distance))
-                            # (1 - distance / node.transmission_model.max_transmission_distance)
+                        # (1 - distance / node.transmission_model.max_transmission_distance)
 
                 # Normalize to between 0 and 1
-                grid[y, x] = min(reception, 1.0)
+                grid[x, y] = min(reception, 1.0)
 
         return grid
 
     def reset(self, seed=None, options=None):
-        self.prev_actions = deque([-2] * self.action_history_length, maxlen=self.action_history_length)
+        self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.recent_packets = deque([0] * self.recent_packets_length, maxlen=self.recent_packets_length)
         self.prev_pos = self.pos
         self.visited_pos = dict()
@@ -313,19 +314,23 @@ class TwoDEnv(gym.Env):
         reward = self.packet_reward_max * sending_node.transmission_model.get_reception_prob(distance)
         return reward
 
-    def get_pos_reward(self, pos1, pos2, time):
-        scaled_time = (time / self.max_steps) * 2
-        distance = math.dist(pos1, pos2)
+    def get_good_action_reward(self, distance_prior_action, distance_after_action):
+        is_good_action = int((distance_after_action < distance_prior_action))
+        return self.good_action_reward * is_good_action
 
+    def get_pos_reward(self, node: 'Node'):
+        distance = math.dist(self.pos, node.pos)
+
+        failure_probability = 1 - node.transmission_model.get_reception_prob(distance)
         scaled_distance = distance / self.max_cross_distance
-        scaled_distance_time = scaled_distance  # * scaled_time
+        # weight = (scaled_distance + failure_probability) / 2 #TODO: try enable, but change min reward
         # Return reward based on scaled distance between a min and max reward
-        reward = self.pos_reward_max - (scaled_distance_time * (self.pos_reward_max - self.pos_reward_min))
+        reward = self.pos_reward_max - (scaled_distance * (self.pos_reward_max - self.pos_reward_min))
 
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
 
-        #if distance < self.node_max_transmission_distance:
+        # if distance < self.node_max_transmission_distance:
         #    reward *= 2
         return reward
 
@@ -355,19 +360,24 @@ class TwoDEnv(gym.Env):
 
         return 0
 
-    def step(self, input_action):
-        min_input_action = -2
-        max_input_action = 2
-        min_scaled_action = 0
-        max_scaled_action = 4
-        # Scaling formula
-        action = min_scaled_action + ((input_action - min_input_action) / (max_input_action - min_input_action)) * (
-                    max_scaled_action - min_scaled_action)
+    def get_next_sending_node_index(self):
+        idx_min = 0
+        for i in range(len(self.nodes)):
+            if self.nodes[i].time_of_next_packet < self.nodes[idx_min].time_of_next_packet:
+                idx_min = i
 
+        return idx_min
+
+    def step(self, action):
         if self.render_mode == "cv2":
             self.render()
         reward = 0
         self.steps += 1
+
+        idx_next_sending_node = self.get_next_sending_node_index()
+        reward += self.get_pos_reward(self.nodes[idx_next_sending_node]) # TODO: try disable
+
+        distance_prior_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
 
         if action == 0:  # stand still
             # nothing
@@ -381,6 +391,9 @@ class TwoDEnv(gym.Env):
         elif action == 4:  # down
             self.pos = self.pos[0], max((self.pos[1] - self.scaled_speed), 0),
 
+        distance_after_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
+        reward += self.get_good_action_reward(distance_prior_action, distance_after_action)  # TODO: try enable
+
         # Track transmissions for each node
         transmission_occurred_per_node = [True] * len(self.nodes)
         for i in range(len(self.nodes)):
@@ -390,7 +403,7 @@ class TwoDEnv(gym.Env):
                 transmission_occurred_per_node[i] = False
             elif received == PACKET_STATUS.RECEIVED:
                 reward += self.get_packet_reward(self.nodes[i])
-                #if self.last_packet_index != i:
+                # if self.last_packet_index != i:
                 #    reward += self.packet_reward_max
                 # reward *= p1.rssi * (1- (self.elapsed_times[i] / self.max_steps))
                 # reward /= 1 + (self.loss_count2 / 10)
@@ -408,18 +421,6 @@ class TwoDEnv(gym.Env):
                 self.loss_counts[i] += 1
                 miss_penalty = self.get_miss_penalty(self.nodes[i])  # * self.loss_counts[i]
                 reward += miss_penalty
-
-            is_next_to_send = True
-            for node in self.nodes:
-                if self.nodes[i].time_of_next_packet > node.time_of_next_packet:
-                    is_next_to_send = False
-                    break
-            if is_next_to_send:
-                reward += self.get_pos_reward(self.pos, self.nodes[i].pos, self.elapsed_times[i])
-
-        # print(f"{self.received_per_node = }\n{self.misses_per_node = }\n\n{self.fairness = }")
-
-        # reward += self.get_explore_reward(self.pos, self.steps)
 
         terminated = self.total_misses >= 20
         truncated = self.steps >= self.max_steps
@@ -559,7 +560,8 @@ class TwoDEnv(gym.Env):
 
 
 class TransmissionModel:
-    def __init__(self, max_transmission_distance=50, ploss_scale=300, use_deterministic_transmissions=False, rssi_ref=-30, path_loss_exponent=2.7,
+    def __init__(self, max_transmission_distance=50, ploss_scale=300, use_deterministic_transmissions=False,
+                 rssi_ref=-30, path_loss_exponent=2.7,
                  noise_floor=-100,
                  rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30):
         self.max_transmission_distance = max_transmission_distance
