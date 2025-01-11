@@ -104,10 +104,10 @@ class TwoDEnv(gym.Env):
         self.steps = 0
         self.ploss_scale = 300  # adjusts the dropoff of transmission probability by distance
 
-        pos1 = (25, 25)
-        pos2 = (self.max_distance_x - 25, self.max_distance_y - 25)
-        pos3 = (25, self.max_distance_y - 25)
-        pos4 = (self.max_distance_x - 25, 25)
+        pos1 = (random.randint(10, self.max_distance_x-10),random.randint(10, self.max_distance_y-10))
+        pos2 = (random.randint(10, self.max_distance_x-10),random.randint(10, self.max_distance_y-10))
+        pos3 = (random.randint(10, self.max_distance_x-10),random.randint(10, self.max_distance_y-10))
+        pos4 = (random.randint(10, self.max_distance_x-10),random.randint(10, self.max_distance_y-10))
 
         positions =[pos1, pos2,pos3, pos4] 
         random.shuffle(positions)
@@ -213,7 +213,7 @@ class TwoDEnv(gym.Env):
                         reception += (1 - distance / node.transmission_model.max_transmission_distance)
 
                 # Normalize to between 0 and 1
-                grid[y, x] = min(reception, 1.0)
+                grid[x, y] = min(reception, 1.0)
 
         return grid
 
