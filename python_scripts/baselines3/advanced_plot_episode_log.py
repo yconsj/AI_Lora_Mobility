@@ -166,6 +166,7 @@ def create_heatmap(positions, step_times, grid_size_x, grid_size_y):
     grid = np.log(grid)
     grid += abs(np.min(grid))  # make sure all values are at least 0
     # Normalize the grid by max time
+    print(f"{np.max(grid) = }")
     grid /= np.max(grid)  # scale so values are between 0 and 1
 
     return grid

@@ -87,11 +87,11 @@ class TwoDEnv(gym.Env):
         # Environment state
         self.visited_pos = dict()
         # Scaled reward values preserving relative ratios
-        self.good_action_reward = 0.025
         self.pos_reward_max = 0.0125
-        self.pos_reward_min = -0.0125
+        self.pos_reward_min = -self.pos_reward_max
+        self.good_action_reward = self.pos_reward_max / 2
         self.miss_penalty_max = 0.5
-        self.miss_penalty_min = 0.25
+        self.miss_penalty_min = self.miss_penalty_max / 2
         self.packet_reward_max = 1.0
         self.packet_reward_min = 0.0
         self.fairness_reward = 0.0625
@@ -109,7 +109,7 @@ class TwoDEnv(gym.Env):
         self.ploss_scale = 100  # adjusts the dropoff of transmission probability by distance
         self.node_max_transmission_distance = 100
         node_pos = [
-            (self.max_distance_x // 6, self.max_distance_y // 6),
+            (self.max_distance_x // 6, self. max_distance_y // 6),
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y - (self.max_distance_y // 6)),
             (self.max_distance_x // 6, self.max_distance_y - (self.max_distance_y // 6)),
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
@@ -228,7 +228,7 @@ class TwoDEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
-        self.recent_packets = deque([0] * self.recent_packets_length, maxlen=self.recent_packets_length)
+        self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
         self.prev_pos = self.pos
         self.visited_pos = dict()
         self.total_misses = 0
@@ -375,7 +375,6 @@ class TwoDEnv(gym.Env):
         self.steps += 1
 
         idx_next_sending_node = self.get_next_sending_node_index()
-        reward += self.get_pos_reward(self.nodes[idx_next_sending_node]) # TODO: try disable
 
         distance_prior_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
 
@@ -387,10 +386,11 @@ class TwoDEnv(gym.Env):
         elif action == 2:  # right
             self.pos = min(self.pos[0] + self.scaled_speed, self.max_distance_x), self.pos[1]
         elif action == 3:  # up
-            self.pos = self.pos[0], min(self.pos[1] + self.scaled_speed, self.max_distance_y),
+            self.pos = self.pos[0], min(self.pos[1] + self.scaled_speed, self.max_distance_y)
         elif action == 4:  # down
-            self.pos = self.pos[0], max((self.pos[1] - self.scaled_speed), 0),
+            self.pos = self.pos[0], max((self.pos[1] - self.scaled_speed), 0)
 
+        reward += self.get_pos_reward(self.nodes[idx_next_sending_node])  # TODO: try disable
         distance_after_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
         reward += self.get_good_action_reward(distance_prior_action, distance_after_action)  # TODO: try enable
 

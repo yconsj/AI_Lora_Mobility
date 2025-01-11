@@ -55,7 +55,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
             residual = x  # Save input for skip connection
             x = layer(x)
             x = self.activation(x)
-            x = x + residual  # Add residual (skip connection) #TODO: reactivate this?
+            x = x + residual  # Add residual (skip connection)
 
         # Final output layer
         x = self.output_layer(x)
@@ -95,21 +95,21 @@ class TensorboardCallback(BaseCallback):
 
 
 def main():
-    envs = 16
+    envs = 16  # TODO: increase again
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
     # TODO: DONT try VecNormalize with this VecMonitor inbetween. Remember to do the same in test2dmodel
     #  (https://www.reddit.com/r/reinforcementlearning/comments/1c9krih/dummyvecenv_vecnormalize_makes_the_reward_chart/)
     #
     # env = VecMonitor(env)
-    gamma = 0.80
-    env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)
+    gamma = 0.85
+    #env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)
 
-    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=150, min_evals=100, verbose=1)
+    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=200, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
-        features_extractor_kwargs=dict(features_dim=64),
+        features_extractor_kwargs=dict(features_dim=32),
         net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
 
@@ -119,22 +119,22 @@ def main():
         progress_so_far = 1.0 - x
         return initial_learn_rate + (final_learn_rate - initial_learn_rate) * progress_so_far
 
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=learn_rate_schedule, gamma=gamma, ent_coef=0.01,
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=5e-5, gamma=gamma, ent_coef=0.005,
                 batch_size=256,
                 clip_range=0.15,
-                n_steps=4096 * 4, # one episode is roughly 4000 steps, when using time_skip=10
-                n_epochs=20,
+                n_steps=4096,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
+                n_epochs=10,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",
                 )
     # TODO: remove ent_coef from above, and change model learn steps
-    # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=8192,?
+    # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
     print("Learning started")
     # default timesteps: 500000
     model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
-    env.save("model_normalization_stats")
+    #env.save("model_normalization_stats")
 
 
 if __name__ == '__main__':

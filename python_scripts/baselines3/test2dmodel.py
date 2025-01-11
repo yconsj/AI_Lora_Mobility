@@ -32,14 +32,14 @@ if __name__ == '__main__':
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
 
-    do_logging = False
+    do_logging = True
     logfile = "env_log.json"
     render_mode = None
     # render_mode = "cv2"
 
 
 
-    vec_env = make_vec_env(make_skipped_env, n_envs=1, vec_env_cls=SubprocVecEnv)
+    vec_env = make_vec_env(make_skipped_env, n_envs=1,  env_kwargs=dict())
     # vec_env = VecMonitor(vec_env)
 
     # Load the saved statistics, but do not update them at test time and disable reward normalization.
@@ -75,4 +75,5 @@ if __name__ == '__main__':
 
     if do_logging:
         plot_mobile_gateway_with_nodes_advanced(logfile)
+        print(f"{grid_size_x, grid_size_y =}")
         plot_heatmap(log_file=logfile, grid_size_x=grid_size_x + 1, grid_size_y=grid_size_y + 1)
