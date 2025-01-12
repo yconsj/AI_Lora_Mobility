@@ -102,7 +102,7 @@ def main():
     #
     # env = VecMonitor(env)
     gamma = 0.85
-    #env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)
+    #env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=200, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,

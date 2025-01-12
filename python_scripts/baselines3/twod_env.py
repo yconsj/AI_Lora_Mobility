@@ -74,7 +74,8 @@ class TwoDEnv(gym.Env):
         super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
-        self.action_space = spaces.Discrete(5, start=0)
+        self.num_discrete_actions = 5
+        self.action_space = spaces.Discrete(self.num_discrete_actions, start=0)
         self.timeskip = timeskip
         self.action_history_length = action_history_length
 
@@ -109,7 +110,7 @@ class TwoDEnv(gym.Env):
         self.ploss_scale = 100  # adjusts the dropoff of transmission probability by distance
         self.node_max_transmission_distance = 100
         node_pos = [
-            (self.max_distance_x // 6, self. max_distance_y // 6),
+            (self.max_distance_x // 6, self.max_distance_y // 6),
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y - (self.max_distance_y // 6)),
             (self.max_distance_x // 6, self.max_distance_y - (self.max_distance_y // 6)),
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
@@ -166,27 +167,31 @@ class TwoDEnv(gym.Env):
 
         self.observation_space = spaces.Box(
             low=np.array(
-                [0] * (action_history_length +
-                       2 +
-                       1 +
-                       len(self.nodes) +
-                       (len(self.nodes) * 2) +
-                       len(self.nodes) +
-                       len(self.nodes) +
-                       len(self.nodes)
-                       ) +
-                [-1] * self.recent_packets_length, dtype=np.float32),
+                [0] * (
+                        action_history_length * self.num_discrete_actions +  # One-hot encoded prev_actions
+                        2 +
+                        1 +
+                        len(self.nodes) +
+                        (len(self.nodes) * 2) +
+                        len(self.nodes) +
+                        len(self.nodes) +
+                        len(self.nodes) +
+                        self.recent_packets_length * (len(self.nodes) + 1)  # One-hot encoded recent_packets)
+                )
+                , dtype=np.float32),
             high=np.array(
-                [1] * (action_history_length +
-                       2 +
-                       1 +
-                       len(self.nodes) +
-                       (len(self.nodes) * 2) +
-                       len(self.nodes) +
-                       len(self.nodes) +
-                       len(self.nodes) +
-                       self.recent_packets_length
-                       ), dtype=np.float32))
+                [1] * (
+                        action_history_length * self.num_discrete_actions +  # One-hot encoded prev_actions
+                        2 +
+                        1 +
+                        len(self.nodes) +
+                        (len(self.nodes) * 2) +
+                        len(self.nodes) +
+                        len(self.nodes) +
+                        len(self.nodes) +
+                        self.recent_packets_length * (len(self.nodes) + 1)  # One-hot encoded recent_packets)
+                )
+                , dtype=np.float32))
 
         # rendering attributes
         self.width, self.height = self.max_distance_x + 50, self.max_distance_y + 50  # Size of the window
@@ -263,7 +268,19 @@ class TwoDEnv(gym.Env):
         return np.array(state, dtype=np.float32), {}
 
     def get_state(self):
-        normalized_actions = [action / 4 for action in self.prev_actions]
+        # One-hot encode and normalize previous actions
+        onehot_encoded_actions = []
+        for action in self.prev_actions:
+            onehot = [1.0 if i == action else 0.0 for i in range(self.num_discrete_actions)]
+            onehot_encoded_actions.extend(onehot)
+
+        onehot_encoded_recent_packets = []
+        for recent_packet in self.recent_packets:
+            onehot = [1.0 if i == recent_packet else 0.0 for i in
+                      range(-1, len(self.nodes))]  # Include -1 for "invalid"
+            onehot_encoded_recent_packets.extend(onehot)
+
+        # Other normalized components
         normalized_send_time = [node.time_of_next_packet / self.max_steps for node in self.nodes]
 
         normalized_node_positions = [
@@ -291,22 +308,19 @@ class TwoDEnv(gym.Env):
             num_received_packets / self.expected_max_packets_sent
             for num_received_packets in self.received_per_node
         ]
-        normalized_recent_packets = [
-            node_id / len(self.nodes)
-            for node_id in self.recent_packets
-        ]
-        # normalized_last_packet = self.last_packet_index / len(self.nodes)
-        # (self.steps % max(self.send_intervals)) / max(self.send_intervals),  # TODO: GCD instead of max
-        state = [*normalized_actions,
-                 self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
-                 self.steps / self.max_steps,
-                 *normalized_send_time,
-                 *normalized_node_positions,
-                 *normalized_node_distances,
-                 *normalized_elapsed_times,
-                 *normalized_received_packets,
-                 *normalized_recent_packets
-                 ]
+
+        # Combine all normalized and one-hot encoded components into the state
+        state = (
+                onehot_encoded_actions +
+                [self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y] +
+                [self.steps / self.max_steps] +
+                normalized_send_time +
+                normalized_node_positions +
+                normalized_node_distances +
+                normalized_elapsed_times +
+                normalized_received_packets +
+                onehot_encoded_recent_packets
+        )
         return state
 
     def get_packet_reward(self, sending_node: 'Node'):

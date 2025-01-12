@@ -154,8 +154,8 @@ def create_heatmap(positions, step_times, grid_size_x, grid_size_y):
 
     # Populate the grid with time spent
     for (x, y), time in zip(positions, step_times):
-        grid_x = int(x)
-        grid_y = int(y)
+        grid_x = round(x)
+        grid_y = round(y)
 
         # Ensure the indices are within grid bounds
         if 0 <= grid_x < grid_size_x and 0 <= grid_y < grid_size_y:
@@ -166,7 +166,6 @@ def create_heatmap(positions, step_times, grid_size_x, grid_size_y):
     grid = np.log(grid)
     grid += abs(np.min(grid))  # make sure all values are at least 0
     # Normalize the grid by max time
-    print(f"{np.max(grid) = }")
     grid /= np.max(grid)  # scale so values are between 0 and 1
 
     return grid
