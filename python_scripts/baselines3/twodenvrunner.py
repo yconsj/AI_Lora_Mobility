@@ -26,7 +26,7 @@ def make_skipped_env():
 
 
 class CustomPolicyNetwork(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=64, num_blocks=4):
+    def __init__(self, observation_space, features_dim=64, num_blocks=3):
         super(CustomPolicyNetwork, self).__init__(observation_space, features_dim)
         input_dim = observation_space.shape[0]
 
@@ -102,14 +102,14 @@ def main():
     #
     # env = VecMonitor(env)
     gamma = 0.85
-    #env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
+    env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=200, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
-        features_extractor_kwargs=dict(features_dim=32),
+        features_extractor_kwargs=dict(features_dim=64),
         net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
 
@@ -120,7 +120,7 @@ def main():
         return initial_learn_rate + (final_learn_rate - initial_learn_rate) * progress_so_far
 
     model = PPO("MlpPolicy", env, device="cpu", learning_rate=5e-5, gamma=gamma, ent_coef=0.005,
-                batch_size=256,
+                batch_size=64,
                 clip_range=0.15,
                 n_steps=4096,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
                 n_epochs=10,
@@ -134,7 +134,7 @@ def main():
     model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
-    #env.save("model_normalization_stats")
+    env.save("model_normalization_stats")
 
 
 if __name__ == '__main__':
