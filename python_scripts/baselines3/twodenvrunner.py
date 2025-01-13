@@ -26,7 +26,7 @@ def make_skipped_env():
 
 
 class CustomPolicyNetwork(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=64, num_blocks=3):
+    def __init__(self, observation_space, features_dim=64, num_blocks=2):
         super(CustomPolicyNetwork, self).__init__(observation_space, features_dim)
         input_dim = observation_space.shape[0]
 
@@ -38,7 +38,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
 
         # Define activation and dropout
         self.activation = nn.ReLU()
-        self.dropout = nn.Dropout(p=0.2)
+        #self.dropout = nn.Dropout(p=0.2)
 
         # Define the output layer
         self.output_layer = nn.Linear(64, features_dim)
@@ -47,7 +47,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
         # Initial input layer
         x = self.input_layer(observations)
         x = self.activation(x)
-        x = self.dropout(x)
+        #x = self.dropout(x)  # TODO: Try to disable this
 
         # Apply residual blocks
         # https://en.wikipedia.org/wiki/Residual_neural_network
@@ -131,7 +131,7 @@ def main():
     # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(4_000_000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
     env.save("model_normalization_stats")

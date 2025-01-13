@@ -175,7 +175,7 @@ class TwoDEnv(gym.Env):
                         len(self.nodes) +
                         len(self.nodes) +
                         len(self.nodes) +
-                        self.recent_packets_length * (len(self.nodes) + 1)  # One-hot encoded recent_packets)
+                        self.recent_packets_length * (len(self.nodes))  # One-hot encoded recent_packets)
                 )
                 , dtype=np.float32),
             high=np.array(
@@ -188,7 +188,7 @@ class TwoDEnv(gym.Env):
                         len(self.nodes) +
                         len(self.nodes) +
                         len(self.nodes) +
-                        self.recent_packets_length * (len(self.nodes) + 1)  # One-hot encoded recent_packets)
+                        self.recent_packets_length * (len(self.nodes))  # One-hot encoded recent_packets)
                 )
                 , dtype=np.float32))
 
@@ -276,7 +276,7 @@ class TwoDEnv(gym.Env):
         onehot_encoded_recent_packets = []
         for recent_packet in self.recent_packets:
             onehot = [1.0 if i == recent_packet else 0.0 for i in
-                      range(-1, len(self.nodes))]  # Include -1 for "invalid"
+                      range(len(self.nodes))]  # Include -1 for "invalid"
             onehot_encoded_recent_packets.extend(onehot)
 
         # Other normalized components
