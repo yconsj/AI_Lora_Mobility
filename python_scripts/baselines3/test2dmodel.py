@@ -43,7 +43,7 @@ if __name__ == '__main__':
     # vec_env = VecMonitor(vec_env)
 
     # Load the saved statistics, but do not update them at test time and disable reward normalization.
-    #vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+    vec_env = VecNormalize.load("model_normalization_stats", vec_env)
     vec_env.training = False
     vec_env.norm_reward = False
 

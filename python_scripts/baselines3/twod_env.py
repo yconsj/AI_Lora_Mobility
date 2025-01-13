@@ -90,7 +90,7 @@ class TwoDEnv(gym.Env):
         # Scaled reward values preserving relative ratios
         self.pos_reward_max = 0.0125
         self.pos_reward_min = -self.pos_reward_max
-        self.good_action_reward = self.pos_reward_max / 2
+        self.good_action_reward = self.pos_reward_max / 4
         self.miss_penalty_max = 0.5
         self.miss_penalty_min = self.miss_penalty_max / 2
         self.packet_reward_max = 1.0
@@ -142,7 +142,6 @@ class TwoDEnv(gym.Env):
 
         self.elapsed_times = [0, 0, 0, 0]
         self.loss_counts = [0, 0, 0, 0]
-        self.last_packet_index = -1
 
         self.expected_max_packets_sent = self.max_steps // min(self.send_intervals)
         self.total_reward = 0
@@ -329,8 +328,11 @@ class TwoDEnv(gym.Env):
         return reward
 
     def get_good_action_reward(self, distance_prior_action, distance_after_action):
-        is_good_action = int((distance_after_action < distance_prior_action))
-        return self.good_action_reward * is_good_action
+        is_good_action = distance_after_action < distance_prior_action
+        if is_good_action:
+            return self.good_action_reward * is_good_action
+        else:
+            return -self.good_action_reward * is_good_action * 2
 
     def get_pos_reward(self, node: 'Node'):
         distance = math.dist(self.pos, node.pos)

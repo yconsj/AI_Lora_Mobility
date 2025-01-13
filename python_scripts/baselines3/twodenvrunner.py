@@ -104,7 +104,7 @@ def main():
     gamma = 0.85
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
-    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=200, min_evals=100, verbose=1)
+    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
@@ -119,7 +119,7 @@ def main():
         progress_so_far = 1.0 - x
         return initial_learn_rate + (final_learn_rate - initial_learn_rate) * progress_so_far
 
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=5e-5, gamma=gamma, ent_coef=0.005,
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=6e-5, gamma=gamma, ent_coef=0.005,
                 batch_size=64,
                 clip_range=0.15,
                 n_steps=4096,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
