@@ -2,10 +2,12 @@ import multiprocessing
 import warnings
 
 import tensorflow as tf
+import torch.nn as nn
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecMonitor
 
 from twod_env import TwoDEnv, FrameSkip
 
@@ -16,12 +18,51 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
 def make_skipped_env():
-    env = TwoDEnv(render_mode="none", timeskip=10)
-    env = FrameSkip(env, skip=10)  # Frame skip for action repeat
+    time_skip = 10
+    # TODO: use_deterministic_transmissions=False
+    env = TwoDEnv(render_mode="none", timeskip=time_skip)
+    env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
 
-## tensorboard --logdir ./tensorboard/;./tensorboard/  ##
+class CustomPolicyNetwork(BaseFeaturesExtractor):
+    def __init__(self, observation_space, features_dim=64, num_blocks=3):
+        super(CustomPolicyNetwork, self).__init__(observation_space, features_dim)
+        input_dim = observation_space.shape[0]
+
+        # Define the input layer
+        self.input_layer = nn.Linear(input_dim, 64)
+
+        # Create residual blocks dynamically
+        self.residual_blocks = nn.ModuleList([nn.Linear(64, 64) for _ in range(num_blocks)])
+
+        # Define activation and dropout
+        self.activation = nn.ReLU()
+        self.dropout = nn.Dropout(p=0.2)
+
+        # Define the output layer
+        self.output_layer = nn.Linear(64, features_dim)
+
+    def forward(self, observations):
+        # Initial input layer
+        x = self.input_layer(observations)
+        x = self.activation(x)
+        #x = self.dropout(x)
+
+        # Apply residual blocks
+        # https://en.wikipedia.org/wiki/Residual_neural_network
+        for layer in self.residual_blocks:
+            residual = x  # Save input for skip connection
+            x = layer(x)
+            x = self.activation(x)
+            x = x + residual  # Add residual (skip connection)
+
+        # Final output layer
+        x = self.output_layer(x)
+        return x
+
+
+## tensorboard --logdir ./tensorboard/; ##
 # http://localhost:6006/
 class TensorboardCallback(BaseCallback):
     """
@@ -54,20 +95,40 @@ class TensorboardCallback(BaseCallback):
 
 
 def main():
-    envs = 8
+    envs = 16  # TODO: increase again
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
-    env = VecNormalize(env)
-    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=300, min_evals=100, verbose=1)
-    eval_callback = EvalCallback(env, eval_freq=1000, callback_after_eval=stop_train_callback,
+    # TODO: DONT try VecNormalize with this VecMonitor inbetween. Remember to do the same in test2dmodel
+    #  (https://www.reddit.com/r/reinforcementlearning/comments/1c9krih/dummyvecenv_vecnormalize_makes_the_reward_chart/)
+    #
+    # env = VecMonitor(env)
+    gamma = 0.85
+    env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
+
+    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
+    eval_callback = EvalCallback(env, eval_freq=2048*2, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
-    
-    model = PPO("MlpPolicy", env, n_steps=2048*2, gamma=0.9, ent_coef=0.01, tensorboard_log="./tensorboard/")
-    print(model.policy)
+    policy_kwargs = dict(
+        features_extractor_class=CustomPolicyNetwork,
+        features_extractor_kwargs=dict(features_dim=64),
+        net_arch=dict(pi=[64, 64,64], vf=[64, 64,64])
+    )
+
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=6e-5, gamma=gamma, ent_coef=0.005,
+                batch_size=64,
+                clip_range=0.15,
+                n_steps=2048*2,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
+                n_epochs=10,
+                policy_kwargs=policy_kwargs,
+                tensorboard_log="./tensorboard/",
+                )
+    # TODO: remove ent_coef from above, and change model learn steps
+    # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(50000000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
+    env.save("model_normalization_stats")
 
 
 if __name__ == '__main__':

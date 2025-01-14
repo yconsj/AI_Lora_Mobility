@@ -85,15 +85,14 @@ class TwoDEnv(gym.Env):
 
         # Environment state
         self.visited_pos = dict()
-        self.pos_reward_max = 0.05
-        self.pos_reward_min = -0.05
-        self.pos_penalty_max = 3
-        self.pos_penalty_min = 0
-        self.miss_penalty_max = 4.0
-        self.miss_penalty_min = 2.0
-        self.packet_reward_max = 2
-        self.fairness_reward = 0.25
-
+        self.pos_reward_max = 0.0125
+        self.pos_reward_min = -self.pos_reward_max
+        self.good_action_reward = self.pos_reward_max / 4
+        self.miss_penalty_max = 2
+        self.miss_penalty_min = self.miss_penalty_max / 2
+        self.packet_reward_max = 2.0
+        self.packet_reward_min = 0.0
+        self.fairness_reward = 0.0625
         speed = 20  # meter per second
         max_distance = 3000  # meter
         self.max_distance_x = int(max_distance / speed)  # scaled by speed
@@ -104,26 +103,26 @@ class TwoDEnv(gym.Env):
         self.steps = 0
         self.ploss_scale = 300  # adjusts the dropoff of transmission probability by distance
 
-        pos1 = (random.randint(10, self.max_distance_x-10),random.randint(10, self.max_distance_y-10))
-        pos2 = (random.randint(10, self.max_distance_x-10),random.randint(10, self.max_distance_y-10))
-        pos3 = (random.randint(10, self.max_distance_x-10),random.randint(10, self.max_distance_y-10))
-        pos4 = (random.randint(10, self.max_distance_x-10),random.randint(10, self.max_distance_y-10))
+        pos1 = (random.randint(0, self.max_distance_x),random.randint(0, self.max_distance_y))
+        pos2 = (random.randint(0, self.max_distance_x),random.randint(0, self.max_distance_y))
+        pos3 = (random.randint(0, self.max_distance_x),random.randint(0, self.max_distance_y))
+        pos4 = (random.randint(0, self.max_distance_x),random.randint(0, self.max_distance_y))
 
         positions =[pos1, pos2,pos3, pos4] 
-        random.shuffle(positions)
-        self.send_intervals = [500 * 4, 500 * 4, 500 * 4, 500 * 4]
-        transmission_model1 = TransmissionModel(max_transmission_distance=50,
+        #random.shuffle(positions)
+        self.send_intervals = [600 * 4, 600 * 4, 600 * 4, 600 * 4]
+        transmission_model1 = TransmissionModel(max_transmission_distance=20,
                                                 ploss_scale=self.ploss_scale)
-        self.node1 = Node(positions[0], transmission_model1, time_to_first_packet=500, send_interval=self.send_intervals[0])
-        transmission_model2 = TransmissionModel(max_transmission_distance=50,
+        self.node1 = Node(positions[0], transmission_model1, time_to_first_packet=600, send_interval=self.send_intervals[0])
+        transmission_model2 = TransmissionModel(max_transmission_distance=20,
                                                 ploss_scale=self.ploss_scale)
-        self.node2 = Node(positions[1], transmission_model2, time_to_first_packet=500 * 2, send_interval=self.send_intervals[1])
-        transmission_model3 = TransmissionModel(max_transmission_distance=50,
+        self.node2 = Node(positions[1], transmission_model2, time_to_first_packet=600 * 2, send_interval=self.send_intervals[1])
+        transmission_model3 = TransmissionModel(max_transmission_distance=20,
                                                 ploss_scale=self.ploss_scale)
-        self.node3 = Node(positions[2], transmission_model3, time_to_first_packet=500 * 3 , send_interval=self.send_intervals[2])
-        transmission_model4 = TransmissionModel(max_transmission_distance=50,
+        self.node3 = Node(positions[2], transmission_model3, time_to_first_packet=600 * 3 , send_interval=self.send_intervals[2])
+        transmission_model4 = TransmissionModel(max_transmission_distance=20,
                                                 ploss_scale=self.ploss_scale)
-        self.node4 = Node(positions[3], transmission_model4, time_to_first_packet=500 * 4, send_interval=self.send_intervals[3])
+        self.node4 = Node(positions[3], transmission_model4, time_to_first_packet=600 * 4, send_interval=self.send_intervals[3])
         self.nodes = [self.node1, self.node2, self.node3, self.node4]
         # while True:
         #     x2 = random.randint(0,150)
@@ -146,6 +145,7 @@ class TwoDEnv(gym.Env):
         self.total_misses = 0
         self.total_received = 0
         self.fairness = 0.0
+
         self.received_per_node = [0] * len(self.nodes)
         self.misses_per_node = [0] * len(self.nodes)
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
@@ -164,18 +164,18 @@ class TwoDEnv(gym.Env):
             [0] * (action_history_length +
                    2 +
                    (len(self.nodes) * 2) +
+                   len(self.nodes) +
                    #len(self.nodes) +
-                   len(self.nodes) +
-                   len(self.nodes) +
+                   #len(self.nodes) +
                    len(self.nodes) 
                    #(len(self.nodes) * 2)
                    ), dtype=np.float32), high=np.array(
             [1] * (action_history_length + 
                    2 +
                    (len(self.nodes) * 2) +
+                   len(self.nodes) +
                    #len(self.nodes) +
-                   len(self.nodes) +
-                   len(self.nodes) +
+                   #len(self.nodes) +
                    len(self.nodes) 
                    #(len(self.nodes) * 2)
                    ), dtype=np.float32))
@@ -219,7 +219,7 @@ class TwoDEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
-        self.last_packet = [-1, -1, -1, -1]
+        self.last_packet_index = [0,0,0,0]
         self.loss_count1 = 0
         self.loss_count2 = 0
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
@@ -230,6 +230,8 @@ class TwoDEnv(gym.Env):
 
         for i in range(len(self.nodes)):
             self.nodes[i].reset()
+            self.nodes[i].pos= random.randint(0, self.max_distance_x),random.randint(0, self.max_distance_y)
+
             self.elapsed_times[i] = 0
             self.loss_counts[i] = 0
             self.received_per_node[i] = 0
@@ -265,15 +267,13 @@ class TwoDEnv(gym.Env):
                                        for num_received_packets in self.received_per_node]
         normalized_distances_x = [ (abs(self.pos[0] - node.pos[0])/self.max_distance_x) for node in self.nodes]
         normalized_distances_y = [ (abs(self.pos[1] - node.pos[1])/self.max_distance_y) for node in self.nodes]
-
-        normalized_packet_index = [i / 4 for i in self.last_packet_index]
         state = [*normalized_actions,
                  self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y,
                  *normalized_node_positions,
                  *normalized_elapsed_times,
                  #*normalized_send_intervals,
-				 *normalized_received_packets,
-                 *normalized_packet_index,
+				 #*normalized_received_packets,
+                 *self.last_packet_index,
                  #*normalized_distances_x,
                  #*normalized_distances_y
                  ]
@@ -290,11 +290,14 @@ class TwoDEnv(gym.Env):
 
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
-
-        if distance < 30:
-            reward += reward
         return reward
+    def get_next_sending_node_index(self):
+        idx_min = 0
+        for i in range(len(self.nodes)):
+            if self.nodes[i].time_of_next_packet < self.nodes[idx_min].time_of_next_packet:
+                idx_min = i
 
+        return idx_min
     def get_miss_penalty(self, pos1, pos2):
         distance = math.dist(pos1, pos2)
         scaled_distance = distance / self.max_cross_distance
@@ -318,13 +321,21 @@ class TwoDEnv(gym.Env):
         self.visited_pos[pos] = time
 
         return 0
-
+    def get_good_action_reward(self, distance_prior_action, distance_after_action):
+            is_good_action = distance_after_action < distance_prior_action
+            if is_good_action:
+                return self.good_action_reward
+            else:
+                return -self.good_action_reward
     def step(self, action):
         if self.render_mode == "cv2":
             self.render()
         reward = 0
         self.steps += 1
 
+        idx_next_sending_node = self.get_next_sending_node_index()
+
+        distance_prior_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
         if action == 0:  # stand still
             # nothing
             pass
@@ -340,7 +351,7 @@ class TwoDEnv(gym.Env):
         elif action == 4:  # down
             if self.pos[1] > 0:
                 self.pos = (self.pos[0], self.pos[1] - 1)
-
+        distance_after_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
         # Track transmissions for each node
         transmission_occurred_per_node = [True] * len(self.nodes)
         for i in range(len(self.nodes)):
@@ -358,7 +369,9 @@ class TwoDEnv(gym.Env):
                 self.received_per_node[i] += 1
                 self.elapsed_times[i] = 0
                 self.loss_counts[i] = 0
-                self.last_packet_index = [i+1] + self.last_packet_index[:-1]
+                self.last_packet_index = [1.0 if i == node else 0.0 for node in
+                                            range(len(self.nodes))]
+                
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
                 reward += self.fairness * self.fairness_reward
             elif received == PACKET_STATUS.LOST:
@@ -366,18 +379,12 @@ class TwoDEnv(gym.Env):
                 self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
                 reward += self.get_miss_penalty(self.pos, self.nodes[i].pos) * self.loss_counts[i]
-
-            is_next_to_send = True
-            for node in self.nodes:
-                if self.nodes[i].time_of_next_packet > node.time_of_next_packet:
-                    is_next_to_send = False
-            if is_next_to_send:
-                reward += self.get_pos_reward(self.pos, self.nodes[i].pos, self.elapsed_times[i])
-
+            if i == idx_next_sending_node:
+                reward += self.get_pos_reward(self.pos, self.nodes[i].pos, self.elapsed_times[i]) * (1+ self.get_good_action_reward(distance_prior_action, distance_after_action))
         # print(f"{self.received_per_node = }\n{self.misses_per_node = }\n\n{self.fairness = }")
 
         #reward += self.get_explore_reward(self.pos, self.steps)
-        terminated = self.total_misses >= 20
+        terminated = self.total_misses >= 4
         truncated = self.steps >= self.max_steps
         done = truncated or terminated
         self.total_reward += reward
@@ -597,7 +604,6 @@ class Node:
     def reset(self):
         self.last_packet_time = 0
         self.time_of_next_packet = self.time_to_first_packet
-
     def generate_next_interval(self):
         # Generate a truncated normal value for the next time interval
         # a and b are calculated to truncate around the mean interval with some range
