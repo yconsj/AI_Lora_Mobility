@@ -34,8 +34,8 @@ if __name__ == '__main__':
 
     do_logging = True
     logfile = "env_log.json"
-    # render_mode = None
-    render_mode = "cv2"
+    render_mode = None
+    #render_mode = "cv2"
 
 
 

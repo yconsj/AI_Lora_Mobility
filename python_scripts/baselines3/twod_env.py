@@ -153,16 +153,17 @@ class TwoDEnv(gym.Env):
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
         # Observation_space =
-        #                     k (recent)prev_actions                           |k
+        #                     k onehot (recent)prev_actions                    |k * action_types
         #                     (gw.x, gw.y)                                     |2
         #                     step / max step                                  |1
-        #                     next transmission time for each node             |n
+        #                     elapsed_time per node                            |n
+        #                     normalized send intervals                        |n
+        #                     normalized send intervals cycle steps            |n
         #                     (x,y)  per node                                  |2n
         #                     distance from gw to each node                    |n
-        #                     elapsed_time per node                            |n
         #                     packets received per node                        |n
-        #                     m recent_packets (initialized to -1)             |m
-        #                                                                      |k + 6n + m + 3
+        #                     m onehot recent_packets (initialized to -1)      |m * n
+        #                                                                      |(k*action_types) + 7n + (m*n) + 3
 
         self.observation_space = spaces.Box(
             low=np.array(
@@ -171,8 +172,9 @@ class TwoDEnv(gym.Env):
                         2 +
                         1 +
                         len(self.nodes) +
-                        (len(self.nodes) * 2) +
                         len(self.nodes) +
+                        len(self.nodes) +
+                        (len(self.nodes) * 2) +
                         len(self.nodes) +
                         len(self.nodes) +
                         self.recent_packets_length * (len(self.nodes))  # One-hot encoded recent_packets)
@@ -184,8 +186,9 @@ class TwoDEnv(gym.Env):
                         2 +
                         1 +
                         len(self.nodes) +
-                        (len(self.nodes) * 2) +
                         len(self.nodes) +
+                        len(self.nodes) +
+                        (len(self.nodes) * 2) +
                         len(self.nodes) +
                         len(self.nodes) +
                         self.recent_packets_length * (len(self.nodes))  # One-hot encoded recent_packets)
@@ -313,10 +316,11 @@ class TwoDEnv(gym.Env):
                 onehot_encoded_actions +
                 [self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y] +
                 [self.steps / self.max_steps] +
-                normalized_send_time +
+                normalized_elapsed_times +
+                normalized_send_intervals +
+                normalized_send_intervals_steps +
                 normalized_node_positions +
                 normalized_node_distances +
-                normalized_elapsed_times +
                 normalized_received_packets +
                 onehot_encoded_recent_packets
         )

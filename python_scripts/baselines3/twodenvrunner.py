@@ -101,7 +101,8 @@ def main():
     #  (https://www.reddit.com/r/reinforcementlearning/comments/1c9krih/dummyvecenv_vecnormalize_makes_the_reward_chart/)
     #
     # env = VecMonitor(env)
-    gamma = 0.85
+    gamma = 0.85  # 0.85 is good
+    ent_coef = 0.005
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
@@ -131,7 +132,7 @@ def main():
     # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(4_000_000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(4_000_000, callback=[eval_callback, TensorboardCallback()], tb_log_name=f"PPO_si_gamma_{gamma}_ent_{ent_coef}")
     print("Learning finished")
     model.save("stable-model")
     env.save("model_normalization_stats")
