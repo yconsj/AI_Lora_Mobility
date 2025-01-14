@@ -26,7 +26,7 @@ def make_skipped_env():
 
 
 class CustomPolicyNetwork(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=64, num_blocks=2):
+    def __init__(self, observation_space, features_dim=64, num_blocks=4):
         super(CustomPolicyNetwork, self).__init__(observation_space, features_dim)
         input_dim = observation_space.shape[0]
 
@@ -38,7 +38,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
 
         # Define activation and dropout
         self.activation = nn.ReLU()
-        #self.dropout = nn.Dropout(p=0.2)
+        # self.dropout = nn.Dropout(p=0.2)
 
         # Define the output layer
         self.output_layer = nn.Linear(64, features_dim)
@@ -47,7 +47,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
         # Initial input layer
         x = self.input_layer(observations)
         x = self.activation(x)
-        #x = self.dropout(x)  # TODO: Try to disable this
+        # x = self.dropout(x)  # TODO: Try to disable this
 
         # Apply residual blocks
         # https://en.wikipedia.org/wiki/Residual_neural_network
@@ -102,15 +102,17 @@ def main():
     #
     # env = VecMonitor(env)
     gamma = 0.85  # 0.85 is good
-    ent_coef = 0.005
+    ent_coef = 0.005  # 0.005 is good
+    learning_rate = 5e-6  #  # 5e-6 is good 
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
+    n_blocks = 4
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
-        features_extractor_kwargs=dict(features_dim=64),
+        features_extractor_kwargs=dict(features_dim=64, num_blocks=n_blocks),
         net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
 
@@ -120,7 +122,7 @@ def main():
         progress_so_far = 1.0 - x
         return initial_learn_rate + (final_learn_rate - initial_learn_rate) * progress_so_far
 
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=6e-5, gamma=gamma, ent_coef=0.005,
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=0.005,
                 batch_size=64,
                 clip_range=0.15,
                 n_steps=4096,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
@@ -132,7 +134,12 @@ def main():
     # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(4_000_000, callback=[eval_callback, TensorboardCallback()], tb_log_name=f"PPO_si_gamma_{gamma}_ent_{ent_coef}")
+
+    # "si": send interval input state, not using the time_of_next_packet of each node.
+    # "fe": full episode, i.e. not early termination
+
+    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
+                        tb_log_name=f"PPO_si_fe;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}")
     print("Learning finished")
     model.save("stable-model")
     env.save("model_normalization_stats")

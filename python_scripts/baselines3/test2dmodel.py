@@ -18,6 +18,7 @@ def get_action_probs(input_state, input_model):
 
 grid_size_x, grid_size_y = 0, 0
 
+
 def make_skipped_env():
     time_skip = 10
     global grid_size_x, grid_size_y
@@ -35,11 +36,9 @@ if __name__ == '__main__':
     do_logging = True
     logfile = "env_log.json"
     render_mode = None
-    #render_mode = "cv2"
+    render_mode = "cv2"
 
-
-
-    vec_env = make_vec_env(make_skipped_env, n_envs=1,  env_kwargs=dict())
+    vec_env = make_vec_env(make_skipped_env, n_envs=1, env_kwargs=dict())
     # vec_env = VecMonitor(vec_env)
 
     # Load the saved statistics, but do not update them at test time and disable reward normalization.

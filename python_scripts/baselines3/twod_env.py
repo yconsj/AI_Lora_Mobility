@@ -77,9 +77,10 @@ class TwoDEnv(gym.Env):
         self.num_discrete_actions = 5
         self.action_space = spaces.Discrete(self.num_discrete_actions, start=0)
         self.timeskip = timeskip
-        self.action_history_length = action_history_length
 
+        self.action_history_length = action_history_length
         self.recent_packets_length = 3
+
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
@@ -168,7 +169,7 @@ class TwoDEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=np.array(
                 [0] * (
-                        action_history_length * self.num_discrete_actions +  # One-hot encoded prev_actions
+                        self.action_history_length * self.num_discrete_actions +  # One-hot encoded prev_actions
                         2 +
                         1 +
                         len(self.nodes) +
@@ -182,7 +183,7 @@ class TwoDEnv(gym.Env):
                 , dtype=np.float32),
             high=np.array(
                 [1] * (
-                        action_history_length * self.num_discrete_actions +  # One-hot encoded prev_actions
+                        self.action_history_length * self.num_discrete_actions +  # One-hot encoded prev_actions
                         2 +
                         1 +
                         len(self.nodes) +
@@ -434,7 +435,7 @@ class TwoDEnv(gym.Env):
                 self.recent_packets.append(i)
 
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
-                reward += self.fairness * self.fairness_reward
+                # reward += self.fairness * self.fairness_reward   # TODO: Disable this
             elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
@@ -442,7 +443,7 @@ class TwoDEnv(gym.Env):
                 miss_penalty = self.get_miss_penalty(self.nodes[i])  # * self.loss_counts[i]
                 reward += miss_penalty
 
-        terminated = self.total_misses >= 20
+        terminated = False  # self.total_misses >= 20 # TODO: Disable this
         truncated = self.steps >= self.max_steps
         done = truncated or terminated
         self.total_reward += reward
@@ -690,7 +691,7 @@ class Node:
     def send(self, time, gpos):
         # Decides whether a packet should be send and if it gets lost
         # Pobability of success is based of last time send and distance
-        if time > self.time_of_next_packet:
+        if time >= self.time_of_next_packet:
             self.last_packet_time = time
             self.time_of_next_packet = time + self.generate_next_interval()
             # f"time of next packet: {self.time_of_next_packet}" )
