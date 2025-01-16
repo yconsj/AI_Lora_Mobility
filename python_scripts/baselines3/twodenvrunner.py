@@ -3,7 +3,7 @@ import warnings
 
 import tensorflow as tf
 import torch.nn as nn
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -101,11 +101,11 @@ def main():
     #  (https://www.reddit.com/r/reinforcementlearning/comments/1c9krih/dummyvecenv_vecnormalize_makes_the_reward_chart/)
     #
     # env = VecMonitor(env)
-    gamma = 0.85
+    gamma = 0.9
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
-    eval_callback = EvalCallback(env, eval_freq=2048*2, callback_after_eval=stop_train_callback,
+    eval_callback = EvalCallback(env, eval_freq=2048*8, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
@@ -113,10 +113,10 @@ def main():
         net_arch=dict(pi=[64, 64,64], vf=[64, 64,64])
     )
 
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=6e-5, gamma=gamma, ent_coef=0.005,
-                batch_size=64,
+    model = PPO("MlpPolicy", env, device="cpu", learning_rate=0.0003, gamma=gamma, ent_coef=0.01,
+                batch_size=512,
                 clip_range=0.15,
-                n_steps=2048*2,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
+                n_steps=2048*8,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
                 n_epochs=10,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",
