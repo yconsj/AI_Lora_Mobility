@@ -332,7 +332,7 @@ class TwoDEnv(gym.Env):
         else:
             return -self.good_action_reward * is_good_action * 2
 
-    def get_pos_reward(self, node: 'Node'):
+    def get_pos_reward(self, node: 'Node', elapsed_time: float):
         distance = math.dist(self.pos, node.pos)
 
         failure_probability = 1 - node.transmission_model.get_reception_prob(distance)
@@ -345,9 +345,9 @@ class TwoDEnv(gym.Env):
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
 
-        time_until_next_packet = max(1, node.time_of_next_packet - self.steps)
-        if time_until_next_packet < 50:
-            reward *= 0.5
+        penalty_immunity_period = 50.0
+        if elapsed_time < penalty_immunity_period:
+            reward = reward # max(0.0, reward)
 
         # if distance < self.node_max_transmission_distance:
         #    reward *= 2
@@ -417,7 +417,7 @@ class TwoDEnv(gym.Env):
         elif action == 4:  # down
             self.pos = self.pos[0], max((self.pos[1] - self.scaled_speed), 0)
 
-        reward += self.get_pos_reward(self.nodes[idx_next_sending_node])  # TODO: try disable
+        reward += self.get_pos_reward(self.nodes[idx_next_sending_node], self.elapsed_times[idx_next_sending_node])  # TODO: try disable
         distance_after_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
         reward += self.get_good_action_reward(distance_prior_action, distance_after_action)  # TODO: try enable
 
@@ -716,7 +716,7 @@ class Node:
         self.time_of_next_packet = self.time_to_first_packet
 
     def generate_next_interval(self):
-        if True: # self.use_deterministic_transmissions:  # TODO: reenable this check
+        if self.use_deterministic_transmissions:  # TODO: reenable this check
             return self.send_interval
         # Generate a truncated normal value for the next time interval
         # a and b are calculated to truncate around the mean interval with some range
