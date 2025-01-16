@@ -716,7 +716,7 @@ class Node:
         self.time_of_next_packet = self.time_to_first_packet
 
     def generate_next_interval(self):
-        if True: # self.use_deterministic_transmissions:  # TODO: reenable this check
+        if self.use_deterministic_transmissions:  # TODO: evaluate impact of this conditional
             return self.send_interval
         # Generate a truncated normal value for the next time interval
         # a and b are calculated to truncate around the mean interval with some range
