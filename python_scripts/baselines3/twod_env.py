@@ -162,7 +162,7 @@ class TwoDEnv(gym.Env):
                    (len(self.nodes) * 2) +
                    len(self.nodes) +
                    len(self.nodes) +
-                   #len(self.nodes) +
+                   len(self.nodes) +
                    len(self.nodes) 
                    #(len(self.nodes) * 2)
                    ), dtype=np.float32), high=np.array(
@@ -171,7 +171,7 @@ class TwoDEnv(gym.Env):
                    (len(self.nodes) * 2) +
                    len(self.nodes) +
                    len(self.nodes) +
-                   #len(self.nodes) +
+                   len(self.nodes) +
                    len(self.nodes) 
                    #(len(self.nodes) * 2)
                    ), dtype=np.float32))
@@ -261,7 +261,18 @@ class TwoDEnv(gym.Env):
         self.log_data = []
         state = self.get_state()
         return np.array(state, dtype=np.float32), {}
+    def calculate_direction(self, x1, y1, x2, y2):
+        # Calculate the differences in x and y
+        dx = x2 - x1
+        dy = y2 - y1
 
+        # Calculate the angle in radians
+        angle_radians = math.atan2(dy, dx)
+
+        # Convert the angle to degrees
+        angle_degrees = math.degrees(angle_radians)
+
+        return angle_degrees
     def get_state(self):
         normalized_actions = [action / 4 for action in self.prev_actions]
         normalized_node_positions = [
@@ -272,11 +283,15 @@ class TwoDEnv(gym.Env):
         normalized_send_intervals = [
             send_interval / self.max_steps for send_interval in self.send_intervals
         ]
+        normalized_node_directions = [self.calculate_direction(self.pos, node.pos) / 360 for node in self.nodes]
         normalized_elapsed_times = [elapsed_time / self.max_steps for elapsed_time in self.elapsed_times]
         for node_id in range(len(self.nodes)):
             if self.expected_times[node_id] < self.steps:
                 self.expected_times[node_id] += self.send_intervals[node_id]
-        normalized_expected_times = [time / self.max_steps for time in self.expected_times]
+        
+        #normalized_expected_times = [time / self.max_steps for time in self.expected_times]
+
+        normalized_expected_times = [node.time_of_next_packet/ self.max_steps for node in self.nodes]
         
         normalized_received_packets = [num_received_packets / self.expected_max_packets_sent
                                        for num_received_packets in self.received_per_node]
@@ -289,6 +304,7 @@ class TwoDEnv(gym.Env):
                  *normalized_node_positions,
                  *normalized_elapsed_times,
                  *normalized_expected_times,
+                 *normalized_node_directions,
                  #*normalized_send_intervals,
 				 #*normalized_received_packets,
                  *self.last_packet_index,
