@@ -87,6 +87,9 @@ class TwoDEnv(gym.Env):
         self.visited_pos = dict()
         self.pos_reward_max = 0.0125
         self.pos_reward_min = 0
+        self.invulnerability_value = self.pos_reward_max
+        self.invulnerability_duration = 50
+        self.invulnerability_counter = 0 # always 0
         self.good_action_reward = self.pos_reward_max/4
         self.miss_penalty_max = 10
         self.miss_penalty_min = self.miss_penalty_max / 2
@@ -250,6 +253,7 @@ class TwoDEnv(gym.Env):
         self.total_reward = 0
         self.total_received = 0
         self.fairness = 0.0
+        self.invulnerability_counter = 0
 
         if self.render_mode == "cv2":
             self.window_name = "RL Animation"
@@ -272,6 +276,9 @@ class TwoDEnv(gym.Env):
         # Convert the angle to degrees
         angle_degrees = math.degrees(angle_radians)
 
+        if angle_degrees < 0:
+            angle_degrees = 360 + angle_degrees
+
         return angle_degrees
     def get_state(self):
         normalized_actions = [action / 4 for action in self.prev_actions]
@@ -283,7 +290,7 @@ class TwoDEnv(gym.Env):
         normalized_send_intervals = [
             send_interval / self.max_steps for send_interval in self.send_intervals
         ]
-        normalized_node_directions = [self.calculate_direction(self.pos, node.pos) / 360 for node in self.nodes]
+        normalized_node_directions = [self.calculate_direction(*self.pos, *node.pos) / 360 for node in self.nodes]
         normalized_elapsed_times = [elapsed_time / self.max_steps for elapsed_time in self.elapsed_times]
         for node_id in range(len(self.nodes)):
             if self.expected_times[node_id] < self.steps:
@@ -369,7 +376,7 @@ class TwoDEnv(gym.Env):
             self.render()
         reward = 0
         self.steps += 1
-
+        self.invulnerability_counter = max(0, self.invulnerability_counter-1)
         idx_next_sending_node = self.get_next_sending_node_index()
 
         distance_prior_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
@@ -411,13 +418,18 @@ class TwoDEnv(gym.Env):
                 
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
                 #reward += self.fairness * self.fairness_reward
+
+                self.invulnerability_counter = self.invulnerability_duration
             elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
                 reward += self.get_miss_penalty(self.pos, self.nodes[i].pos) * self.loss_counts[i]
             if i == idx_next_sending_node: #and self.nodes[idx_next_sending_node].time_of_next_packet - self.steps < 500:
-                reward += self.get_pos_reward(self.pos, self.nodes[i].pos, self.elapsed_times[i])
+                if self.invulnerability_counter == 0:
+                    reward += self.get_pos_reward(self.pos, self.nodes[i].pos, self.elapsed_times[i])
+                else:
+                    reward += self.invulnerability_value
             if math.dist(self.nodes[i].pos, self.pos) < self.nodes[i].transmission_model.max_transmission_distance:
                 pass #reward += 0.0001
         # print(f"{self.received_per_node = }\n{self.misses_per_node = }\n\n{self.fairness = }")
