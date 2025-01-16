@@ -119,7 +119,7 @@ class TwoDEnv(gym.Env):
 
         base_send_interval = 4000  # random.choice([2000, 3000, 4000])
         self.send_intervals = [base_send_interval, base_send_interval, base_send_interval * 2, base_send_interval * 2]
-        send_std = 5
+        send_std = 5  # used to be 5
 
         self.first_packets = [int(min(self.send_intervals) * fraction / len(self.send_intervals))
                               for fraction in range(1, len(self.send_intervals) + 1)]
@@ -143,6 +143,7 @@ class TwoDEnv(gym.Env):
 
         self.elapsed_times = [0, 0, 0, 0]
         self.loss_counts = [0, 0, 0, 0]
+        self.expected_send_time = self.first_packets.copy()
 
         self.expected_max_packets_sent = self.max_steps // min(self.send_intervals)
         self.total_reward = 0
@@ -158,9 +159,7 @@ class TwoDEnv(gym.Env):
         #                     (gw.x, gw.y)                                     |2
         #                     step / max step                                  |1
         #                     elapsed_time per node                            |n
-        #                     normalized send intervals                        |n
-        #                     normalized send intervals cycle steps            |n
-        #                     (x,y)  per node                                  |2n
+        #                     expected send time                               |n
         #                     distance from gw to each node                    |n
         #                     packets received per node                        |n
         #                     m onehot recent_packets (initialized to -1)      |m * n
@@ -175,8 +174,6 @@ class TwoDEnv(gym.Env):
                         len(self.nodes) +
                         len(self.nodes) +
                         len(self.nodes) +
-                        (len(self.nodes) * 2) +
-                        len(self.nodes) +
                         len(self.nodes) +
                         self.recent_packets_length * (len(self.nodes))  # One-hot encoded recent_packets)
                 )
@@ -188,8 +185,6 @@ class TwoDEnv(gym.Env):
                         1 +
                         len(self.nodes) +
                         len(self.nodes) +
-                        len(self.nodes) +
-                        (len(self.nodes) * 2) +
                         len(self.nodes) +
                         len(self.nodes) +
                         self.recent_packets_length * (len(self.nodes))  # One-hot encoded recent_packets)
@@ -254,6 +249,9 @@ class TwoDEnv(gym.Env):
             self.loss_counts[i] = 0
             self.received_per_node[i] = 0
             self.misses_per_node[i] = 0
+
+        self.expected_send_time = self.first_packets.copy()
+
         self.steps = 0
         self.total_reward = 0
         self.total_received = 0
@@ -285,12 +283,8 @@ class TwoDEnv(gym.Env):
 
         # Other normalized components
         normalized_send_time = [node.time_of_next_packet / self.max_steps for node in self.nodes]
+        normalized_expected_send_time = [expected_time / self.max_steps for expected_time in self.expected_send_time]
 
-        normalized_node_positions = [
-            position
-            for node in self.nodes
-            for position in (node.pos[0] / self.max_distance_x, node.pos[1] / self.max_distance_y)
-        ]
         normalized_node_distances = [
             math.dist(self.pos, node.pos) / self.max_cross_distance
             for node in self.nodes
@@ -318,9 +312,8 @@ class TwoDEnv(gym.Env):
                 [self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y] +
                 [self.steps / self.max_steps] +
                 normalized_elapsed_times +
-                normalized_send_intervals +
-                normalized_send_intervals_steps +
-                normalized_node_positions +
+                normalized_expected_send_time +
+                # normalized_send_time +
                 normalized_node_distances +
                 normalized_received_packets +
                 onehot_encoded_recent_packets
@@ -344,12 +337,17 @@ class TwoDEnv(gym.Env):
 
         failure_probability = 1 - node.transmission_model.get_reception_prob(distance)
         scaled_distance = distance / self.max_cross_distance
+
         # weight = (scaled_distance + failure_probability) / 2 #TODO: try enable, but change min reward
         # Return reward based on scaled distance between a min and max reward
         reward = self.pos_reward_max - (scaled_distance * (self.pos_reward_max - self.pos_reward_min))
 
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
+
+        time_until_next_packet = max(1, node.time_of_next_packet - self.steps)
+        if time_until_next_packet < 50:
+            reward *= 0.5
 
         # if distance < self.node_max_transmission_distance:
         #    reward *= 2
@@ -389,13 +387,21 @@ class TwoDEnv(gym.Env):
 
         return idx_min
 
+    def get_next_expected_sending_node_index(self):
+        idx_min = 0
+        for i in range(len(self.expected_send_time)):
+            if self.expected_send_time[i] < self.expected_send_time[idx_min]:
+                idx_min = i
+
+        return idx_min
+
     def step(self, action):
         if self.render_mode == "cv2":
             self.render()
         reward = 0
         self.steps += 1
 
-        idx_next_sending_node = self.get_next_sending_node_index()
+        idx_next_sending_node = self.get_next_expected_sending_node_index()
 
         distance_prior_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
 
@@ -434,8 +440,9 @@ class TwoDEnv(gym.Env):
                 self.loss_counts[i] = 0
                 self.recent_packets.append(i)
 
+                self.expected_send_time[i] += self.send_intervals[i]
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
-                # reward += self.fairness * self.fairness_reward   # TODO: Disable this
+                reward += self.fairness * self.fairness_reward  # TODO: Disable this
             elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
@@ -443,7 +450,12 @@ class TwoDEnv(gym.Env):
                 miss_penalty = self.get_miss_penalty(self.nodes[i])  # * self.loss_counts[i]
                 reward += miss_penalty
 
-        terminated = False  # self.total_misses >= 20 # TODO: Disable this
+        # update send time approximation
+        for i in range(len(self.expected_send_time)):
+            if self.steps >= self.expected_send_time[i]:
+                self.expected_send_time[i] += self.send_intervals[i]
+
+        terminated = False  # self.total_misses >= 20  # TODO: Disable this
         truncated = self.steps >= self.max_steps
         done = truncated or terminated
         self.total_reward += reward
@@ -536,6 +548,19 @@ class TwoDEnv(gym.Env):
 
         # Resize frame for better visualization
         enlarged_image = cv2.resize(frame, (0, 0), fx=1.5, fy=1.5, interpolation=cv2.INTER_NEAREST)
+
+        # Render text data and stats
+        canvas = self.render_text_data(enlarged_image)
+
+        # Enable resizable window and update the content dynamically
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)  # Make the window resizable
+        cv2.imshow(self.window_name, canvas)
+
+        # Wait for resizing to reflect (fullscreen updates dynamically)
+        cv2.waitKey(2)
+
+    def render_text_data(self, image):
+        """Render text stats and dynamic node data on a canvas."""
         # Define stats list
         stats = [
             f"Total received: {self.total_received}",
@@ -549,32 +574,52 @@ class TwoDEnv(gym.Env):
         text_height = num_lines * line_height + 20  # Padding for text
 
         # Create a canvas larger than the image to include space for stats
-        canvas = np.zeros((enlarged_image.shape[0] + text_height, enlarged_image.shape[1], 3), dtype=np.uint8)
+        canvas = np.zeros((image.shape[0] + text_height, image.shape[1], 3), dtype=np.uint8)
 
         # Place the enlarged image on the canvas
-        canvas[:enlarged_image.shape[0], :, :] = enlarged_image
+        canvas[:image.shape[0], :, :] = image
+
+        # Font settings
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.8
+        font_thickness = 1
+        text_color = (255, 255, 255)  # white
 
         # Add stats below the image
         text_offset_x = 10
-        text_offset_y = enlarged_image.shape[0] + 20
+        text_offset_y = image.shape[0] + 20
         for i, text in enumerate(stats):
             cv2.putText(canvas, text, (text_offset_x, text_offset_y + (i * line_height)),
-                        cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=(255, 255, 255), thickness=1)
+                        font, fontScale=font_scale, color=text_color, thickness=font_thickness)
 
-        text_offset_x = 300
-        text_offset_y = enlarged_image.shape[0]
-        i = 0
-        for node in self.nodes:
-            cv2.putText(canvas, str(i) + ": " + str(round(node.time_of_next_packet - self.steps)),
-                        (text_offset_x, text_offset_y + (i * line_height)),
-                        cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=(255, 255, 255), thickness=1)
-            i += 1
-        # Enable resizable window and update the content dynamically
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)  # Make the window resizable
-        cv2.imshow(self.window_name, canvas)
+        # Initialize variables for dynamic text rendering
+        line_height = 30  # Define consistent vertical spacing
 
-        # Wait for resizing to reflect (fullscreen updates dynamically)
-        cv2.waitKey(2)
+        # Initialize variables for dynamic text rendering
+        text_offset_y = image.shape[0]
+        base_offset_x = 300  # Initial horizontal position for node data
+        id_offset = base_offset_x
+        remaining_time_offset = base_offset_x + 30 # Offset for remaining time
+        send_interval_offset = remaining_time_offset + 80  # Offset for combined " | send_interval" text
+
+        # Render node data
+        for i, node in enumerate(self.nodes):
+            # Calculate the y-coordinate for this row
+            y_coord = text_offset_y + (i * line_height)
+
+            # Text values
+            node_id_text = f"{i}:"
+            remaining_time_text = f"{round(node.time_of_next_packet - self.steps)}"
+            combined_text = f"| {self.send_intervals[i]}"  # Combine separator and send interval
+
+            # Draw the text parts with fixed offsets
+            cv2.putText(canvas, node_id_text, (id_offset, y_coord), font, font_scale, text_color, font_thickness)
+            cv2.putText(canvas, remaining_time_text, (remaining_time_offset, y_coord), font, font_scale, text_color,
+                        font_thickness)
+            cv2.putText(canvas, combined_text, (send_interval_offset, y_coord), font, font_scale, text_color,
+                        font_thickness)
+
+        return canvas
 
     def close(self):
         cv2.destroyAllWindows()
@@ -671,7 +716,7 @@ class Node:
         self.time_of_next_packet = self.time_to_first_packet
 
     def generate_next_interval(self):
-        if self.use_deterministic_transmissions:
+        if True: # self.use_deterministic_transmissions:  # TODO: reenable this check
             return self.send_interval
         # Generate a truncated normal value for the next time interval
         # a and b are calculated to truncate around the mean interval with some range
