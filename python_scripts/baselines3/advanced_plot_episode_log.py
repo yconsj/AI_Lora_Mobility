@@ -183,11 +183,35 @@ def _plot_heatmap(grid):
     plt.ylabel('Grid Y')
     plt.show()
 
+
 def plot_heatmap(log_file, grid_size_x, grid_size_y):
     gw_positions, timestamps, *_ = load_json_log(log_file)
     heatmap_grid = create_heatmap(gw_positions, timestamps, grid_size_x, grid_size_y)
     _plot_heatmap(heatmap_grid)
 
+
+def plot_batch_episode_performance(all_pdr, all_fairness):
+    # Plot the performance of the current batch of episodes
+    fig, ax1 = plt.subplots(figsize=(8, 6))
+
+    n_episodes = min(len(all_pdr), len(all_fairness))
+
+    # Plot PDR and fairness
+    ax1.plot(range(1, n_episodes + 1), all_pdr, label="PDR", color="blue", marker="o")
+    ax1.set_xlabel("Episode")
+    ax1.set_ylabel("PDR", color="blue")
+    ax1.tick_params(axis='y', labelcolor="blue")
+    ax1.set_ylim(0, 1)  # Set y-axis for PDR from 0 to 1
+
+    ax2 = ax1.twinx()  # Create another y-axis for fairness
+    ax2.plot(range(1, n_episodes + 1), all_fairness, label="Fairness", color="red", marker="x")
+    ax2.set_ylabel("Fairness", color="red")
+    ax2.tick_params(axis='y', labelcolor="red")
+    ax2.set_ylim(0, 1)  # Set y-axis for Fairness from 0 to 1
+
+    fig.tight_layout()  # Ensure the layout doesn't overlap
+    plt.title("Performance: PDR and Fairness over Episodes")
+    plt.show()
 
 if __name__ == '__main__':
     # Parameters
