@@ -142,7 +142,7 @@ def main():
     # "fe": full episode, i.e. not early termination
 
     model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
-                        tb_log_name=f"PPO_ept_fe;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}")
+                        tb_log_name=f"PPO_fe;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}")
     print("Learning finished")
     model.save("stable-model")
     env.save("model_normalization_stats")
