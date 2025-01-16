@@ -103,7 +103,7 @@ def main():
     # env = VecMonitor(env)
     gamma = 0.85  # base: 0.85
     ent_coef = 0.005  # base: 0.005
-    learning_rate = 3e-5  # base: 6e-5
+    learning_rate = 6e-5  # base: 6e-5
     n_blocks = 2  # # base: 2
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
@@ -142,7 +142,7 @@ def main():
     # "fe": full episode, i.e. not early termination
 
     model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
-                        tb_log_name=f"PPO_fe;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}")
+                        tb_log_name=f"PPO_ept_fe;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}")
     print("Learning finished")
     model.save("stable-model")
     env.save("model_normalization_stats")

@@ -119,7 +119,7 @@ class TwoDEnv(gym.Env):
 
         base_send_interval = 4000  # random.choice([2000, 3000, 4000])
         self.send_intervals = [base_send_interval, base_send_interval, base_send_interval * 2, base_send_interval * 2]
-        send_std = 5  # used to be 5
+        self.send_std = 5  # used to be 5
 
         self.first_packets = [int(min(self.send_intervals) * fraction / len(self.send_intervals))
                               for fraction in range(1, len(self.send_intervals) + 1)]
@@ -137,7 +137,7 @@ class TwoDEnv(gym.Env):
                  time_to_first_packet=self.first_packets[i],
                  send_interval=self.send_intervals[i],
                  use_deterministic_transmissions=use_deterministic_transmissions,
-                 send_std=send_std)
+                 send_std=self.send_std)
             for i in range(len(node_pos))
         ]
 
@@ -347,7 +347,7 @@ class TwoDEnv(gym.Env):
 
         penalty_immunity_period = 50.0
         if elapsed_time < penalty_immunity_period:
-            reward = reward # max(0.0, reward)
+            reward = max(0.0, reward)
 
         # if distance < self.node_max_transmission_distance:
         #    reward *= 2
@@ -440,7 +440,7 @@ class TwoDEnv(gym.Env):
                 self.loss_counts[i] = 0
                 self.recent_packets.append(i)
 
-                self.expected_send_time[i] += self.send_intervals[i]
+                self.expected_send_time[i] += self.send_intervals[i] + self.send_std
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
                 reward += self.fairness * self.fairness_reward  # TODO: Disable this
             elif received == PACKET_STATUS.LOST:
@@ -453,7 +453,7 @@ class TwoDEnv(gym.Env):
         # update send time approximation
         for i in range(len(self.expected_send_time)):
             if self.steps >= self.expected_send_time[i]:
-                self.expected_send_time[i] += self.send_intervals[i]
+                self.expected_send_time[i] += self.send_intervals[i] + self.send_std
 
         terminated = False  # self.total_misses >= 20  # TODO: Disable this
         truncated = self.steps >= self.max_steps
