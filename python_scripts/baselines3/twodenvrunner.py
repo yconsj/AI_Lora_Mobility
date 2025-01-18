@@ -101,11 +101,11 @@ def main():
     #  (https://www.reddit.com/r/reinforcementlearning/comments/1c9krih/dummyvecenv_vecnormalize_makes_the_reward_chart/)
     #
     # env = VecMonitor(env)
-    gamma = 0.85
+    gamma = 0.99
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
-    eval_callback = EvalCallback(env, eval_freq=2048*4, callback_after_eval=stop_train_callback,
+    eval_callback = EvalCallback(env, eval_freq=2048*2, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
@@ -114,9 +114,9 @@ def main():
     )
 
     model = PPO("MlpPolicy", env, device="cpu", learning_rate=0.0003, gamma=gamma, ent_coef=0.01,
-                batch_size=128,
+                batch_size=64*2,
                 clip_range=0.15,
-                n_steps=2048*4,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
+                n_steps=2048*2,  # one episode is roughly 4000 steps, when using time_skip=10  # TODO: decrease
                 n_epochs=10,
                 policy_kwargs=policy_kwargs,
                 tensorboard_log="./tensorboard/",
@@ -126,7 +126,7 @@ def main():
     # TODO: Mario superstar
     print("Learning started")
     # default timesteps: 500000
-    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()])
+    model = model.learn(4_000_000, callback=[eval_callback, TensorboardCallback()])
     print("Learning finished")
     model.save("stable-model")
     env.save("model_normalization_stats")

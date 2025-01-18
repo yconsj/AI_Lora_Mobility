@@ -18,7 +18,7 @@ for episode in range(episodes):
             action = int(input("number from 0 to 4"))
         obs, reward, done, truncated, info = env.step(action)
         #print(reward)
-        if counter % 100 == 0:
+        if counter % 10 == 0:
             print(obs)
         counter += 1
 
