@@ -107,14 +107,14 @@ class TwoDEnv(gym.Env):
         self.ploss_scale = 300  # adjusts the dropoff of transmission probability by distance
 
 
-        self.n_nodes_max = 6
-        self.n_nodes_min = 3
+        self.n_nodes_max = 4
+        self.n_nodes_min = 1
         self.n_nodes = random.randint(self.n_nodes_min, self.n_nodes_max)
         self.node_distance = 20
         positions = self.get_random_node_positions(self.n_nodes, self.node_distance)
         #random.shuffle(positions)
-        self.send_intervals = [500*self.n_nodes if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
-        self.expected_times= [500 * (1+n) if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
+        self.send_intervals = [500*self.n_nodes if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
+        self.expected_times= [500 * (1+n) if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
 
 
         self.nodes = []
@@ -142,9 +142,9 @@ class TwoDEnv(gym.Env):
         #     if math.dist((x2,y2), self.node1.pos) >= 120 and math.dist((x2, y2), self.pos) >= 65:
         #         self.node2.pos= (x2, y2)
         #         break
-        self.elapsed_times = [0 if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
-        self.loss_counts = [0 if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
-        self.last_packet_index = [0 if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
+        self.elapsed_times = [0 if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
+        self.loss_counts = [0 if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
+        self.last_packet_index = [0 if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
 
         #self.expected_max_packets_sent = self.max_steps // min(self.send_intervals)
         self.total_reward = 0
@@ -152,8 +152,8 @@ class TwoDEnv(gym.Env):
         self.total_received = 0
         self.fairness = 0.0
 
-        self.received_per_node = [0 if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
-        self.misses_per_node = [0 if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
+        self.received_per_node = [0 if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
+        self.misses_per_node = [0 if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
 
         # Observation_space =
@@ -165,7 +165,7 @@ class TwoDEnv(gym.Env):
         #                                                  |k + 5n + 2
 
         self.observation_space = spaces.Box(low=np.array(
-            [-1] * (#action_history_length+
+            [0] * (#action_history_length+
                    #2 +
                    #(len(self.nodes) * 2) +
                    self.n_nodes_max +
@@ -240,10 +240,10 @@ class TwoDEnv(gym.Env):
     def reset(self, seed=None, options=None):
         # Reset the.pos and steps counter
         self.n_nodes = random.randint(self.n_nodes_min, self.n_nodes_max)
-        self.send_intervals = [500*self.n_nodes if n < self.n_nodes else -1  for n in range(self.n_nodes_max)]
-        self.expected_times= [500 * (1+n) if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
+        self.send_intervals = [500*self.n_nodes if n < self.n_nodes else np.nan  for n in range(self.n_nodes_max)]
+        self.expected_times= [500 * (1+n) if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
 
-        self.last_packet_index = [0 if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
+        self.last_packet_index = [0 if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         positions = self.get_random_node_positions(self.n_nodes, self.node_distance)
         self.prev_pos = self.pos
@@ -264,9 +264,9 @@ class TwoDEnv(gym.Env):
             )
             self.nodes.append(node)
 
-        self.received_per_node  = [0 if n < self.n_nodes else -1  for n in range(self.n_nodes_max)]
-        self.misses_per_node    = [0 if n < self.n_nodes else -1  for n in range(self.n_nodes_max)]
-        self.loss_counts        = [0 if n < self.n_nodes else -1  for n in range(self.n_nodes_max)]
+        self.received_per_node  = [0 if n < self.n_nodes else np.nan  for n in range(self.n_nodes_max)]
+        self.misses_per_node    = [0 if n < self.n_nodes else np.nan  for n in range(self.n_nodes_max)]
+        self.loss_counts        = [0 if n < self.n_nodes else np.nan  for n in range(self.n_nodes_max)]
 
         self.steps = 0
         self.total_reward = 0
@@ -309,7 +309,7 @@ class TwoDEnv(gym.Env):
         normalized_send_intervals = [
             send_interval / self.max_steps for send_interval in self.send_intervals
         ]
-        normalized_node_directions = [self.calculate_direction(*self.pos, *self.nodes[n].pos) / 360 if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
+        normalized_node_directions = [self.calculate_direction(*self.pos, *self.nodes[n].pos) / 360 if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
         normalized_elapsed_times = [elapsed_time / self.max_steps for elapsed_time in self.elapsed_times]
         for node_id in range(len(self.nodes)):
             if self.expected_times[node_id] < self.steps:
@@ -317,11 +317,11 @@ class TwoDEnv(gym.Env):
         
         #normalized_expected_times = [(time - self.steps) / self.max_steps for time in self.expected_times]
 
-        normalized_expected_times = [(self.nodes[n].time_of_next_packet - self.steps)/ self.max_steps if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
+        normalized_expected_times = [(self.nodes[n].time_of_next_packet - self.steps)/ self.max_steps if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
         
         #normalized_received_packets = [num_received_packets / self.expected_max_packets_sent
         #                               for num_received_packets in self.received_per_node]
-        normalized_distances = [ math.dist(self.pos, self.nodes[n].pos)/self.max_cross_distance if n < self.n_nodes else -1 for n in range(self.n_nodes_max)]
+        normalized_distances = [ math.dist(self.pos, self.nodes[n].pos)/self.max_cross_distance if n < self.n_nodes else np.nan for n in range(self.n_nodes_max)]
         active_nodes = [1 if n <self.n_nodes else 0 for n in range(self.n_nodes_max)]
         state = [#*normalized_actions,
                  #self.steps / self.max_steps,
@@ -433,7 +433,7 @@ class TwoDEnv(gym.Env):
                 self.received_per_node[i] += 1
                 self.elapsed_times[i] = 0
                 self.loss_counts[i] = 0
-                self.last_packet_index = [1.0 if i == node else 0.0 if node < self.n_nodes else -1 for node in range(self.n_nodes_max)]
+                self.last_packet_index = [1.0 if i == node else 0.0 if node < self.n_nodes else np.nan for node in range(self.n_nodes_max)]
                 
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
                 #reward += self.fairness * self.fairness_reward

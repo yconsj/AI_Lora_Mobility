@@ -2,6 +2,7 @@ import multiprocessing
 import warnings
 
 import tensorflow as tf
+import torch
 import torch.nn as nn
 from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
@@ -45,6 +46,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
 
     def forward(self, observations):
         # Initial input layer
+        observations = torch.nan_to_num(observations, nan=-1.0)
         x = self.input_layer(observations)
         x = self.activation(x)
         #x = self.dropout(x)
