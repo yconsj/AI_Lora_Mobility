@@ -103,7 +103,7 @@ def main():
     # env = VecMonitor(env)
     gamma = 0.85  # base: 0.85
     ent_coef = 0.005  # base: 0.005
-    learning_rate = 3e-4  # base: 6e-5
+    learning_rate = 1e-4  # base: 6e-5
     n_blocks = 3  # # base: 2
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
@@ -113,7 +113,7 @@ def main():
 
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
-        features_extractor_kwargs=dict(features_dim=64, num_blocks=n_blocks),
+        features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
         net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
 
@@ -145,7 +145,7 @@ def main():
     tb_log_name = f"PPO_ept_sm;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
-    model = model.learn(2_000_000, callback=[eval_callback, TensorboardCallback()],
+    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
                         tb_log_name=tb_log_name)
 
     print("Learning finished")

@@ -95,8 +95,10 @@ def schedule_first_packets(send_intervals, initial_delay=0):
     - first_packets (list of int): List of first packet times for each node.
     """
     first_packets = [int(min(send_intervals) * fraction / len(send_intervals)) + initial_delay
-                     for fraction in range(2, len(send_intervals) + 2)]
-
+                     for fraction in range(0, len(send_intervals))]
+    min_value_fp = min(first_packets)
+    first_packets = [(fp_t - min_value_fp) + initial_delay for fp_t in first_packets]
+    assert len(first_packets) == len(send_intervals)
     return first_packets
 
 
@@ -149,11 +151,11 @@ class TwoDEnv(gym.Env):
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
         ]
 
-        self.base_send_interval = 1500  # random.choice([2000, 3000, 4000])  # TODO: try with random send intervals?
+        self.base_send_interval = random.choice([1500, 1750, 2000]) # 1500  #  # TODO: try with random send intervals?
         self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
                                self.base_send_interval * 2]
         random.shuffle(self.send_intervals)
-        self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=400)
+        self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
         # print(f"{self.first_packets =}")
         # [int(max(self.send_intervals) * fraction / len(self.send_intervals))
         #                  for fraction in range(1, len(self.send_intervals) + 1)]
@@ -260,9 +262,12 @@ class TwoDEnv(gym.Env):
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
 
         # print(f"prior shuffling: {self.send_intervals = }")
+        self.base_send_interval = random.choice([1500, 1750, 2000])  # 1500  #  # TODO: try with random send intervals?
+        self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
+                               self.base_send_interval * 2]
         random.shuffle(self.send_intervals)
         # print(f"after shuffling: {self.send_intervals = }")
-        self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=400)
+        self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
         # print(f"{self.first_packets =}")
 
         # random.shuffle(self.first_packets)
@@ -350,6 +355,9 @@ class TwoDEnv(gym.Env):
                 # normalized_received_packets +
                 onehot_encoded_recent_packets
         )
+        #print(f"{normalized_expected_send_time=}\n{normalized_node_distances=}\n{normalized_node_directions=}\n"
+        #      f"{onehot_encoded_recent_packets=}")
+        #print(f"{len(state)=}\n{state=}")
         return state
 
     def get_packet_reward(self, sending_node: 'Node'):
