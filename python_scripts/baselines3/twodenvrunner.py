@@ -104,6 +104,12 @@ def main():
     gamma = 0.85  # base: 0.85
     ent_coef = 0.005  # base: 0.005
     learning_rate = 1e-4  # base: 6e-5
+    def learn_rate_schedule(x: float):
+        initial_learn_rate = 5e-2
+        final_learn_rate = 1e-3
+        progress_so_far = 1.0 - x
+        return initial_learn_rate + (final_learn_rate - initial_learn_rate) * progress_so_far
+
     n_blocks = 3  # # base: 2
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
@@ -116,12 +122,6 @@ def main():
         features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
         net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
     )
-
-    def learn_rate_schedule(x: float):
-        initial_learn_rate = 5e-2
-        final_learn_rate = 1e-3
-        progress_so_far = 1.0 - x
-        return initial_learn_rate + (final_learn_rate - initial_learn_rate) * progress_so_far
 
     model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=ent_coef,
                 batch_size=64,  # base: 64

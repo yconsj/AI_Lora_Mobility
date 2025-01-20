@@ -28,23 +28,8 @@ class TFPolicy(tf.keras.Model):
         self.policy_output_layer = tf.keras.layers.Softmax()  # tf.keras.layers.Dense(output_dim)
 
         # Build the model with the provided hidden layers
-        self.dense_layers = []
-        prev_dim = input_dim
-        for layer in hidden_layers:
-            print(f"{layer = }, {type(layer) = }")
-            if isinstance(layer, tf.keras.layers.Dense):
-                # Create a Dense layer (from the given hidden layer)
-                self.dense_layers.append(layer)
-                layer.build(input_shape=(None, prev_dim))  # Explicitly build the layer with correct input shape
-                prev_dim = layer.units  # Update the previous dimension to match the output size of this Dense layer
-            elif isinstance(layer, tf.keras.layers.Activation):
-                # Add an Activation layer
-                self.dense_layers.append(layer)
-            elif isinstance(layer, tf.keras.layers.Softmax):
-                # self.dense_layers.append(layer)
-                pass
-            else:
-                raise ValueError(f"Unknown layer type: {type(layer)}")
+        self.dense_layers = hidden_layers
+
 
     def call(self, inputs):
         x = inputs
@@ -61,6 +46,32 @@ class TFPolicy(tf.keras.Model):
         return concrete_function.get_concrete_function()
 
 
+def extract_torch_layers(module, input_dim):
+    layers = []
+    prev_dim = input_dim
+    for sb3_layer in module:
+        print(f"{sb3_layer = }")
+        if isinstance(sb3_layer, torch.nn.Linear):
+            # Create a Dense layer for TensorFlow and append it to the hidden_layers list
+            tf_dense_layer = tf.keras.layers.Dense(sb3_layer.out_features, activation=None)
+            tf_dense_layer.build(input_shape=(None, prev_dim))  # Explicitly build the layer with correct input shape
+            prev_dim = tf_dense_layer.units  # Update the previous dimension to match the output size of this Dense layer
+            layers.append(tf_dense_layer)
+        elif isinstance(sb3_layer, torch.nn.Tanh):
+            layers.append(tf.keras.layers.Activation("tanh"))
+        elif isinstance(sb3_layer, torch.nn.ReLU):
+            layers.append(tf.keras.layers.Activation("relu"))
+        if isinstance(sb3_layer, tf.keras.layers.Softmax):
+            # self.dense_layers.append(layer)
+            pass
+        elif isinstance(sb3_layer, torch.nn.Sequential) or \
+                isinstance(sb3_layer, torch.nn.ModuleList) or \
+                isinstance(sb3_layer, list):
+            layers.extend(extract_torch_layers(sb3_layer))
+        else:
+            raise ValueError(f"Unhandled layer type: {type(sb3_layer)}")
+    return layers
+
 def sb3_to_tensorflow(sb3_model, env):
     input_dim = env.observation_space.shape[0]  # Extract input dimension from SB3
     output_dim = env.action_space.n  # Extract output dimension from SB3
@@ -74,18 +85,8 @@ def sb3_to_tensorflow(sb3_model, env):
     sb3_layers.append(sb3_model.policy.action_net)  # Actor network
     # print(f"{sb3_model.policy.action_net = }")
 
-    prev_dim = input_dim
+    hidden_layers.append(extract_torch_layers(sb3_layers, input_dim))
 
-    for sb3_layer in sb3_layers:
-        print(f"{sb3_layer = }")
-        if isinstance(sb3_layer, torch.nn.Linear):
-            # Create a Dense layer for TensorFlow and append it to the hidden_layers list
-            tf_dense_layer = tf.keras.layers.Dense(sb3_layer.out_features, activation=None)
-            hidden_layers.append(tf_dense_layer)
-        elif isinstance(sb3_layer, torch.nn.Tanh):
-            hidden_layers.append(tf.keras.layers.Activation("tanh"))
-        else:
-            raise ValueError(f"Unknown layer type: {type(sb3_layer)}")
 
     # construct the softmax output layer
     # Initialize TFPolicy with the dynamic hidden layers list
@@ -106,7 +107,7 @@ def sb3_to_tensorflow(sb3_model, env):
     return tf_model
 
 
-def tf_to_tflite(tf_model, export_path):
+def tf_to_tflite(tf_model, export_path, training_info_export_path):
     # normalization factors for state data
     sim_time_duration = (60 * 60 * 12.0)
     norm_factors = {InputMembers.LATEST_PACKET_RSSI.value: 1.0 / 255.0,
@@ -138,7 +139,6 @@ def tf_to_tflite(tf_model, export_path):
             g_model_length = len(tflite_model)  # Calculate g_model length
             print(f"{g_model_length = }")
             rewrite_policy_net_header(header_path, export_path, g_model_length, episode_num=0)
-            training_info_export_path = config["training_info_path"]
 
             export_training_info(training_info_export_path, current_episode_num=1, max_episode_num=1,
                                  packet_reward=0,
@@ -158,4 +158,9 @@ def sb3_to_tflite_pipeline(relative_model_path):
     config = load_config("config.json")
     gen_model = config['model_path']
     export_model_path = gen_model
-    tf_to_tflite(tf_model, export_model_path)
+    training_info_export_path = config["training_info_path"]
+    tf_to_tflite(tf_model, export_model_path, training_info_export_path)
+
+
+if __name__ == '__main__':
+    sb3_to_tflite_pipeline("stable-model-2d-best/best_model")
