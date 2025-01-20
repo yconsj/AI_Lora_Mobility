@@ -84,10 +84,11 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
                 load_json_log(log_file)
 
             final_pdr = packets_received[-1] / packets_sent[-1]
+            all_pdr.append(final_pdr)
+
             final_misses = [ps - pr for ps, pr in
                             zip(packets_received_per_node[-1], packets_sent_per_node[-1])]
             final_fairness = jains_fairness_index(packets_received_per_node[-1], final_misses)
-            all_pdr.append(final_pdr)
             all_fairness.append(final_fairness)
 
             if i + 1 == n_episodes:  # only do these plots for the last episode in the batch.

@@ -26,7 +26,7 @@ def make_skipped_env():
 
 
 class CustomPolicyNetwork(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=64, num_blocks=2, negative_slope=0.01):
+    def __init__(self, observation_space, features_dim=64, num_blocks=3):
         super(CustomPolicyNetwork, self).__init__(observation_space, features_dim)
         input_dim = observation_space.shape[0]
 
@@ -103,12 +103,12 @@ def main():
     # env = VecMonitor(env)
     gamma = 0.85  # base: 0.85
     ent_coef = 0.005  # base: 0.005
-    learning_rate = 6e-5  # base: 6e-5
-    n_blocks = 2  # # base: 2
+    learning_rate = 3e-4  # base: 6e-5
+    n_blocks = 3  # # base: 2
     env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
-    eval_callback = EvalCallback(env, eval_freq=4096, callback_after_eval=stop_train_callback,
+    eval_callback = EvalCallback(env, eval_freq=4000, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
 
     policy_kwargs = dict(
@@ -134,15 +134,20 @@ def main():
     # TODO: change input to approximate "time_of_next_packet" using the send interval and time.
     # TODO: remove ent_coef from above, and change model learn steps
     # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
-    print("Learning started")
+
     # default timesteps: 500000
 
     # "si": send interval input state, not using the time_of_next_packet of each node.
     # "ept": 'expected packet time' in input state. uses send interval to deduce when the packets should be approximately sent.
+    # "tpt": 'true packet time'
     # "fe": full episode, i.e. not early termination
+    # "sm": small model (fewer inputs in observation)
+    tb_log_name = f"PPO_ept_sm;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}"
+    print(f"Learning started, tb_log: {tb_log_name}")
+    env.reset()
+    model = model.learn(2_000_000, callback=[eval_callback, TensorboardCallback()],
+                        tb_log_name=tb_log_name)
 
-    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
-                        tb_log_name=f"PPO_ept_fe;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}")
     print("Learning finished")
     model.save("stable-model")
     env.save("model_normalization_stats")
