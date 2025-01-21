@@ -3,7 +3,7 @@ import warnings
 
 import tensorflow as tf
 import torch.nn as nn
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -104,6 +104,7 @@ def main():
     gamma = 0.85  # base: 0.85
     ent_coef = 0.005  # base: 0.005
     learning_rate = 1e-4  # base: 6e-5
+
     def learn_rate_schedule(x: float):
         initial_learn_rate = 5e-2
         final_learn_rate = 1e-3
@@ -120,19 +121,23 @@ def main():
     policy_kwargs = dict(
         features_extractor_class=CustomPolicyNetwork,
         features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
-        net_arch=dict(pi=[64, 64, 64], vf=[64, 64, 64])
+        net_arch=[64, 64, 64]
     )
-
-    model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=ent_coef,
-                batch_size=64,  # base: 64
-                clip_range=0.15,  # base: 0.15
-                n_steps=4096,  # one episode is roughly 4000 steps, when using time_skip=10 # base: 4096
-                n_epochs=10,    # base: 10
-                policy_kwargs=policy_kwargs,
-                tensorboard_log="./tensorboard/",
-                )
-    # TODO: change input to approximate "time_of_next_packet" using the send interval and time.
-    # TODO: remove ent_coef from above, and change model learn steps
+    if False:
+        model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=ent_coef,
+                    batch_size=64,  # base: 64
+                    clip_range=0.15,  # base: 0.15
+                    n_steps=4096,  # one episode is roughly 4000 steps, when using time_skip=10 # base: 4096
+                    n_epochs=10,  # base: 10
+                    policy_kwargs=policy_kwargs,
+                    tensorboard_log="./tensorboard/",
+                    )
+    else:
+        model = DQN("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma,
+                    batch_size=64,  # base: 64
+                    policy_kwargs=policy_kwargs,
+                    tensorboard_log="./tensorboard/",
+                    )
     # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
 
     # default timesteps: 500000

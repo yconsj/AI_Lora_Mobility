@@ -142,8 +142,8 @@ class TwoDEnv(gym.Env):
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
         self.prev_pos = self.pos
         self.steps = 0
-        self.ploss_scale = 100  # adjusts the dropoff of transmission probability by distance
-        self.node_max_transmission_distance = 100
+        self.ploss_scale = 50  # adjusts the dropoff of transmission probability by distance
+        self.node_max_transmission_distance = 40
         node_pos = [
             (self.max_distance_x // 6, self.max_distance_y // 6),
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y - (self.max_distance_y // 6)),
@@ -151,7 +151,7 @@ class TwoDEnv(gym.Env):
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
         ]
 
-        self.base_send_interval = random.choice([1500, 1750, 2000]) # 1500  #  # TODO: try with random send intervals?
+        self.base_send_interval = random.choice([1500, 1750, 2000])  # 1500  #  # TODO: try with random send intervals?
         self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
                                self.base_send_interval * 2]
         random.shuffle(self.send_intervals)
@@ -177,8 +177,8 @@ class TwoDEnv(gym.Env):
             for i in range(len(node_pos))
         ]
 
-        self.elapsed_times = [0, 0, 0, 0]
-        self.loss_counts = [0, 0, 0, 0]
+        self.elapsed_times = [0] * len(self.nodes)
+        self.loss_counts = [0] * len(self.nodes)
         self.expected_send_time = self.first_packets.copy()
 
         self.expected_max_packets_sent = self.max_steps // min(self.send_intervals)
@@ -232,6 +232,20 @@ class TwoDEnv(gym.Env):
         self.log_file = log_file
         self.log_data = []  # Store logs before writing to the file
 
+    def get_random_node_positions(self, num_positions=4, min_dist=20):
+        positions = []
+        for _ in range(num_positions):
+            while True:
+                new_pos = (
+                    random.randint(0, self.max_distance_x),
+                    random.randint(0, self.max_distance_y)
+                )
+                if all(math.dist(new_pos, pos) >= min_dist for pos in positions):
+                    positions.append(new_pos)
+                    break
+        random.shuffle(positions)
+        return positions
+
     def _compute_reception_grid(self):
         """ Compute the reception grid based on node positions and transmission range. """
         # grid of 0 to max_distance y & x, max_distance inclusive
@@ -245,8 +259,7 @@ class TwoDEnv(gym.Env):
                     distance = np.sqrt((x - node.pos[0]) ** 2 + (y - node.pos[1]) ** 2)
                     if distance <= node.transmission_model.max_transmission_distance:
                         # Reception is a function of distance
-                        reception += node.transmission_model.get_reception_prob((distance))
-                        # (1 - distance / node.transmission_model.max_transmission_distance)
+                        reception += node.transmission_model.get_reception_prob(distance)
 
                 # Normalize to between 0 and 1
                 grid[x, y] = min(reception, 1.0)
@@ -260,18 +273,15 @@ class TwoDEnv(gym.Env):
         self.visited_pos = dict()
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
-
-        # print(f"prior shuffling: {self.send_intervals = }")
+        positions = self.get_random_node_positions(num_positions=len(self.nodes),
+                                                   min_dist=2*self.node_max_transmission_distance)
         self.base_send_interval = random.choice([1500, 1750, 2000])  # 1500  #  # TODO: try with random send intervals?
         self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
                                self.base_send_interval * 2]
         random.shuffle(self.send_intervals)
-        # print(f"after shuffling: {self.send_intervals = }")
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
-        # print(f"{self.first_packets =}")
-
-        # random.shuffle(self.first_packets)
         for i in range(len(self.nodes)):
+            self.nodes[i].pos = positions[i]
             self.nodes[i].set_send_interval(self.send_intervals[i])
             self.nodes[i].time_to_first_packet = self.first_packets[i]
             self.nodes[i].reset()
@@ -355,22 +365,15 @@ class TwoDEnv(gym.Env):
                 # normalized_received_packets +
                 onehot_encoded_recent_packets
         )
-        #print(f"{normalized_expected_send_time=}\n{normalized_node_distances=}\n{normalized_node_directions=}\n"
+        # print(f"{normalized_expected_send_time=}\n{normalized_node_distances=}\n{normalized_node_directions=}\n"
         #      f"{onehot_encoded_recent_packets=}")
-        #print(f"{len(state)=}\n{state=}")
+        # print(f"{len(state)=}\n{state=}")
         return state
 
     def get_packet_reward(self, sending_node: 'Node'):
         distance = math.dist(self.pos, sending_node.pos)
         reward = self.packet_reward_max * sending_node.transmission_model.get_reception_prob(distance)
         return reward
-
-    def get_good_action_reward(self, distance_prior_action, distance_after_action):
-        is_good_action = distance_after_action < distance_prior_action
-        if is_good_action:
-            return self.good_action_reward * is_good_action
-        else:
-            return -self.good_action_reward * is_good_action * 2
 
     def get_pos_reward(self, node: 'Node', elapsed_time: float):
         distance = math.dist(self.pos, node.pos)
@@ -380,7 +383,11 @@ class TwoDEnv(gym.Env):
 
         # weight = (scaled_distance + failure_probability) / 2 #TODO: try enable, but change min reward
         # Return reward based on scaled distance between a min and max reward
-        reward = self.pos_reward_max - (scaled_distance * (self.pos_reward_max - self.pos_reward_min))
+        # Exponential reward calculation
+        k = 6  # Adjust this scaling factor to control the sharpness of the exponential decay
+        reward = self.pos_reward_max * math.exp(-k * scaled_distance)
+
+        # reward = self.pos_reward_max - (scaled_distance * (self.pos_reward_max - self.pos_reward_min))
 
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
@@ -392,6 +399,22 @@ class TwoDEnv(gym.Env):
         # if distance < self.node_max_transmission_distance:
         #    reward *= 2
         return reward
+
+    def get_next_sending_node_index(self):
+        idx_min = 0
+        for i in range(len(self.nodes)):
+            if self.nodes[i].time_of_next_packet < self.nodes[idx_min].time_of_next_packet:
+                idx_min = i
+
+        return idx_min
+
+    def get_next_expected_sending_node_index(self):
+        idx_min = 0
+        for i in range(len(self.expected_send_time)):
+            if self.expected_send_time[i] < self.expected_send_time[idx_min]:
+                idx_min = i
+
+        return idx_min
 
     def get_miss_penalty(self, node: 'Node'):
         distance = math.dist(self.pos, node.pos)
@@ -419,21 +442,12 @@ class TwoDEnv(gym.Env):
 
         return 0
 
-    def get_next_sending_node_index(self):
-        idx_min = 0
-        for i in range(len(self.nodes)):
-            if self.nodes[i].time_of_next_packet < self.nodes[idx_min].time_of_next_packet:
-                idx_min = i
-
-        return idx_min
-
-    def get_next_expected_sending_node_index(self):
-        idx_min = 0
-        for i in range(len(self.expected_send_time)):
-            if self.expected_send_time[i] < self.expected_send_time[idx_min]:
-                idx_min = i
-
-        return idx_min
+    def get_good_action_reward(self, distance_prior_action, distance_after_action):
+        is_good_action = distance_after_action < distance_prior_action
+        if is_good_action:
+            return self.good_action_reward
+        else:
+            return -self.good_action_reward * 2
 
     def step(self, action):
         if self.render_mode == "cv2":
@@ -489,8 +503,7 @@ class TwoDEnv(gym.Env):
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
-                miss_penalty = self.get_miss_penalty(self.nodes[i])  # * self.loss_counts[i]
-                reward += miss_penalty
+                reward += self.get_miss_penalty(self.nodes[i])  # * self.loss_counts[i]
 
         # update send time approximation
         for i in range(len(self.expected_send_time)):
@@ -739,7 +752,7 @@ class PACKET_STATUS(Enum):
 
 class Node:
     def __init__(self, pos: tuple[int, int], transmission_model: TransmissionModel, time_to_first_packet: int,
-                 send_interval: int, use_deterministic_transmissions=False, send_std=10):
+                 send_interval: int, send_std=10, use_deterministic_transmissions=False):
         self.pos = pos
         self.time_to_first_packet = time_to_first_packet
         self.time_of_next_packet = time_to_first_packet
