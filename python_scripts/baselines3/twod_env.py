@@ -98,6 +98,7 @@ def schedule_first_packets(send_intervals, initial_delay=0):
                      for fraction in range(0, len(send_intervals))]
     min_value_fp = min(first_packets)
     first_packets = [(fp_t - min_value_fp) + initial_delay for fp_t in first_packets]
+    random.shuffle(first_packets)
     assert len(first_packets) == len(send_intervals)
     return first_packets
 
@@ -392,7 +393,7 @@ class TwoDEnv(gym.Env):
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
 
-        penalty_immunity_period = 10.0
+        penalty_immunity_period = 20.0
         if elapsed_time < penalty_immunity_period:
             reward = max(0.0, reward)
 
@@ -621,6 +622,7 @@ class TwoDEnv(gym.Env):
             f"Total received: {self.total_received}",
             f"Total misses: {self.total_misses}",
             f"Total reward: {self.total_reward:.3f}",
+            f"Time: {self.steps} | {self.max_steps}"
         ]
 
         # Calculate text-related dimensions
