@@ -176,7 +176,7 @@ def _plot_heatmap(grid):
     Plots the heatmap using Matplotlib.
     """
     plt.figure(figsize=(10, 8))
-    plt.imshow(grid, origin='lower', cmap='hot')
+    plt.imshow(grid, origin='upper', cmap='hot')
     plt.colorbar(label='log(Time Spent)')
     plt.title('Mobile Gateway Heatmap')
     plt.xlabel('Grid X')
