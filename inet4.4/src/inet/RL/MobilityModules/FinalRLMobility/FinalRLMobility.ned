@@ -7,7 +7,7 @@
 // Author: Emin Ilker Cetinbas (niw3_at_yahoo_d0t_com)
 //
 
-package inet.RL.SimpleRLMobility;
+package inet.RL.MobilityModules.FinalRLMobility;
 
 import inet.mobility.base.MovingMobilityBase;
 import inet.RL.LearningModel.LearningModel;

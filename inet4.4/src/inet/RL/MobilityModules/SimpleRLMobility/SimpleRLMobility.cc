@@ -1,13 +1,4 @@
-//
-// Copyright (C) 2005 Emin Ilker Cetinbas
-//
-// SPDX-License-Identifier: LGPL-3.0-or-later
-//
-//
-// Author: Emin Ilker Cetinbas (niw3_at_yahoo_d0t_com)
-//
-
-#include "inet/RL/SimpleRLMobility/SimpleRLMobility.h"
+#include "inet/RL/MobilityModules/SimpleRLMobility/SimpleRLMobility.h"
 
 #include "inet/RL/LearningModel/LearningModel.h"
 #include "inet/mobility/static/StationaryMobility.h"
