@@ -8,7 +8,7 @@
 #ifndef INET_MOBILITY_SINGLE_ADVANCEDRLMOBILITY_H_
 #define INET_MOBILITY_SINGLE_ADVANCEDRLMOBILITY_H_
 
-#include "../../LearningModels/AdvancedLearningModel/AdvancedLearningModel.h"
+
 #include "inet/mobility/static/StationaryMobility.h"
 #include "inet/common/INETMath.h"
 #include "inet/common/geometry/common/Coord.h"

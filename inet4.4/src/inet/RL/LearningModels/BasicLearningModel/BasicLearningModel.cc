@@ -16,28 +16,7 @@
 
 #include "BasicLearningModel.h"
 
-#include <algorithm>  // std::generate
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <omnetpp.h>
-#include <array>
-#include <cmath>
 
-
-
-#include "inet/common/geometry/common/Coord.h"
-#include "inet/mobility/contract/IMobility.h" // for accessing mobility
-#include <random>  // For random sampling
-
-#include "../../MobilityModules/BasicRLMobility/BasicRLMobility.h"
-#include "inet/RL/InputState.h"
-#include "inet/RL/modelfiles/policy_net_model.h"
-#include "inet/RL/StateLogger/StateLogger.h"  // Include the StateLogger header
 
 
 namespace inet {

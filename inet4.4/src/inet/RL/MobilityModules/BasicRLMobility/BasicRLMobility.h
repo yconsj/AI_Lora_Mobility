@@ -10,7 +10,7 @@
 
 #include "inet/mobility/base/MovingMobilityBase.h"
 #include "inet/common/geometry/common/Coord.h"
-#include "../../LearningModels/BasicLearningModel/BasicLearningModel.h"
+
 #include "inet/mobility/static/StationaryMobility.h"
 #include "inet/common/INETMath.h"
 #include "inet/common/geometry/common/Coord.h"
