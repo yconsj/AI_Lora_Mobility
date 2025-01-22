@@ -1,9 +1,10 @@
+import json
 import multiprocessing
 
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize
 
-from advanced_plot_episode_log import load_json_log, plot_mobile_gateway_with_nodes_advanced, plot_heatmap, \
+from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap, \
     plot_batch_episode_performance
 from twod_env import TwoDEnv, FrameSkip, jains_fairness_index
 from stable_baselines3.common.env_util import make_vec_env
@@ -17,15 +18,9 @@ def get_action_probabilities(input_state, input_model):
     return probabilities_np
 
 
-grid_size_x, grid_size_y = 0, 0
-
-
 def make_skipped_env(do_logging, log_file, input_render_mode):
     time_skip = 10
-    global grid_size_x, grid_size_y
     env = TwoDEnv(render_mode=input_render_mode, timeskip=time_skip, do_logging=do_logging, log_file=log_file)
-    grid_size_x = env.max_distance_x
-    grid_size_y = env.max_distance_y
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
@@ -37,6 +32,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
     test_best = True
     if test_best:
         model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
+        # model = DQN.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
     else:
         model = PPO.load("stable-model", device="cpu", print_system_info=True)
 
@@ -78,10 +74,13 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             counter += 1
 
         if do_logging:
-            gw_positions, timestamps, \
-            node_distances, packets_received, packets_sent, \
-            transmissions_per_node, packets_received_per_node, packets_sent_per_node = \
-                load_json_log(log_file)
+            with open(log_file, 'r') as file:
+                data = json.load(file)
+            dynamic_data = data["dynamic"]
+            packets_received = [entry['packets_received'] for entry in dynamic_data]
+            packets_sent = [entry['packets_sent'] for entry in dynamic_data]
+            packets_received_per_node = [[] for _ in range(len(dynamic_data[0]['packets_received_per_node']))]
+            packets_sent_per_node = [[] for _ in range(len(dynamic_data[0]['packets_sent_per_node']))]
 
             final_pdr = packets_received[-1] / packets_sent[-1]
             all_pdr.append(final_pdr)
@@ -93,7 +92,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
 
             if i + 1 == n_episodes:  # only do these plots for the last episode in the batch.
                 plot_mobile_gateway_with_nodes_advanced(log_file)
-                plot_heatmap(log_file=log_file, grid_size_x=grid_size_x + 1, grid_size_y=grid_size_y + 1)
+                plot_heatmap(log_file=log_file)
     if do_logging:
         plot_batch_episode_performance(all_pdr, all_fairness)
 
@@ -101,5 +100,5 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
 if __name__ == '__main__':
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
-
-    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=20, rendering_mode=None)
+    rendering_mode = None  # "cv2"
+    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=1, rendering_mode=rendering_mode)

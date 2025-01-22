@@ -2,41 +2,6 @@ import json
 from matplotlib import lines
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
-
-
-def load_json_log(log_file):
-    """
-    Loads JSON log file and extracts relevant data for plotting.
-    """
-    with open(log_file, 'r') as file:
-        data = json.load(file)
-
-    # Extract data
-    gw_position_x = [entry['gw_pos_x'] for entry in data]
-    gw_position_y = [entry['gw_pos_y'] for entry in data]
-    gw_positions = zip(gw_position_x, gw_position_y)
-    timestamps = [entry['step_time'] for entry in data]
-    node_distances = [entry['node_distances'] for entry in data]  # Directly use node_distances from the log
-    packets_received = [entry['packets_received'] for entry in data]
-    packets_sent = [entry['packets_sent'] for entry in data]
-
-    transmissions_per_node = [[] for _ in range(len(data[0]['transmissions_per_node']))]
-    packets_received_per_node = [[] for _ in range(len(data[0]['packets_received_per_node']))]
-    packets_sent_per_node = [[] for _ in range(len(data[0]['packets_sent_per_node']))]
-
-    for entry in data:
-        for i, transmission in enumerate(entry['transmissions_per_node']):
-            if transmission:
-                transmissions_per_node[i].append(entry['step_time'])
-        for i, received in enumerate(entry['packets_received_per_node']):
-            packets_received_per_node[i].append(received)
-        for i, sent in enumerate(entry['packets_sent_per_node']):
-            packets_sent_per_node[i].append(sent)
-
-    return gw_positions, timestamps, node_distances, packets_received, packets_sent, \
-           transmissions_per_node, packets_received_per_node, packets_sent_per_node
-
 
 def plot_mobile_gateway_with_nodes_advanced(log_file):
     """
@@ -45,10 +10,21 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     2. Number of packets received vs packets sent for each node, and total packets received.
     """
     # Load log data
-    gw_positions, timestamps, \
-        node_distances, packets_received, packets_sent, \
-        transmissions_per_node, packets_received_per_node, packets_sent_per_node = \
-        load_json_log(log_file)
+    with open(log_file, 'r') as file:
+        data = json.load(file)
+    dynamic_data = data["dynamic"]
+    node_distances = [entry['node_distances'] for entry in dynamic_data]
+    timestamps = [entry['step_time'] for entry in dynamic_data]
+    packets_received = [entry['packets_received'] for entry in dynamic_data]
+    packets_sent = [entry['packets_sent'] for entry in dynamic_data]
+    transmission_occureds = [entry['transmissions_per_node'] for entry in dynamic_data]
+    packets_received_per_node = [[] for _ in range(len(dynamic_data[0]['packets_received_per_node']))]
+    packets_sent_per_node = [[] for _ in range(len(dynamic_data[0]['packets_sent_per_node']))]
+    for entry in dynamic_data:
+        for i, received in enumerate(entry['packets_received_per_node']):
+            packets_received_per_node[i].append(received)
+        for i, sent in enumerate(entry['packets_sent_per_node']):
+            packets_sent_per_node[i].append(sent)
 
     # Colors for different nodes
     node_colors = ["tab:red", "xkcd:bluish", "xkcd:dark grass green", "tab:orange"]
@@ -62,9 +38,13 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
         axs[0].plot(timestamps, [dist[idx] for dist in node_distances], label=f"Distance to Node {idx}",
                     color=color, linestyle="-", linewidth=1.5, alpha=0.9)
 
-        # Plot transmission times for each node (vertical lines)
-        for time in transmissions_per_node[idx]:
-            axs[0].axvline(x=time, color=color, linestyle="--", alpha=0.7)
+    # Plot transmission times for each node (vertical lines)
+    for i in range(len(transmission_occureds)):
+        time = timestamps[i]
+        for node_idx in range(len(transmission_occureds[0])):
+            if transmission_occureds[i][node_idx]:
+                color = node_colors[node_idx]
+                axs[0].axvline(x=time, color=color, linestyle="--", alpha=0.7)
 
     # Custom legend for node-specific distances and transmission times
     custom_transmission_lines = [
@@ -96,23 +76,12 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     for node_idx, color in enumerate(node_colors):
         axs[1].plot(timestamps, packets_received_per_node[node_idx], label=f"Node {node_idx} Packets Received",
                     color=color, linestyle='-', alpha=0.9, linewidth=3)
-        # Plot transmission times for each node (vertical lines)
-        for time in transmissions_per_node[node_idx]:
-            axs[1].axvline(x=time, color=color, linestyle="--", alpha=0.7)
-
-    # Calculate the total Packet Delivery Rate (PDR) for each time step
-    pdr = [r / s if s != 0 else 0 for r, s in zip(packets_received, packets_sent)]
-
-    # Create secondary y-axis for PDR
-    ax2 = axs[1].twinx()
-    ax2.plot(timestamps, pdr, label="Total PDR", color="black", linestyle=':', linewidth=2)
 
     # Define custom legend for packets received, packets sent, and PDR
     # Custom legend for node-specific distances and transmission times
     custom_lines = [
         lines.Line2D([], [], color="black", linestyle='-', label="Total Packets Received"),
-        lines.Line2D([], [], color="black", linestyle='--', label="Total Packets Sent"),
-        lines.Line2D([], [], color="black", linestyle=':', label="Total PDR")
+        lines.Line2D([], [], color="black", linestyle='--', label="Total Packets Sent")
     ]
     custom_transmission_lines = [
         lines.Line2D([], [], color=color, linestyle='--', label=f"Node {i} Transmission")
@@ -129,11 +98,6 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
         borderaxespad=0.0,
         ncol=2  # Two columns for better spacing
     )
-    # TODO: Add fairness metric?
-    # Set labels for the secondary axis
-    ax2.set_ylabel("PDR", color="black")
-    ax2.set_ylim(0, 1)
-
     axs[1].set_xlabel("Time (steps)")
     axs[1].set_ylabel("Packets")
     axs[1].set_title("Packets Received vs Packets Sent Per Node & PDR")
@@ -145,7 +109,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     plt.show()
 
 
-def create_heatmap(positions, step_times, grid_size_x, grid_size_y):
+def create_heatmap(gw_positions, grid_size_x, grid_size_y):
     """
     Creates a normalized heatmap showing the fraction of total time spent in each grid cell.
     """
@@ -153,7 +117,7 @@ def create_heatmap(positions, step_times, grid_size_x, grid_size_y):
     grid = np.zeros((grid_size_y, grid_size_x))
 
     # Populate the grid with time spent
-    for (x, y), time in zip(positions, step_times):
+    for (x, y) in gw_positions:
         grid_x = round(x)
         grid_y = round(y)
 
@@ -171,23 +135,43 @@ def create_heatmap(positions, step_times, grid_size_x, grid_size_y):
     return grid
 
 
-def _plot_heatmap(grid):
+def _plot_heatmap(grid, node_positions):
     """
     Plots the heatmap using Matplotlib.
     """
     plt.figure(figsize=(10, 8))
+    # invert y-axis to match with render screen, where y ascends in the downwards direction:
     plt.imshow(grid, origin='upper', cmap='hot')
+    # Overlay static node positions
     plt.colorbar(label='log(Time Spent)')
+    for x, y in node_positions:
+        plt.scatter(x, y, color='blue', label='Node', edgecolor='white', s=100, zorder=5)
+
     plt.title('Mobile Gateway Heatmap')
     plt.xlabel('Grid X')
     plt.ylabel('Grid Y')
     plt.show()
 
 
-def plot_heatmap(log_file, grid_size_x, grid_size_y):
-    gw_positions, timestamps, *_ = load_json_log(log_file)
-    heatmap_grid = create_heatmap(gw_positions, timestamps, grid_size_x, grid_size_y)
-    _plot_heatmap(heatmap_grid)
+def plot_heatmap(log_file):
+    with open(log_file, 'r') as file:
+        data = json.load(file)
+
+    # Extract data
+    static_data = data["static"]
+    node_positions_x = static_data["node_positions_x"]
+    node_positions_y = static_data["node_positions_y"]
+    node_positions = zip(node_positions_x, node_positions_y)
+    max_distance_x = static_data["max_distance_x"] + 1
+    max_distance_y = static_data["max_distance_y"] + 1
+
+    dynamic_data = data["dynamic"]
+    gw_position_x = [entry['gw_pos_x'] for entry in dynamic_data]
+    gw_position_y = [entry['gw_pos_y'] for entry in dynamic_data]
+    gw_positions = zip(gw_position_x, gw_position_y)
+
+    heatmap_grid = create_heatmap(gw_positions, max_distance_x, max_distance_y)
+    _plot_heatmap(heatmap_grid, node_positions)
 
 
 def plot_batch_episode_performance(all_pdr, all_fairness):
@@ -213,8 +197,8 @@ def plot_batch_episode_performance(all_pdr, all_fairness):
     plt.title("Performance: PDR and Fairness over Episodes")
     plt.show()
 
+
 if __name__ == '__main__':
     # Parameters
     log_file = "env_log.json"
-    grid_size_x, grid_size_y = 301, 301  # Define the grid size (e.g., 150x150)
-    plot_heatmap(log_file, grid_size_x, grid_size_y)
+    plot_heatmap(log_file)

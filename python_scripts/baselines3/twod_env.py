@@ -122,7 +122,6 @@ class TwoDEnv(gym.Env):
         self.max_steps = 40000  # Maximum steps per episode
 
         # Environment state
-        self.visited_pos = dict()
         # Scaled reward values preserving relative ratios
         self.pos_reward_max = 0.0125
         self.pos_reward_min = -self.pos_reward_max
@@ -231,7 +230,7 @@ class TwoDEnv(gym.Env):
         # logging attributes
         self.do_logging = do_logging
         self.log_file = log_file
-        self.log_data = []  # Store logs before writing to the file
+        self.log_dynamic_data = []  # Store logs before writing to the file
 
     def get_random_node_positions(self, num_positions=4, min_dist=20):
         positions = []
@@ -271,7 +270,6 @@ class TwoDEnv(gym.Env):
         self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
         self.prev_pos = self.pos
-        self.visited_pos = dict()
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
         positions = self.get_random_node_positions(num_positions=len(self.nodes),
@@ -305,7 +303,7 @@ class TwoDEnv(gym.Env):
             self.reception_grid = self._compute_reception_grid()
             self.background_frame = _generate_color_frame(self.reception_grid)
 
-        self.log_data = []
+        self.log_dynamic_data = []
         state = self.get_state()
         return np.array(state, dtype=np.float32), {}
 
@@ -429,19 +427,6 @@ class TwoDEnv(gym.Env):
         penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
         return -penalty
 
-    def get_explore_reward(self, pos, time):
-        base_reward = 0.001
-        if pos not in self.visited_pos.keys():
-            self.visited_pos[pos] = time
-            multiplier = abs(pos[0] - int(self.max_distance_x / 2)) * abs(pos[1] - int(self.max_distance_y / 2)) / (
-                    self.max_cross_distance * 2)
-            return (base_reward)  # + (base_reward * multiplier)
-
-        base_reward = base_reward
-
-        self.visited_pos[pos] = time
-
-        return 0
 
     def get_good_action_reward(self, distance_prior_action, distance_after_action):
         is_good_action = distance_after_action < distance_prior_action
@@ -529,11 +514,26 @@ class TwoDEnv(gym.Env):
                 transmissions_per_node=transmission_occurred_per_node
             )
             if done:
-                # Write to JSON file if the episode ends
-                with open(self.log_file, 'w') as file:
-                    json.dump(self.log_data, file, indent=4)
+                self.log_done()
 
         return np.array(state, dtype=np.float32), reward, terminated, truncated, info
+
+    def log_done(self):
+        episode_data = {
+            "static": {
+                "node_positions_x":
+                    [node.pos[0] for node in self.nodes],
+                "node_positions_y":
+                    [node.pos[1] for node in self.nodes],
+                "send_intervals": self.send_intervals,
+                "max_distance_x": self.max_distance_x,
+                "max_distance_y": self.max_distance_y
+            },
+            "dynamic": self.log_dynamic_data
+        }
+        # Write to JSON file if the episode ends
+        with open(self.log_file, 'w') as file:
+            json.dump(episode_data, file, indent=4)
 
     def log_step(self, transmissions_per_node):
         """
@@ -558,7 +558,7 @@ class TwoDEnv(gym.Env):
             ],
             "node_distances": node_distances  # Add node distances to the log entry
         }
-        self.log_data.append(log_entry)
+        self.log_dynamic_data.append(log_entry)
 
     def render(self):
         """Render the environment with reception-based background and dynamic elements."""

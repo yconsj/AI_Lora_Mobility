@@ -123,7 +123,7 @@ def main():
         features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
         net_arch=[64, 64, 64]
     )
-    if False:
+    if True:
         model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=ent_coef,
                     batch_size=64,  # base: 64
                     clip_range=0.15,  # base: 0.15
@@ -138,6 +138,7 @@ def main():
                     policy_kwargs=policy_kwargs,
                     tensorboard_log="./tensorboard/",
                     )
+    model_type = type(model).__name__
     # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
 
     # default timesteps: 500000
@@ -147,7 +148,7 @@ def main():
     # "tpt": 'true packet time'
     # "fe": full episode, i.e. not early termination
     # "sm": small model (fewer inputs in observation)
-    tb_log_name = f"PPO_ept_sm;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}"
+    tb_log_name = f"{model_type}_ept_sm;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
     model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
