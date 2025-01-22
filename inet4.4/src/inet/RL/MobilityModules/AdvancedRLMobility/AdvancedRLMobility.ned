@@ -7,10 +7,10 @@
 // Author: Emin Ilker Cetinbas (niw3_at_yahoo_d0t_com)
 //
 
-package inet.RL.MobilityModules.SimpleRLMobility;
+package inet.RL.MobilityModules.AdvancedRLMobility;
 
 import inet.mobility.base.MovingMobilityBase;
-import inet.RL.LearningModel.LearningModel;
+import inet.RL.LearningModels.AdvancedLearningModel.AdvancedLearningModel;
 
 //
 // This is a linear mobility model with speed, angle and acceleration parameters.
@@ -19,7 +19,7 @@ import inet.RL.LearningModel.LearningModel;
 //
 // @author Emin Ilker Cetinbas
 //
-module SimpleRLMobility extends MovingMobilityBase
+module AdvancedRLMobility extends MovingMobilityBase
 {
     parameters:
         double initialX @unit(m) = default(uniform(this.constraintAreaMinX, this.constraintAreaMaxX));
@@ -31,9 +31,9 @@ module SimpleRLMobility extends MovingMobilityBase
         double initialMovementElevation @unit(deg) = default(0deg);
 		//updateInterval = 0.1s;  // parameter how often movement is scheduled. normal default is 0.1 seconds
 	    double modelUpdateInterval @unit(s) = default(10s); // how often we poll the model from the mobility module
-        @class(SimpleRLMobility);
+        @class(AdvancedRLMobility);
         
     submodules:
-        learningModel: LearningModel;
+        advancedLearningModel: AdvancedLearningModel;
 }
 

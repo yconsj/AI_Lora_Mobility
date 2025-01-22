@@ -1,17 +1,12 @@
-#include "inet/RL/MobilityModules/FinalRLMobility/FinalRLMobility.h"
+#include "AdvancedRLMobility.h"
 
-#include "inet/RL/LearningModel/LearningModel.h"
-#include "inet/mobility/static/StationaryMobility.h"
-
-#include "inet/common/INETMath.h"
-#include "inet/common/geometry/common/Coord.h"
 
 
 namespace inet {
 
-Define_Module(FinalRLMobility);
+Define_Module(AdvancedRLMobility);
 
-FinalRLMobility::FinalRLMobility()
+AdvancedRLMobility::AdvancedRLMobility()
 {
     speed = 0;
     pollModelTimer = nullptr;
@@ -23,10 +18,10 @@ FinalRLMobility::FinalRLMobility()
     direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
 }
 
-void FinalRLMobility::initialize(int stage)
+void AdvancedRLMobility::initialize(int stage)
 {
     MovingMobilityBase::initialize(stage);
-    EV << "initializing FinalRLMobility stage " << stage << endl;
+    EV << "initializing AdvancedRLMobility stage " << stage << endl;
     if (stage == INITSTAGE_LOCAL) {
         speed = par("speed");
         stationary = (speed == 0);
@@ -49,14 +44,14 @@ void FinalRLMobility::initialize(int stage)
 }
 
 
-void FinalRLMobility::schedulePollModelUpdate()
+void AdvancedRLMobility::schedulePollModelUpdate()
 {
    cancelEvent(pollModelTimer);
    simtime_t nextUpdate = simTime() + modelUpdateInterval;
    scheduleAt(nextUpdate, pollModelTimer);
 }
 
-void FinalRLMobility::handleSelfMessage(cMessage *message)
+void AdvancedRLMobility::handleSelfMessage(cMessage *message)
 {
     if (message == moveTimer) {
         moveAndUpdate();
@@ -70,11 +65,11 @@ void FinalRLMobility::handleSelfMessage(cMessage *message)
 }
 
 
-const Coord& FinalRLMobility::getInitialPosition() {
+const Coord& AdvancedRLMobility::getInitialPosition() {
     return initialPosition;
 }
 
-const Coord& FinalRLMobility::getLoRaNodePosition(int index)
+const Coord& AdvancedRLMobility::getLoRaNodePosition(int index)
 {
     // Access the parent network module
     cModule *network = getParentModule()->getParentModule();
@@ -98,17 +93,17 @@ const Coord& FinalRLMobility::getLoRaNodePosition(int index)
     return Coord(NAN, NAN, NAN);
 }
 
-void FinalRLMobility::pollModel() {
+void AdvancedRLMobility::pollModel() {
     //subjectModule->
     EV << "test LM" <<  endl;
-    cModule* submodule = getSubmodule("learningModel");
-    LearningModel *learningModel = check_and_cast<LearningModel*>(submodule);
-    if (!learningModel) {
-        EV << "LearningModel submodule not found!" << endl;
+    cModule* submodule = getSubmodule("advancedLearningModel");
+    AdvancedLearningModel *advancedLearningModel = check_and_cast<AdvancedLearningModel*>(submodule);
+    if (!advancedLearningModel) {
+        EV << "AdvancedLearningModel submodule not found!" << endl;
         return;
     }
-    // Call a function from LearningModel
-    int choice = learningModel->pollModel();
+    // Call a function from AdvancedLearningModel
+    int choice = advancedLearningModel->pollModel();
     switch(choice) {
     case 0: // stand still
         lastVelocity = direction * 0.0;
@@ -135,7 +130,7 @@ void FinalRLMobility::pollModel() {
     EV << "direction: " << direction << omnetpp::endl;
 }
 
-void FinalRLMobility::move()
+void AdvancedRLMobility::move()
 {
     double elapsedTime = (simTime() - lastUpdate).dbl();
 

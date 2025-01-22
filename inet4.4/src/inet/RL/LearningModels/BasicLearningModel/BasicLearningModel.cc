@@ -14,7 +14,7 @@
 // 
 
 
-#include "inet/RL/LearningModel/LearningModel.h"
+#include "BasicLearningModel.h"
 
 #include <algorithm>  // std::generate
 #include <cassert>
@@ -34,15 +34,15 @@
 #include "inet/mobility/contract/IMobility.h" // for accessing mobility
 #include <random>  // For random sampling
 
+#include "../../MobilityModules/BasicRLMobility/BasicRLMobility.h"
 #include "inet/RL/InputState.h"
 #include "inet/RL/modelfiles/policy_net_model.h"
-#include "inet/RL/SimpleRLMobility/SimpleRLMobility.h"
 #include "inet/RL/StateLogger/StateLogger.h"  // Include the StateLogger header
 
 
 namespace inet {
 
-Define_Module(LearningModel);
+Define_Module(BasicLearningModel);
 const tflite::Model* model = nullptr;
 
 
@@ -69,7 +69,7 @@ constexpr int kTensorArenaSize = const_g_model_length;
 
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
-LearningModel::LearningModel()
+BasicLearningModel::BasicLearningModel()
 {
     lastStateNumberOfPackets = 0.0;
     currentState = InputStateBasic();
@@ -78,10 +78,9 @@ LearningModel::LearningModel()
     std::vector<uint8_t> model_data(const_g_model_length, 0);
     packet_reward = -1.0;
     exploration_reward = -1.0;
-    random_choice_probability = 0.0;
 }
 
-LearningModel::~LearningModel() {
+BasicLearningModel::~BasicLearningModel() {
     // Clean up the model interpreter
     if (interpreter) {
         delete interpreter; // Assuming interpreter is dynamically allocated
@@ -99,9 +98,9 @@ LearningModel::~LearningModel() {
     }
 }
 
-void LearningModel::initialize()
+void BasicLearningModel::initialize()
 {
-    EV_TRACE << "initializing LearningModel " << omnetpp::endl;
+    EV_TRACE << "initializing BasicLearningModel " << omnetpp::endl;
 
     // get rewards from training_info_file
     readJsonFile(training_info_path);
@@ -114,14 +113,14 @@ void LearningModel::initialize()
 
     // After loading the model
     if (model == nullptr) {
-        throw cRuntimeError("LearningModel.cc:Failed to load model.");
+        throw cRuntimeError("BasicLearningModel.cc:Failed to load model.");
     } else {
         //EV << "Model loaded successfully. Number of subgraphs: " << model->subgraphs()->size() << omnetpp::endl;
     }
 
     if (model->version() != TFLITE_SCHEMA_VERSION) {
       //EV << "Model provided is schema version" << model->version() << " not equal to supported version " << TFLITE_SCHEMA_VERSION << omnetpp::endl;
-      throw cRuntimeError("LearningModel.cc: Model provided's schema version is not equal to supported version. ");
+      throw cRuntimeError("BasicLearningModel.cc: Model provided's schema version is not equal to supported version. ");
     }
 
 
@@ -130,7 +129,7 @@ void LearningModel::initialize()
     // Allocate memory from the tensor_arena for the model's tensors.
     TfLiteStatus allocate_status = interpreter->AllocateTensors();
     if (allocate_status != kTfLiteOk) {
-      throw cRuntimeError("LearningModel.cc: AllocateTensors() failed");
+      throw cRuntimeError("BasicLearningModel.cc: AllocateTensors() failed");
     }
 
     // Retrieve input tensor
@@ -144,7 +143,7 @@ void LearningModel::initialize()
        EV << model_input->dims->data[0] << omnetpp::endl;
        EV << model_input->dims->data[1] << omnetpp::endl;
 
-       throw cRuntimeError("LearningModel.cc: wrong input dimensions");
+       throw cRuntimeError("BasicLearningModel.cc: wrong input dimensions");
    }
    model_input_buffer = model_input->data.f; // Pointer to input data
 
@@ -158,7 +157,7 @@ void LearningModel::initialize()
        EV << model_output->dims->size << omnetpp::endl;
        EV << model_output->dims->data[0] << omnetpp::endl;
        EV << model_output->dims->data[1] << omnetpp::endl;
-       throw cRuntimeError("LearningModel.cc: wrong output dimensions");
+       throw cRuntimeError("BasicLearningModel.cc: wrong output dimensions");
    }
 
    const bool doTest = false;
@@ -177,7 +176,7 @@ void LearningModel::initialize()
    }
 }
 
-double LearningModel::readJsonValue(const json& jsonData, const std::string& key) {
+double BasicLearningModel::readJsonValue(const json& jsonData, const std::string& key) {
     if (jsonData.contains(key)) {
         return jsonData[key].get<double>(); // Retrieve the value and return it as a double
     } else {
@@ -185,7 +184,7 @@ double LearningModel::readJsonValue(const json& jsonData, const std::string& key
     }
 }
 
-void LearningModel::readJsonFile(const std::string& filepath) {
+void BasicLearningModel::readJsonFile(const std::string& filepath) {
     // Open the JSON file
     std::ifstream inputFile(filepath);
     if (!inputFile.is_open()) {
@@ -230,7 +229,7 @@ void LearningModel::readJsonFile(const std::string& filepath) {
     EV << "Exploration Reward: " << exploration_reward << std::endl;
 }
 
-StateLogger* LearningModel::getStateLoggerModule() {
+StateLogger* BasicLearningModel::getStateLoggerModule() {
     // Retrieve the network module directly
     cModule* network = getSimulation()->getSystemModule();
     if (network == nullptr) {
@@ -246,15 +245,15 @@ StateLogger* LearningModel::getStateLoggerModule() {
     return stateLogger;
 }
 
-SimpleRLMobility* LearningModel::getMobilityModule() {
-    // Fetch the mobility module, which is the parent of LearningModel
-    cModule* mobilityModule = getParentModule(); // mobility is the parent of LearningModel
+BasicRLMobility* BasicLearningModel::getMobilityModule() {
+    // Fetch the mobility module, which is the parent of BasicLearningModel
+    cModule* mobilityModule = getParentModule(); // mobility is the parent of BasicLearningModel
     if (!mobilityModule || strcmp(mobilityModule->getName(), "mobility") != 0) {
         throw cRuntimeError("The parent module is not the expected 'mobility' module.");
     }
 
     // Verify that the mobility module is an instance of SimpleRLMobility
-    SimpleRLMobility* mobility = check_and_cast<SimpleRLMobility*>(mobilityModule);
+    BasicRLMobility* mobility = check_and_cast<BasicRLMobility*>(mobilityModule);
     if (!mobility) {
         throw cRuntimeError("Failed to cast the mobility module to SimpleRLMobility.");
     }
@@ -262,9 +261,9 @@ SimpleRLMobility* LearningModel::getMobilityModule() {
 }
 
 // Method to get the position (coordinate) from the SimpleRLMobility module
-const Coord LearningModel::getCoord() {
-    // Fetch the mobility module, which is the parent of LearningModel
-    SimpleRLMobility* mobility = getMobilityModule();
+const Coord BasicLearningModel::getCoord() {
+    // Fetch the mobility module, which is the parent of BasicLearningModel
+    BasicRLMobility* mobility = getMobilityModule();
     // Return the current position of the mobility module
     const Coord pos = mobility->getCurrentPosition();
     return pos;
@@ -272,19 +271,19 @@ const Coord LearningModel::getCoord() {
 }
 
 // Function to read the model from a file
-std::vector<uint8_t> LearningModel::ReadModelFromFile(const char* filename) {
+std::vector<uint8_t> BasicLearningModel::ReadModelFromFile(const char* filename) {
     std::vector<uint8_t> model_data;
     std::ifstream file(filename, std::ios::binary);
     if (!file) {
         std::cerr << "Error opening model file: " << filename << std::endl;
-        throw cRuntimeError("LearningModel.cc: Error reading the model from file. ");
+        throw cRuntimeError("BasicLearningModel.cc: Error reading the model from file. ");
     }
 
     // Read the entire file into the model_data vector
     file.seekg(0, std::ios::end);
     size_t file_size = file.tellg();
     if (file_size == -1) {
-        throw cRuntimeError("LearningModel.cc: Error getting file size.");
+        throw cRuntimeError("BasicLearningModel.cc: Error getting file size.");
     }
 
     model_data.resize(file_size);
@@ -293,7 +292,7 @@ std::vector<uint8_t> LearningModel::ReadModelFromFile(const char* filename) {
     // Check if the read was successful
      if (!file) {
          std::cerr << "Error reading model data from file: " << filename << std::endl;
-         throw cRuntimeError("LearningModel.cc: Error reading the model data from file.");
+         throw cRuntimeError("BasicLearningModel.cc: Error reading the model data from file.");
      }
 
     return model_data;
@@ -301,7 +300,7 @@ std::vector<uint8_t> LearningModel::ReadModelFromFile(const char* filename) {
 
 
 
-void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id) {
+void BasicLearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id) {
     currentState.numReceivedPackets = nReceivedPackets;
 
 
@@ -317,7 +316,7 @@ void LearningModel::setPacketInfo(double rssi, double snir, double nReceivedPack
 }
 
 
-double LearningModel::getReward() {
+double BasicLearningModel::getReward() {
 
     double reward = (currentState.numReceivedPackets - lastStateNumberOfPackets) * packet_reward * rewardModifier;
     lastStateNumberOfPackets = currentState.numReceivedPackets;
@@ -331,7 +330,7 @@ double LearningModel::getReward() {
 
 
 
-int LearningModel::pollModel()
+int BasicLearningModel::pollModel()
 {
     // get remaining state info:
     currentState.gwPosition = getCoord() * coord_x_norm_factor;
@@ -354,7 +353,7 @@ int LearningModel::pollModel()
 }
 
 
-int LearningModel::selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic) {
+int BasicLearningModel::selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic) {
     int selected_index = -1;
 
     if (deterministic) {
@@ -392,7 +391,7 @@ int LearningModel::selectOutputIndex(float random_choice_probability, const TfLi
     }
 }
 
-int LearningModel::invokeModel(InputStateBasic state) {
+int BasicLearningModel::invokeModel(InputStateBasic state) {
     if (interpreter == nullptr) {
         EV << "Interpreter is not initialized." << omnetpp::endl;
         return -1;
@@ -471,7 +470,7 @@ int LearningModel::invokeModel(InputStateBasic state) {
 }
 
 // A helper function to compare two floating-point arrays with a tolerance
-bool LearningModel::compareArrays(const std::array<double, 3>& predicted, const std::array<double, 3>& expected, double tolerance) {
+bool BasicLearningModel::compareArrays(const std::array<double, 3>& predicted, const std::array<double, 3>& expected, double tolerance) {
     for (size_t i = 0; i < 3; ++i) {
         if (std::abs(predicted[i] - expected[i]) > tolerance) {
             return false; // Return false if any element doesn't match within tolerance
@@ -481,7 +480,7 @@ bool LearningModel::compareArrays(const std::array<double, 3>& predicted, const 
 }
 
 // The function you can call during initialize()
-void LearningModel::testModelOutput(
+void BasicLearningModel::testModelOutput(
     const std::array<double, 5>& state,
     int expectedAction,
     const std::array<double, 3>& expectedActionProbs) {
@@ -502,7 +501,7 @@ void LearningModel::testModelOutput(
         EV << model_input->dims->data[0] << omnetpp::endl;
         EV << model_input->dims->data[1] << omnetpp::endl;
 
-        throw cRuntimeError("LearningModel.cc: wrong input dimensions");
+        throw cRuntimeError("BasicLearningModel.cc: wrong input dimensions");
     }
     if ((model_output->dims->size != 2) ||
         (model_output->dims->data[0] != kOutputHeight) ||
@@ -512,7 +511,7 @@ void LearningModel::testModelOutput(
         EV << model_output->dims->size << omnetpp::endl;
         EV << model_output->dims->data[0] << omnetpp::endl;
         EV << model_output->dims->data[1] << omnetpp::endl;
-        throw cRuntimeError("LearningModel.cc: wrong output dimensions");
+        throw cRuntimeError("BasicLearningModel.cc: wrong output dimensions");
     }
 
     model_input->data.f[0] = state[0];  // Assuming state[0] corresponds to x-position of gateway

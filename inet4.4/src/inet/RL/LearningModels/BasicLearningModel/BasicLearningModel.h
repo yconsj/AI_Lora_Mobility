@@ -13,8 +13,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_
-#define INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_
+#ifndef INET_RL_LEARNINGMODELS_BASICLEARNINGMODEL_H_
+#define INET_RL_LEARNINGMODELS_BASICLEARNINGMODEL_H_
 
 #include "inet/common/geometry/common/Coord.h"
 #include <vector>
@@ -25,9 +25,9 @@
 #include "tensorflow/lite/micro/system_setup.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
+#include "../../MobilityModules/BasicRLMobility/BasicRLMobility.h"
 #include "inet/RL/InputState.h"
 #include "inet/RL/include/json.hpp"
-#include "inet/RL/SimpleRLMobility/SimpleRLMobility.h"
 #include "inet/RL/StateLogger/StateLogger.h"
 
 using json = nlohmann::json;
@@ -35,11 +35,11 @@ using json = nlohmann::json;
 namespace inet {
 
 
-class LearningModel : public omnetpp::cSimpleModule {
+class BasicLearningModel : public omnetpp::cSimpleModule {
 public:
     virtual void setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id);
-    LearningModel();
-    virtual ~LearningModel();
+    BasicLearningModel();
+    virtual ~BasicLearningModel();
     virtual int pollModel();
 
 protected:
@@ -58,7 +58,7 @@ private:
         int expectedAction,
         const std::array<double, 3>& expectedActionProbs);
 
-    SimpleRLMobility* getMobilityModule();
+    BasicRLMobility* getMobilityModule();
     virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
     void readJsonFile(const std::string& filepath);
     double readJsonValue(const json& jsonData, const std::string& key);
@@ -86,4 +86,4 @@ private:
 
 } /* namespace inet */
 
-#endif /* INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_ */
+#endif /* INET_RL_LEARNINGMODELS_BASICLEARNINGMODEL_H_ */

@@ -15,7 +15,7 @@
 
 #include "MobileGatewayLoRaApp.h"
 
-#include "../../../../inet4.4/src/inet/RL/LearningModel/LearningModel.h"
+#include "inet/RL/LearningModels/BasicLearningModel/BasicLearningModel.h"
 #include "LoRa/LoRaMac.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/common/ModuleAccess.h"
@@ -157,12 +157,12 @@ void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, double
     if (!mobilityModule)
         throw cRuntimeError("SimpleRLMobility module not found!");
 
-    // Get the LearningModel submodule from SimpleRLMobility
-    LearningModel *learningModel = check_and_cast<LearningModel*>(mobilityModule->getSubmodule("learningModel"));
-    if (!learningModel)
-        throw cRuntimeError("LearningModel module not found");
+    // Get the BasicLearningModel submodule from SimpleRLMobility
+    BasicLearningModel *basicLearningModel = check_and_cast<BasicLearningModel*>(mobilityModule->getSubmodule("basicLearningModel"));
+    if (!basicLearningModel)
+        throw cRuntimeError("BasicLearningModel module not found");
     // Log the packet information (RSSI, SNIR, and timestamp)
-    learningModel->setPacketInfo(rssi, snir, nReceivedPackets, timestamp, id);
+    basicLearningModel->setPacketInfo(rssi, snir, nReceivedPackets, timestamp, id);
 }
 
 void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)

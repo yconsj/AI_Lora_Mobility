@@ -1,15 +1,20 @@
 /*
- * FinalRLMobility.h
+ * BasicRLMobility.h
  *
  *  Created on: 31. jul. 2024
  *      Author: august
  */
 
-#ifndef INET_MOBILITY_SINGLE_FinalRLMobility_H_
-#define INET_MOBILITY_SINGLE_FinalRLMobility_H_
+#ifndef INET_MOBILITY_SINGLE_BASICRLMOBILITY_H_
+#define INET_MOBILITY_SINGLE_BASICRLMOBILITY_H_
 
 #include "inet/mobility/base/MovingMobilityBase.h"
 #include "inet/common/geometry/common/Coord.h"
+#include "../../LearningModels/BasicLearningModel/BasicLearningModel.h"
+#include "inet/mobility/static/StationaryMobility.h"
+#include "inet/common/INETMath.h"
+#include "inet/common/geometry/common/Coord.h"
+
 #include <vector>
 
 namespace inet {
@@ -20,13 +25,13 @@ namespace inet {
  * @ingroup mobility
  * @author Emin Ilker Cetinbas
  */
-class INET_API FinalRLMobility : public MovingMobilityBase
+class INET_API BasicRLMobility : public MovingMobilityBase
 {
   public:
     virtual double getMaxSpeed() const override { return speed; }
     virtual const Coord& getInitialPosition();
     virtual bool isNewGridPosition();
-    FinalRLMobility();
+    BasicRLMobility();
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     /** @brief Initializes mobility model parameters.*/
@@ -47,6 +52,9 @@ class INET_API FinalRLMobility : public MovingMobilityBase
     Coord direction;
   private:
     Coord initialPosition;
+    const int gridSize = 200;
+    std::vector<int> visitedGrids;
+
 };
 
 } // namespace inet

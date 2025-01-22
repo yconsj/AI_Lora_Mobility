@@ -1,17 +1,12 @@
-#include "inet/RL/MobilityModules/SimpleRLMobility/SimpleRLMobility.h"
+#include "BasicRLMobility.h"
 
-#include "inet/RL/LearningModel/LearningModel.h"
-#include "inet/mobility/static/StationaryMobility.h"
-
-#include "inet/common/INETMath.h"
-#include "inet/common/geometry/common/Coord.h"
 
 
 namespace inet {
 
-Define_Module(SimpleRLMobility);
+Define_Module(BasicRLMobility);
 
-SimpleRLMobility::SimpleRLMobility()
+BasicRLMobility::BasicRLMobility()
 {
     speed = 0;
     pollModelTimer = nullptr;
@@ -23,10 +18,10 @@ SimpleRLMobility::SimpleRLMobility()
     direction = Quaternion(EulerAngles(heading, -elevation, rad(0))).rotate(Coord::X_AXIS);
 }
 
-void SimpleRLMobility::initialize(int stage)
+void BasicRLMobility::initialize(int stage)
 {
     MovingMobilityBase::initialize(stage);
-    EV << "initializing SimpleRLMobility stage " << stage << endl;
+    EV << "initializing BasicRLMobility stage " << stage << endl;
     if (stage == INITSTAGE_LOCAL) {
         speed = par("speed");
         stationary = (speed == 0);
@@ -49,14 +44,14 @@ void SimpleRLMobility::initialize(int stage)
 }
 
 
-void SimpleRLMobility::schedulePollModelUpdate()
+void BasicRLMobility::schedulePollModelUpdate()
 {
    cancelEvent(pollModelTimer);
    simtime_t nextUpdate = simTime() + modelUpdateInterval;
    scheduleAt(nextUpdate, pollModelTimer);
 }
 
-void SimpleRLMobility::handleSelfMessage(cMessage *message)
+void BasicRLMobility::handleSelfMessage(cMessage *message)
 {
     if (message == moveTimer) {
         moveAndUpdate();
@@ -70,11 +65,11 @@ void SimpleRLMobility::handleSelfMessage(cMessage *message)
 }
 
 
-const Coord& SimpleRLMobility::getInitialPosition() {
+const Coord& BasicRLMobility::getInitialPosition() {
     return initialPosition;
 }
 
-const Coord& SimpleRLMobility::getLoRaNodePosition(int index)
+const Coord& BasicRLMobility::getLoRaNodePosition(int index)
 {
     // Access the parent network module
     cModule *network = getParentModule()->getParentModule();
@@ -98,17 +93,17 @@ const Coord& SimpleRLMobility::getLoRaNodePosition(int index)
     return Coord(NAN, NAN, NAN);
 }
 
-void SimpleRLMobility::pollModel() {
+void BasicRLMobility::pollModel() {
     //subjectModule->
     EV << "test LM" <<  endl;
-    cModule* submodule = getSubmodule("learningModel");
-    LearningModel *learningModel = check_and_cast<LearningModel*>(submodule);
-    if (!learningModel) {
-        EV << "LearningModel submodule not found!" << endl;
+    cModule* submodule = getSubmodule("basicLearningModel");
+    BasicLearningModel *basicLearningModel = check_and_cast<BasicLearningModel*>(submodule);
+    if (!basicLearningModel) {
+        EV << "BasicLearningModel submodule not found!" << endl;
         return;
     }
     // Call a function from LearningModel
-    int choice = learningModel->pollModel();
+    int choice = basicLearningModel->pollModel();
     if (choice == 2) {
         lastVelocity = direction * 0.0;
         EV << "Stalling at position " << lastPosition.x << omnetpp::endl;
@@ -141,7 +136,7 @@ void SimpleRLMobility::pollModel() {
     }
 }
 
-void SimpleRLMobility::move()
+void BasicRLMobility::move()
 {
     double elapsedTime = (simTime() - lastUpdate).dbl();
 
@@ -156,7 +151,7 @@ int getSign(int num) {
     return (num > 0) - (num < 0);
 }
 
-bool SimpleRLMobility::isNewGridPosition() {
+bool BasicRLMobility::isNewGridPosition() {
     float distance = getCurrentPosition().x - getInitialPosition().x;
     int currentGridSlice = (distance / (float)gridSize);  // Incorporate direction with sign
     EV << "currentX : " << getCurrentPosition().x << ", initialX : " << getInitialPosition().x << omnetpp::endl;
