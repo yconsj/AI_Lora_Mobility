@@ -123,7 +123,7 @@ def main():
         features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
         net_arch=[64, 64, 64]
     )
-    if True:
+    if False:
         model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=ent_coef,
                     batch_size=64,  # base: 64
                     clip_range=0.15,  # base: 0.15

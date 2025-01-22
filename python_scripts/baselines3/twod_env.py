@@ -553,6 +553,7 @@ class TwoDEnv(gym.Env):
             "packets_sent": self.total_received + self.total_misses,
             "transmissions_per_node": transmissions_per_node.copy(),
             "packets_received_per_node": self.received_per_node.copy(),
+            "packets_missed_per_node": self.misses_per_node.copy(),
             "packets_sent_per_node": [
                 self.received_per_node[i] + self.misses_per_node[i] for i in range(len(self.nodes))
             ],
