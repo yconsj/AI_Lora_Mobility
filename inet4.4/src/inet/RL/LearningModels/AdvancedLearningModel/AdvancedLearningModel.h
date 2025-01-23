@@ -60,18 +60,19 @@ namespace inet {
 
 class AdvancedLearningModel : public omnetpp::cSimpleModule {
 public:
-    virtual void setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id);
     AdvancedLearningModel();
     virtual ~AdvancedLearningModel();
     virtual int pollModel();
 
 protected:
     // The following redefined virtual function holds the algorithm.
-    virtual void initialize() override;
+    virtual void initialize(int stage) override;
+    int numInitStages() const override { return NUM_INIT_STAGES; }
 
 private:
+    virtual void nodeValueInitialization();
     StateLogger* getStateLoggerModule();  // Function to fetch the StateLogger module. should not be virtual
-    int invokeModel(InputStateBasic state);
+    int invokeModel();
     const Coord getCoord();
 
     bool compareArrays(const std::array<double, 3>& predicted, const std::array<double, 3>& expected, double tolerance = 1e-6);
@@ -89,9 +90,21 @@ private:
 private:
     double lastStateNumberOfPackets;
     std::vector<uint8_t> model_data;
-    InputStateBasic currentState;
-    int lastPacketId = -1;
     double random_choice_probability = 0.0;
+
+    // base model inputs:
+    /*
+     *         state = (
+                normalized_expected_send_time +
+                normalized_node_distances +
+                normalized_node_directions +
+                onehot_encoded_recent_packets
+        )
+    */
+    std::vector<cModules*> nodes;
+    std::vector<uint8_t> expected_send_times;
+    std::vector<uint8_t> node_positions;
+    std::vector<uint8_t> recent_packets;
 
     // Normalization factors initialized to -1.0
     double latest_packet_rssi_norm_factor = -1.0;    // Normalization factor for packet RSSI

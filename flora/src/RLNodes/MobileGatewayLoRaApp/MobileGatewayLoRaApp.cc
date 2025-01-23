@@ -15,7 +15,7 @@
 
 #include "MobileGatewayLoRaApp.h"
 
-#include "inet/RL/LearningModels/BasicLearningModel/BasicLearningModel.h"
+#include "inet/RL/LearningModels/AdvancedLearningModel/AdvancedLearningModel.h"
 #include "LoRa/LoRaMac.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/common/ModuleAccess.h"
@@ -34,6 +34,7 @@ void MobileGatewayLoRaApp::constructMacSubmoduleTable(cModule *module) {
         cModule *submodule = *it;
 
         // Check if the submodule is a LoRaMac
+
         if (auto loRaMac = dynamic_cast<flora::LoRaMac *>(submodule)) {
             // Go 2 levels up to get the LoRaNode module
             cModule *nicModule = loRaMac->getParentModule(); // Assume it's LoRaNic

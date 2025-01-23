@@ -15,15 +15,13 @@
 
 
 #include "AdvancedLearningModel.h"
-
-
+#include "inet/common/InitStages.h"
 
 
 namespace inet {
 
 Define_Module(AdvancedLearningModel);
 const tflite::Model* model = nullptr;
-
 
 // This pulls in all the operation implementations we need.
 // NOLINTNEXTLINE(runtime-global-variables)
@@ -41,117 +39,156 @@ float* model_output_buffer = nullptr;
 const int kInputHeight = 1;
 const int kInputWidth = 5; // Change based on your features
 const int kOutputHeight = 1;
-const int kOutputWidth = 3; // Change based on your model output
+const int kOutputWidth = 5; // Change based on your model output
 
 constexpr int kTensorArenaSize = const_g_model_length;
 // Keep aligned to 16 bytes for CMSIS
 
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
-AdvancedLearningModel::AdvancedLearningModel()
+AdvancedLearningModel::AdvancedLearningModel() : model(nullptr), interpreter(nullptr), model_input(nullptr), model_output(nullptr)
 {
-    lastStateNumberOfPackets = 0.0;
-    currentState = InputStateBasic();
-
-    model = nullptr;
     std::vector<uint8_t> model_data(const_g_model_length, 0);
 
 }
 
 AdvancedLearningModel::~AdvancedLearningModel() {
-    // Clean up the model interpreter
-    if (interpreter) {
-        delete interpreter; // Assuming interpreter is dynamically allocated
-        interpreter = nullptr; // Avoid dangling pointer
+    // Clean up dynamically allocated resources
+    delete interpreter; // Delete interpreter, if allocated
+    interpreter = nullptr;
+
+    // No need to delete model_input and model_output as they are managed by TensorFlow Lite
+    model_input = nullptr;
+    model_output = nullptr;
+}
+
+void AdvancedLearningModel::initialize(int stage)
+{
+    omnetpp::cSimpleModule::initialize(stage);
+    if (stage == 0)
+    {
+        EV_TRACE << "initializing AdvancedLearningModel " << omnetpp::endl;
+
+        // get rewards from training_info_file
+
+        // Load the model data from a file
+        model_data = ReadModelFromFile(model_file_path);
+
+        model = tflite::GetModel(model_data.data());
+        interpreter = new tflite::MicroInterpreter(model, resolver, tensor_arena, kTensorArenaSize);
+
+        // After loading the model
+        if (model == nullptr) {
+            throw cRuntimeError("AdvancedLearningModel.cc:Failed to load model.");
+        } else {
+            //EV << "Model loaded successfully. Number of subgraphs: " << model->subgraphs()->size() << omnetpp::endl;
+        }
+
+        if (model->version() != TFLITE_SCHEMA_VERSION) {
+          //EV << "Model provided is schema version" << model->version() << " not equal to supported version " << TFLITE_SCHEMA_VERSION << omnetpp::endl;
+          throw cRuntimeError("AdvancedLearningModel.cc: Model provided's schema version is not equal to supported version. ");
+        }
+
+
+        // TODO: Might need to Validate input tensor dimensions for multi-dimensional input
+        // TODO: And also might need to validate output tensor dimensions.
+        // Allocate memory from the tensor_arena for the model's tensors.
+        TfLiteStatus allocate_status = interpreter->AllocateTensors();
+        if (allocate_status != kTfLiteOk) {
+          throw cRuntimeError("AdvancedLearningModel.cc: AllocateTensors() failed");
+        }
+
+        // Retrieve input tensor
+       model_input = interpreter->input(0);
+       if ((model_input->dims->size != 2) ||
+           (model_input->dims->data[0] != kInputHeight) ||
+           (model_input->dims->data[1] != kInputWidth) ||
+           (model_input->type != kTfLiteFloat32)) {
+           EV << "size, data0, data1" << omnetpp::endl;
+           EV << model_input->dims->size << omnetpp::endl;
+           EV << model_input->dims->data[0] << omnetpp::endl;
+           EV << model_input->dims->data[1] << omnetpp::endl;
+
+           throw cRuntimeError("AdvancedLearningModel.cc: wrong input dimensions");
+       }
+       model_input_buffer = model_input->data.f; // Pointer to input data
+
+       // Retrieve output tensor
+       model_output = interpreter->output(0);
+       if ((model_output->dims->size != 2) ||
+           (model_output->dims->data[0] != kOutputHeight) ||
+           (model_output->dims->data[1] != kOutputWidth) ||
+           (model_output->type != kTfLiteFloat32)) {
+           EV << "size, data0, data1" << omnetpp::endl;
+           EV << model_output->dims->size << omnetpp::endl;
+           EV << model_output->dims->data[0] << omnetpp::endl;
+           EV << model_output->dims->data[1] << omnetpp::endl;
+           throw cRuntimeError("AdvancedLearningModel.cc: wrong output dimensions");
+       }
+
+       const bool doTest = false;
+       if (doTest) {
+           // Example test cases
+           testModelOutput({0.5, -1.0, -1.0, 1.0, 1.0}, 0, {1.0, 2.6736742e-19, 4.5851665e-09});
+           testModelOutput({0.5, 0.29333332, 0.68, 0.0049, 0.0273}, 1, {0.00705481, 0.9893167, 0.00362856});
+           testModelOutput({0.5, 0.29333332, 0.73333335, 0.0151, 0.0075}, 0, {0.77158856, 0.20506233, 0.02334913});
+           testModelOutput({0.33333334, 0.0, 0.73333335, 0.0554, 0.1075}, 0, {0.7043012, 0.25701952, 0.03867925});
+           testModelOutput({0.46666667, 0.26, 0.7866667, 0.0049, 0.0272}, 1, {0.00789684, 0.98852056, 0.00358255});
+           testModelOutput({0.46666667, 0.28666666, 0.8, 0.0153, 0.007}, 0, {0.74286765, 0.23371261, 0.02341967});
+           testModelOutput({0.33333334, 0.32, 0.79333335, 0.0258, 0.0169}, 0, {0.62283444, 0.34535939, 0.03180616});
+           testModelOutput({0.6, 0.3, 0.6666667, 0.0055, 0.027}, 1, {0.0486112, 0.9424392, 0.00894961});
+           testModelOutput({0.46666667, 0.29333332, 0.68666667, 0.0154, 0.0073}, 0, {0.6372505, 0.33337855, 0.02937095});
+           testModelOutput({0.33333334, 0.24666667, 0.7, 0.0247, 0.0165}, 0, {0.6030182, 0.35945818, 0.03752354});
+       }
+    }
+   else if (stage == INITSTAGE_LAST) {
+       EV << "initstage after mobility. fetch node values" <<omnetpp::endl;
+       nodeValueInitialization();
+   }
+}
+
+
+void AdvancedLearningModel::nodeValueInitialization() {
+    std::vector<cModule *> loRaNodes;
+    cModule *network = getSimulation()->getSystemModule();
+
+    // Find LoRa nodes
+    for (cModule::SubmoduleIterator it(network); !it.end(); ++it) {
+        cModule *submodule = *it;
+        std::string moduleName = submodule->getName();
+        if (moduleName == "loRaNodes") {
+            loRaNodes.push_back(submodule);
+        } else {
+            EV << "Skipping non-LoRa node submodule: " << submodule->getFullName() << omnetpp::endl;
+        }
     }
 
-    // Clean up the input tensor if allocated
-    if (model_input) {
-        model_input = nullptr; // Avoid dangling pointer
-    }
+    nodes.resize(loRaNodes.size(), nullptr);
+    expected_send_times.resize(loRaNodes.size(),nullptr);
+    node_positions.resize(loRaNodes.size(),nullptr);
+    for (size_t i = 0; i < loRaNodes.size(); ++i) {
+        cModule *loRaNode = loRaNodes[i];
+        int nodeIndex = loRaNode->getIndex();
+        nodes[nodeIndex] = loRaNode;
 
-    // Clean up the output tensor if allocated
-    if (model_output) {
-        model_output = nullptr; // Avoid dangling pointer
+        // Retrieve LoRa application
+        auto *loRaApp = dynamic_cast<flora::LoRaMac *>(loRaNode->getSubmodule("app", 0));
+        if (!loRaApp) {
+            throw cRuntimeError("Invalid LoRa application for node %d", nodeIndex);
+        }
+
+        // Record node properties
+        expected_send_times[nodeIndex] = loRaApp->timeToFirstPacket;
+        auto *mobility = check_and_cast<BaseMobility *>(getContainingNode(loRaNode)->getSubmodule("mobility"));
+        node_positions[nodeIndex] = mobility->getPosition();
     }
 }
 
-void AdvancedLearningModel::initialize()
-{
-    EV_TRACE << "initializing AdvancedLearningModel " << omnetpp::endl;
-
-    // get rewards from training_info_file
-    readJsonFile(training_info_path);
-
-    // Load the model data from a file
-    model_data = ReadModelFromFile(model_file_path);
-
-    model = tflite::GetModel(model_data.data());
-    interpreter = new tflite::MicroInterpreter(model, resolver, tensor_arena, kTensorArenaSize);
-
-    // After loading the model
-    if (model == nullptr) {
-        throw cRuntimeError("AdvancedLearningModel.cc:Failed to load model.");
-    } else {
-        //EV << "Model loaded successfully. Number of subgraphs: " << model->subgraphs()->size() << omnetpp::endl;
-    }
-
-    if (model->version() != TFLITE_SCHEMA_VERSION) {
-      //EV << "Model provided is schema version" << model->version() << " not equal to supported version " << TFLITE_SCHEMA_VERSION << omnetpp::endl;
-      throw cRuntimeError("AdvancedLearningModel.cc: Model provided's schema version is not equal to supported version. ");
-    }
-
-
-    // TODO: Might need to Validate input tensor dimensions for multi-dimensional input
-    // TODO: And also might need to validate output tensor dimensions.
-    // Allocate memory from the tensor_arena for the model's tensors.
-    TfLiteStatus allocate_status = interpreter->AllocateTensors();
-    if (allocate_status != kTfLiteOk) {
-      throw cRuntimeError("AdvancedLearningModel.cc: AllocateTensors() failed");
-    }
-
-    // Retrieve input tensor
-   model_input = interpreter->input(0);
-   if ((model_input->dims->size != 2) ||
-       (model_input->dims->data[0] != kInputHeight) ||
-       (model_input->dims->data[1] != kInputWidth) ||
-       (model_input->type != kTfLiteFloat32)) {
-       EV << "size, data0, data1" << omnetpp::endl;
-       EV << model_input->dims->size << omnetpp::endl;
-       EV << model_input->dims->data[0] << omnetpp::endl;
-       EV << model_input->dims->data[1] << omnetpp::endl;
-
-       throw cRuntimeError("AdvancedLearningModel.cc: wrong input dimensions");
-   }
-   model_input_buffer = model_input->data.f; // Pointer to input data
-
-   // Retrieve output tensor
-   model_output = interpreter->output(0);
-   if ((model_output->dims->size != 2) ||
-       (model_output->dims->data[0] != kOutputHeight) ||
-       (model_output->dims->data[1] != kOutputWidth) ||
-       (model_output->type != kTfLiteFloat32)) {
-       EV << "size, data0, data1" << omnetpp::endl;
-       EV << model_output->dims->size << omnetpp::endl;
-       EV << model_output->dims->data[0] << omnetpp::endl;
-       EV << model_output->dims->data[1] << omnetpp::endl;
-       throw cRuntimeError("AdvancedLearningModel.cc: wrong output dimensions");
-   }
-
-   const bool doTest = false;
-   if (doTest) {
-       // Example test cases
-       testModelOutput({0.5, -1.0, -1.0, 1.0, 1.0}, 0, {1.0, 2.6736742e-19, 4.5851665e-09});
-       testModelOutput({0.5, 0.29333332, 0.68, 0.0049, 0.0273}, 1, {0.00705481, 0.9893167, 0.00362856});
-       testModelOutput({0.5, 0.29333332, 0.73333335, 0.0151, 0.0075}, 0, {0.77158856, 0.20506233, 0.02334913});
-       testModelOutput({0.33333334, 0.0, 0.73333335, 0.0554, 0.1075}, 0, {0.7043012, 0.25701952, 0.03867925});
-       testModelOutput({0.46666667, 0.26, 0.7866667, 0.0049, 0.0272}, 1, {0.00789684, 0.98852056, 0.00358255});
-       testModelOutput({0.46666667, 0.28666666, 0.8, 0.0153, 0.007}, 0, {0.74286765, 0.23371261, 0.02341967});
-       testModelOutput({0.33333334, 0.32, 0.79333335, 0.0258, 0.0169}, 0, {0.62283444, 0.34535939, 0.03180616});
-       testModelOutput({0.6, 0.3, 0.6666667, 0.0055, 0.027}, 1, {0.0486112, 0.9424392, 0.00894961});
-       testModelOutput({0.46666667, 0.29333332, 0.68666667, 0.0154, 0.0073}, 0, {0.6372505, 0.33337855, 0.02937095});
-       testModelOutput({0.33333334, 0.24666667, 0.7, 0.0247, 0.0165}, 0, {0.6030182, 0.35945818, 0.03752354});
-   }
+void AdvancedLearningModel::runTestCases() {
+    // Example test cases for the model
+    testModelOutput({0.5, -1.0, -1.0, 1.0, 1.0}, 0, {1.0, 2.6736742e-19, 4.5851665e-09});
+    testModelOutput({0.5, 0.29333332, 0.68, 0.0049, 0.0273}, 1, {0.00705481, 0.9893167, 0.00362856});
+    // Add more cases as needed
 }
 
 double AdvancedLearningModel::readJsonValue(const json& jsonData, const std::string& key) {
@@ -239,7 +276,6 @@ const Coord AdvancedLearningModel::getCoord() {
     // Return the current position of the mobility module
     const Coord pos = mobility->getCurrentPosition();
     return pos;
-
 }
 
 // Function to read the model from a file
@@ -271,39 +307,11 @@ std::vector<uint8_t> AdvancedLearningModel::ReadModelFromFile(const char* filena
 }
 
 
-
-void AdvancedLearningModel::setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id) {
-    currentState.numReceivedPackets = nReceivedPackets;
-
-
-    // we will normalize these later, when doing inference
-    if (id == 0) {
-        currentState.stampPos1 = getCoord() * coord_x_norm_factor;;
-        currentState.timestamp1 = simTime().dbl() * current_timestamp_norm_factor;
-    }
-    else if (id == 1) {
-        currentState.stampPos2 = getCoord() * coord_x_norm_factor;;
-        currentState.timestamp2 = simTime().dbl() * current_timestamp_norm_factor;
-    }
-}
-
 int AdvancedLearningModel::pollModel()
 {
-    // get remaining state info:
-    currentState.gwPosition = getCoord() * coord_x_norm_factor;
-    currentState.timeOfSample = simTime().dbl();
-
-    EV << "printing state: " << omnetpp::endl;
-    EV << "currentState.gwPosition: " << currentState.gwPosition << omnetpp::endl;
-    EV << "currentState.stampPos1: " << currentState.stampPos1 << omnetpp::endl;
-    EV << "currentState.stampPos2: " << currentState.stampPos2 << omnetpp::endl;
-    EV << "currentState.timestamp1: " << currentState.timestamp1 << omnetpp::endl;
-    EV << "currentState.timestamp2: " << currentState.timestamp2 << omnetpp::endl;
-
-    int output = invokeModel(currentState);
+    int output = invokeModel();
     StateLogger* stateLogger = getStateLoggerModule();
-    stateLogger->logStep(currentState, output, 0.0);
-
+    stateLogger->logStep(output);  // needs some new info
     return output;
 
 }
@@ -347,7 +355,7 @@ int AdvancedLearningModel::selectOutputIndex(float random_choice_probability, co
     }
 }
 
-int AdvancedLearningModel::invokeModel(InputStateBasic state) {
+int AdvancedLearningModel::invokeModel(InputState state) {
     if (interpreter == nullptr) {
         EV << "Interpreter is not initialized." << omnetpp::endl;
         return -1;
@@ -381,6 +389,21 @@ int AdvancedLearningModel::invokeModel(InputStateBasic state) {
     }
     EV << "debug msg. model_4_bit_per_byte_sum:" << model_sum << omnetpp::endl;
      */
+
+    // prepare input:
+/*
+        state = (
+                normalized_expected_send_time +
+                normalized_node_distances +
+                normalized_node_directions +
+                onehot_encoded_recent_packets
+        )
+*/
+    std::vector<uint8_t> normalized_expected_send_time;
+    std::vector<uint8_t> normalized_node_distances;
+    std::vector<uint8_t> normalized_node_directions;
+    std::vector<std::vector<uint8_t>> onehot_encoded_recent_packets;
+
 
     // Insert input data for the model from state values
     model_input->data.f[0] = state.gwPosition.x;

@@ -7,7 +7,7 @@ from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecMonitor
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 from twod_env import TwoDEnv, FrameSkip
 
@@ -123,7 +123,7 @@ def main():
         features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
         net_arch=[64, 64, 64]
     )
-    if False:
+    if True:
         model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=ent_coef,
                     batch_size=64,  # base: 64
                     clip_range=0.15,  # base: 0.15

@@ -32,7 +32,7 @@ public:
     virtual ~StateLogger();
     virtual void addTransmissionTime();
     virtual void logStationaryGatewayPacketReception(int loragwIndex);
-    virtual void logStep(InputStateBasic& inputState, int choice, double reward);
+    virtual void logStep(InputState& inputState, int choice);
     void writeToFile();
 
 
@@ -40,9 +40,8 @@ protected:
     virtual void finish() override;
     virtual void initialize() override;
 private:
-    std::vector<InputStateBasic> inputStateArray;
+    std::vector<InputState> inputStateArray;
     std::vector<int> choiceArray;
-    std::vector<double> rewardArray;
     std::vector<double> transmissionTimes;
     std::vector<double> stationaryReceptionTimes;  // Store reception times for stationary gateways
     int runnumber = -1;

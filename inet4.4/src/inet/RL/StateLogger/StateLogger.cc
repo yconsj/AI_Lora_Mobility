@@ -31,7 +31,6 @@ StateLogger::StateLogger() {
 void StateLogger::initialize() {
     inputStateArray.clear(); // Clear any previous data (if needed)
     choiceArray.clear();
-    rewardArray.clear();
     transmissionTimes.clear(); // Clear previous transmission times
     runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
 
@@ -54,10 +53,9 @@ void StateLogger::logStationaryGatewayPacketReception(int gwIndex) {
     }
 }
 
-void StateLogger::logStep(InputStateBasic& inputState, int choice, double reward) {
+void StateLogger::logStep(InputState& inputState, int choice) {
     inputStateArray.push_back(inputState);
     choiceArray.push_back(choice);
-    rewardArray.push_back(reward);
 }
 
 
@@ -86,7 +84,7 @@ void StateLogger::writeToFile() {
         // Add the structure to the JSON object
         outputJson["gw_data"]["stateformat"] = stateFormat;
 
-        // Populate states, actions, and rewards in the JSON structure
+        // Populate states, actions in the JSON structure
         std::vector<std::vector<double>> states;
         for (const auto& state : inputStateArray) {
             states.push_back({
@@ -98,7 +96,6 @@ void StateLogger::writeToFile() {
 
         outputJson["gw_data"]["states"] = states;
         outputJson["gw_data"]["actions"] = choiceArray;
-        outputJson["gw_data"]["rewards"] = rewardArray;
 
         // Add transmission times to the JSON object
         outputJson["transmission_times"] = transmissionTimes;
