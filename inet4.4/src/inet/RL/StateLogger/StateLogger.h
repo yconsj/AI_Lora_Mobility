@@ -32,7 +32,7 @@ public:
     virtual ~StateLogger();
     virtual void addTransmissionTime();
     virtual void logStationaryGatewayPacketReception(int loragwIndex);
-    virtual void logStep(InputState& inputState, int choice);
+    virtual void logStep(int choice);
     void writeToFile();
 
 

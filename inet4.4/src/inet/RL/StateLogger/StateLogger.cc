@@ -53,8 +53,7 @@ void StateLogger::logStationaryGatewayPacketReception(int gwIndex) {
     }
 }
 
-void StateLogger::logStep(InputState& inputState, int choice) {
-    inputStateArray.push_back(inputState);
+void StateLogger::logStep(int choice) {
     choiceArray.push_back(choice);
 }
 

@@ -29,6 +29,7 @@ class INET_API AdvancedRLMobility : public MovingMobilityBase
   public:
     virtual double getMaxSpeed() const override { return speed; }
     virtual const Coord& getInitialPosition();
+    virtual const double getMaxCrossDistance();
     AdvancedRLMobility();
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }

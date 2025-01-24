@@ -69,6 +69,10 @@ const Coord& AdvancedRLMobility::getInitialPosition() {
     return initialPosition;
 }
 
+const double AdvancedRLMobility::getMaxCrossDistance() {
+    return constraintAreaMin.distance(constraintAreaMax);
+}
+
 const Coord& AdvancedRLMobility::getLoRaNodePosition(int index)
 {
     // Access the parent network module

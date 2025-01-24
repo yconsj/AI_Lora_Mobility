@@ -158,12 +158,12 @@ void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, double
     if (!mobilityModule)
         throw cRuntimeError("SimpleRLMobility module not found!");
 
-    // Get the BasicLearningModel submodule from SimpleRLMobility
-    BasicLearningModel *basicLearningModel = check_and_cast<BasicLearningModel*>(mobilityModule->getSubmodule("basicLearningModel"));
-    if (!basicLearningModel)
-        throw cRuntimeError("BasicLearningModel module not found");
+    // Get the AdvancedLearningModel submodule from SimpleRLMobility
+    AdvancedLearningModel *advancedLearningModel = check_and_cast<AdvancedLearningModel*>(mobilityModule->getSubmodule("advancedLearningModel"));
+    if (!advancedLearningModel)
+        throw cRuntimeError("AdvancedLearningModel module not found");
     // Log the packet information (RSSI, SNIR, and timestamp)
-    basicLearningModel->setPacketInfo(rssi, snir, nReceivedPackets, timestamp, id);
+    advancedLearningModel->setPacketInfo(id);
 }
 
 void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)

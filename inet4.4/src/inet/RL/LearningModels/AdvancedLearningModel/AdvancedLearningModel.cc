@@ -15,8 +15,6 @@
 
 
 #include "AdvancedLearningModel.h"
-#include "inet/common/InitStages.h"
-
 
 namespace inet {
 
@@ -36,19 +34,23 @@ float* model_input_buffer = nullptr;
 float* model_output_buffer = nullptr;
 
 // Define dimensions
+
 const int kInputHeight = 1;
-const int kInputWidth = 5; // Change based on your features
+const int kInputWidth = 3 * number_of_nodes + (recent_packets_length * number_of_nodes);
 const int kOutputHeight = 1;
-const int kOutputWidth = 5; // Change based on your model output
+const int kOutputWidth = 5;
 
 constexpr int kTensorArenaSize = const_g_model_length;
 // Keep aligned to 16 bytes for CMSIS
 
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
-AdvancedLearningModel::AdvancedLearningModel() : model(nullptr), interpreter(nullptr), model_input(nullptr), model_output(nullptr)
+AdvancedLearningModel::AdvancedLearningModel()
 {
     std::vector<uint8_t> model_data(const_g_model_length, 0);
+    while (recent_packets.size() < recent_packets_length) {
+        recent_packets.push_back(-1.0);
+    }
 
 }
 
@@ -64,15 +66,17 @@ AdvancedLearningModel::~AdvancedLearningModel() {
 
 void AdvancedLearningModel::initialize(int stage)
 {
-    omnetpp::cSimpleModule::initialize(stage);
+
+    cSimpleModule::initialize(stage);
     if (stage == 0)
     {
-        EV_TRACE << "initializing AdvancedLearningModel " << omnetpp::endl;
+
+        EV << "initializing AdvancedLearningModel " << endl;
 
         // get rewards from training_info_file
-
         // Load the model data from a file
         model_data = ReadModelFromFile(model_file_path);
+
 
         model = tflite::GetModel(model_data.data());
         interpreter = new tflite::MicroInterpreter(model, resolver, tensor_arena, kTensorArenaSize);
@@ -125,21 +129,8 @@ void AdvancedLearningModel::initialize(int stage)
            EV << model_output->dims->data[1] << omnetpp::endl;
            throw cRuntimeError("AdvancedLearningModel.cc: wrong output dimensions");
        }
+       EV << " AdvancedLearningModel EVinit stage 0 end " << endl;
 
-       const bool doTest = false;
-       if (doTest) {
-           // Example test cases
-           testModelOutput({0.5, -1.0, -1.0, 1.0, 1.0}, 0, {1.0, 2.6736742e-19, 4.5851665e-09});
-           testModelOutput({0.5, 0.29333332, 0.68, 0.0049, 0.0273}, 1, {0.00705481, 0.9893167, 0.00362856});
-           testModelOutput({0.5, 0.29333332, 0.73333335, 0.0151, 0.0075}, 0, {0.77158856, 0.20506233, 0.02334913});
-           testModelOutput({0.33333334, 0.0, 0.73333335, 0.0554, 0.1075}, 0, {0.7043012, 0.25701952, 0.03867925});
-           testModelOutput({0.46666667, 0.26, 0.7866667, 0.0049, 0.0272}, 1, {0.00789684, 0.98852056, 0.00358255});
-           testModelOutput({0.46666667, 0.28666666, 0.8, 0.0153, 0.007}, 0, {0.74286765, 0.23371261, 0.02341967});
-           testModelOutput({0.33333334, 0.32, 0.79333335, 0.0258, 0.0169}, 0, {0.62283444, 0.34535939, 0.03180616});
-           testModelOutput({0.6, 0.3, 0.6666667, 0.0055, 0.027}, 1, {0.0486112, 0.9424392, 0.00894961});
-           testModelOutput({0.46666667, 0.29333332, 0.68666667, 0.0154, 0.0073}, 0, {0.6372505, 0.33337855, 0.02937095});
-           testModelOutput({0.33333334, 0.24666667, 0.7, 0.0247, 0.0165}, 0, {0.6030182, 0.35945818, 0.03752354});
-       }
     }
    else if (stage == INITSTAGE_LAST) {
        EV << "initstage after mobility. fetch node values" <<omnetpp::endl;
@@ -153,43 +144,54 @@ void AdvancedLearningModel::nodeValueInitialization() {
     cModule *network = getSimulation()->getSystemModule();
 
     // Find LoRa nodes
+    std::string mod_str = "loRaNodes";
     for (cModule::SubmoduleIterator it(network); !it.end(); ++it) {
         cModule *submodule = *it;
         std::string moduleName = submodule->getName();
-        if (moduleName == "loRaNodes") {
+        if (mod_str.compare(moduleName) == 0) {
             loRaNodes.push_back(submodule);
         } else {
             EV << "Skipping non-LoRa node submodule: " << submodule->getFullName() << omnetpp::endl;
         }
     }
 
+    EV << "loRaNodes.size() = " << loRaNodes.size() << endl;
     nodes.resize(loRaNodes.size(), nullptr);
-    expected_send_times.resize(loRaNodes.size(),nullptr);
-    node_positions.resize(loRaNodes.size(),nullptr);
+    node_positions.resize(loRaNodes.size(), Coord(0,0,0));
+    expected_send_times.resize(loRaNodes.size(), 0);
+    send_intervals.resize(loRaNodes.size(), 0);
+
+
     for (size_t i = 0; i < loRaNodes.size(); ++i) {
         cModule *loRaNode = loRaNodes[i];
-        int nodeIndex = loRaNode->getIndex();
-        nodes[nodeIndex] = loRaNode;
+        int node_index = loRaNode->getIndex();
+        nodes[node_index] = loRaNode;
+        EV << "node_index: " << node_index << endl;
 
         // Retrieve LoRa application
-        auto *loRaApp = dynamic_cast<flora::LoRaMac *>(loRaNode->getSubmodule("app", 0));
+        auto *loRaApp = check_and_cast<cModule *>(loRaNode->getSubmodule("app", 0));
         if (!loRaApp) {
-            throw cRuntimeError("Invalid LoRa application for node %d", nodeIndex);
+            throw cRuntimeError("Invalid LoRa application for node %d", node_index);
         }
 
-        // Record node properties
-        expected_send_times[nodeIndex] = loRaApp->timeToFirstPacket;
-        auto *mobility = check_and_cast<BaseMobility *>(getContainingNode(loRaNode)->getSubmodule("mobility"));
-        node_positions[nodeIndex] = mobility->getPosition();
+        // store node properties
+        // Access the 'timeToFirstPacket' parameter
+
+        simtime_t timeToFirstPacket = loRaApp->par("timeToFirstPacket");
+        simtime_t timeToNextPacket = loRaApp->par("timeToNextPacket");
+
+        expected_send_times[node_index] = timeToFirstPacket;
+        send_intervals[node_index] = timeToNextPacket;
+        auto *mobility = check_and_cast<StationaryMobility *>(loRaNode->getSubmodule("mobility"));
+
+        if (!mobility) {
+            throw cRuntimeError("Error, node missing mobility module in LoRa application for node %d", node_index);
+        }
+
+        node_positions[node_index] = mobility->getCurrentPosition();
     }
 }
 
-void AdvancedLearningModel::runTestCases() {
-    // Example test cases for the model
-    testModelOutput({0.5, -1.0, -1.0, 1.0, 1.0}, 0, {1.0, 2.6736742e-19, 4.5851665e-09});
-    testModelOutput({0.5, 0.29333332, 0.68, 0.0049, 0.0273}, 1, {0.00705481, 0.9893167, 0.00362856});
-    // Add more cases as needed
-}
 
 double AdvancedLearningModel::readJsonValue(const json& jsonData, const std::string& key) {
     if (jsonData.contains(key)) {
@@ -278,6 +280,28 @@ const Coord AdvancedLearningModel::getCoord() {
     return pos;
 }
 
+double AdvancedLearningModel::calculateNormalizedAngle(const Coord& coord1, const Coord& coord2) {
+    // Calculate the difference in coordinates
+   double dx = coord2.x - coord1.x;
+   double dy = coord2.y - coord1.y;
+
+   // Calculate the angle in radians
+   double angleRadians = atan2(dy, dx);
+
+   // Convert radians to degrees
+   double angleDegrees = angleRadians * (180.0 / M_PI);
+
+   // Ensure the angle is in the range [0, 360]
+   if (angleDegrees < 0) {
+       angleDegrees += 360.0;
+   }
+
+   // Normalize the angle to [0, 1]
+   double normalizedAngle = angleDegrees / 360.0;
+
+   return normalizedAngle;
+}
+
 // Function to read the model from a file
 std::vector<uint8_t> AdvancedLearningModel::ReadModelFromFile(const char* filename) {
     std::vector<uint8_t> model_data;
@@ -309,7 +333,10 @@ std::vector<uint8_t> AdvancedLearningModel::ReadModelFromFile(const char* filena
 
 int AdvancedLearningModel::pollModel()
 {
+    EV << "pollmodel chk" << endl;
+
     int output = invokeModel();
+    return output;
     StateLogger* stateLogger = getStateLoggerModule();
     stateLogger->logStep(output);  // needs some new info
     return output;
@@ -355,7 +382,22 @@ int AdvancedLearningModel::selectOutputIndex(float random_choice_probability, co
     }
 }
 
-int AdvancedLearningModel::invokeModel(InputState state) {
+
+
+void AdvancedLearningModel::setPacketInfo(int index) {
+    EV << "Packet Info!" << endl;
+    // update recent packets
+    while (recent_packets.size() >= recent_packets_length) {
+        recent_packets.pop_front();
+    }
+    recent_packets.push_back(index);
+
+    // update expected send time
+    expected_send_times[index] = simTime() + send_intervals[index];
+    return;
+}
+
+int AdvancedLearningModel::invokeModel() {
     if (interpreter == nullptr) {
         EV << "Interpreter is not initialized." << omnetpp::endl;
         return -1;
@@ -382,41 +424,88 @@ int AdvancedLearningModel::invokeModel(InputState state) {
         EV << "Model output size is zero or negative." << omnetpp::endl;
         return -1;
     }
-    /*
-    unsigned long model_sum = 0;
-    for (int i = 0; i < g_model_len; i++) {
-        model_sum += g_model[i] & 0x0F; // get last 4 bytes.
-    }
-    EV << "debug msg. model_4_bit_per_byte_sum:" << model_sum << omnetpp::endl;
-     */
 
-    // prepare input:
 /*
-        state = (
-                normalized_expected_send_time +
-                normalized_node_distances +
-                normalized_node_directions +
-                onehot_encoded_recent_packets
-        )
+    // prepare input:
+    state = (
+        normalized_expected_send_time +
+        normalized_node_distances +
+        normalized_node_directions +
+        onehot_encoded_recent_packets
+    )
 */
-    std::vector<uint8_t> normalized_expected_send_time;
-    std::vector<uint8_t> normalized_node_distances;
-    std::vector<uint8_t> normalized_node_directions;
-    std::vector<std::vector<uint8_t>> onehot_encoded_recent_packets;
+    EV << "pollmodel chk 2" << endl;
+    static cConfigOption simTimeConfig("sim-time-limit", true,cConfigOption::Type::CFG_DOUBLE, "s", "0", "sim-time-limit");
+    static simtime_t sim_time_limit = getSimulation()->getActiveEnvir()->getConfig()->getAsDouble(&simTimeConfig, 0);
+    EV << "sim_time_limit = " << sim_time_limit << endl;
+    static float max_cross_distance = getMobilityModule()->getMaxCrossDistance();
 
+    Coord gw_pos = getCoord();
+
+    std::vector<float> normalized_expected_send_time;
+    std::vector<float> normalized_node_distances;
+    std::vector<float> normalized_node_directions;
+    for (int i = 0; i < nodes.size(); i++) {
+
+        double delta_time = expected_send_times[i].dbl() - simTime().dbl();
+        if (delta_time < 0) { // update expected send time
+            expected_send_times[i] += (-delta_time) + send_intervals[i];
+        }
+        float time = (expected_send_times[i].dbl() - simTime().dbl()) / sim_time_limit.dbl();
+        normalized_expected_send_time.push_back(time);
+
+        Coord node_pos = node_positions[i];
+        float norm_distance = gw_pos.distance(node_pos) / max_cross_distance;
+        normalized_node_distances.push_back(norm_distance);
+
+        float norm_direction = calculateNormalizedAngle(getCoord(), node_pos);
+        normalized_node_directions.push_back(norm_direction);
+    }
+
+    std::vector<std::vector<float>> onehot_encoded_recent_packets;
+    for (int recent_packet : recent_packets) {
+        // Create a one-hot vector initialized with 0.0
+        std::vector<float> onehot(nodes.size(), 0.0);
+
+        // Set the corresponding index to 1.0 if the recent_packet is valid
+        if (recent_packet >= 0 && recent_packet < nodes.size()) {
+            onehot[recent_packet] = 1.0;
+        }
+
+        // Add the one-hot encoded vector to the result
+        onehot_encoded_recent_packets.push_back(onehot);
+    }
 
     // Insert input data for the model from state values
-    model_input->data.f[0] = state.gwPosition.x;
-    model_input->data.f[1] = state.stampPos1.x;
-    model_input->data.f[2] = state.stampPos2.x;
+    // Inserting the normalized expected send times
+    int index = 0;  // Start with index 0 in model_input->data.f
+    for (int i = 0; i < normalized_expected_send_time.size(); ++i) {
+        EV << "expected_send_time = " << normalized_expected_send_time[i] << endl;
+        model_input->data.f[index] = normalized_expected_send_time[i];
+        index++;
+    }
 
-    // time since packets were received;
-    double timesince1 = simTime().dbl() * current_timestamp_norm_factor - state.timestamp1;
-    double timesince2 = simTime().dbl() * current_timestamp_norm_factor - state.timestamp2;
+    // Inserting the normalized node distances
+    for (int i = 0; i < normalized_node_distances.size(); ++i) {
+        EV << "distances = " << normalized_node_distances[i] << endl;
+        model_input->data.f[index] = normalized_node_distances[i];
+        index++;
+    }
 
-    model_input->data.f[3] = timesince1;
-    model_input->data.f[4] = timesince2;
-    // model_input->data.f[6] = state.coord.y;
+    // Inserting the normalized node directions
+    for (int i = 0; i < normalized_node_directions.size(); ++i) {
+        EV << "directions = " << normalized_node_directions[i] << endl;
+        model_input->data.f[index] = normalized_node_directions[i];
+        index++;
+    }
+
+    // Inserting the one-hot encoded recent packets
+    for (const std::vector<float>& onehot : onehot_encoded_recent_packets) {
+        for (int i = 0; i < onehot.size(); ++i) {
+            model_input->data.f[index] = onehot[i];
+            index++;
+        }
+    }
 
     // Place the quantized input in the model's input tensor
     for (size_t i = 0; i < kInputWidth; ++i) { // Adjust based on your actual number of inputs
@@ -448,106 +537,5 @@ int AdvancedLearningModel::invokeModel(InputState state) {
     return selected_index;
 }
 
-// A helper function to compare two floating-point arrays with a tolerance
-bool AdvancedLearningModel::compareArrays(const std::array<double, 3>& predicted, const std::array<double, 3>& expected, double tolerance) {
-    for (size_t i = 0; i < 3; ++i) {
-        if (std::abs(predicted[i] - expected[i]) > tolerance) {
-            return false; // Return false if any element doesn't match within tolerance
-        }
-    }
-    return true;
-}
-
-// The function you can call during initialize()
-void AdvancedLearningModel::testModelOutput(
-    const std::array<double, 5>& state,
-    int expectedAction,
-    const std::array<double, 3>& expectedActionProbs) {
-
-    // Check if interpreter, model, model_input, or model_output are uninitialized
-    if (interpreter == nullptr || model == nullptr || model_input == nullptr || model_output == nullptr
-            || model_output->data.f == nullptr || model_output->bytes <= 0
-    ) {
-        EV << "Model or necessary components are not initialized." << omnetpp::endl;
-        return;
-    }
-    if ((model_input->dims->size != 2) ||
-        (model_input->dims->data[0] != kInputHeight) ||
-        (model_input->dims->data[1] != kInputWidth) ||
-        (model_input->type != kTfLiteFloat32)) {
-        EV << "size, data0, data1" << omnetpp::endl;
-        EV << model_input->dims->size << omnetpp::endl;
-        EV << model_input->dims->data[0] << omnetpp::endl;
-        EV << model_input->dims->data[1] << omnetpp::endl;
-
-        throw cRuntimeError("AdvancedLearningModel.cc: wrong input dimensions");
-    }
-    if ((model_output->dims->size != 2) ||
-        (model_output->dims->data[0] != kOutputHeight) ||
-        (model_output->dims->data[1] != kOutputWidth) ||
-        (model_output->type != kTfLiteFloat32)) {
-        EV << "size, data0, data1" << omnetpp::endl;
-        EV << model_output->dims->size << omnetpp::endl;
-        EV << model_output->dims->data[0] << omnetpp::endl;
-        EV << model_output->dims->data[1] << omnetpp::endl;
-        throw cRuntimeError("AdvancedLearningModel.cc: wrong output dimensions");
-    }
-
-    model_input->data.f[0] = state[0];  // Assuming state[0] corresponds to x-position of gateway
-    model_input->data.f[1] = state[1];  // Corresponds to x-position of first stationary node
-    model_input->data.f[2] = state[2];  // Corresponds to x-position of second stationary node
-    model_input->data.f[3] = state[3];
-    model_input->data.f[4] = state[4];
-
-    for (size_t i = 0; i < kInputWidth; ++i) { // Adjust based on your actual number of inputs
-        //model_input->data.f[i] = (model_input_buffer[i]);
-        EV << "model_input->data.f" << i << ": "  << model_input->data.f[i] << omnetpp::endl;
-        if (!std::isfinite(model_input->data.f[i])) {
-            EV << "Invalid input detected at index " << i << ": " << model_input->data.f[i] << omnetpp::endl;
-            throw cRuntimeError("NaN or inf detected in model input");
-        }
-    }
-
-    TfLiteStatus invoke_status = interpreter->Invoke();
-
-    if (invoke_status != kTfLiteOk) {
-        EV << "Invoke failed" << omnetpp::endl;
-        throw cRuntimeError("Invoke failed");
-    }
-    // Obtain the model's output probabilities (Assuming output tensor contains probabilities for actions)
-    std::array<double, 3> predictedActionProbs = {model_output->data.f[0], model_output->data.f[1], model_output->data.f[2]};
-
-
-    // Compare the predicted action with the expected action
-    int predictedAction = std::distance(predictedActionProbs.begin(),
-                                        std::max_element(predictedActionProbs.begin(), predictedActionProbs.end()));
-
-    if (predictedAction == expectedAction) {
-        EV << "Action test passed for state: [";
-        for (const auto& val : state) EV << val << " ";
-        EV << "]\n";
-    } else {
-        EV << "Action test failed for state: [";
-        for (const auto& val : state) EV << val << " ";
-        EV << "].";
-    }
-    EV << "Expected: " << expectedAction << ", Got: " << predictedAction << "\n";
-
-    // Compare the predicted action probabilities with the expected ones
-    if (compareArrays(predictedActionProbs, expectedActionProbs)) {
-        EV << "Probabilities test passed for state: [";
-        for (const auto& val : state) EV << val << " ";
-        EV << "]\n";
-    } else {
-        EV << "Probabilities test failed for state: [";
-        for (const auto& val : state) EV << val << " ";
-        EV << "].";
-    }
-    EV << "Expected: [";
-        for (const auto& val : expectedActionProbs) EV << val << " ";
-        EV << "], Got: [";
-        for (const auto& val : predictedActionProbs) EV << val << " ";
-        EV << "]\n";
-}
 
 } /* namespace inet */

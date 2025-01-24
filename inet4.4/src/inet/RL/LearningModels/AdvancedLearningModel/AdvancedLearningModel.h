@@ -29,6 +29,8 @@
 #include "inet/RL/InputState.h"
 #include "inet/RL/include/json.hpp"
 #include "inet/RL/StateLogger/StateLogger.h"
+#include "inet/common/InitStages.h"
+#include "inet/common/ModuleAccess.h"
 
 #include <algorithm>  // std::generate
 #include <cassert>
@@ -41,8 +43,7 @@
 #include <omnetpp.h>
 #include <array>
 #include <cmath>
-
-
+#include <deque>
 
 #include "inet/common/geometry/common/Coord.h"
 #include "inet/mobility/contract/IMobility.h" // for accessing mobility
@@ -56,55 +57,45 @@
 using json = nlohmann::json;
 
 namespace inet {
-
+const size_t recent_packets_length = 1;
+const size_t number_of_nodes = 4;
 
 class AdvancedLearningModel : public omnetpp::cSimpleModule {
 public:
     AdvancedLearningModel();
     virtual ~AdvancedLearningModel();
     virtual int pollModel();
+    virtual void setPacketInfo(int index);
 
 protected:
     // The following redefined virtual function holds the algorithm.
     virtual void initialize(int stage) override;
     int numInitStages() const override { return NUM_INIT_STAGES; }
 
+
 private:
     virtual void nodeValueInitialization();
     StateLogger* getStateLoggerModule();  // Function to fetch the StateLogger module. should not be virtual
     int invokeModel();
     const Coord getCoord();
-
-    bool compareArrays(const std::array<double, 3>& predicted, const std::array<double, 3>& expected, double tolerance = 1e-6);
-    void testModelOutput(
-        const std::array<double, 5>& state,
-        int expectedAction,
-        const std::array<double, 3>& expectedActionProbs);
-
     AdvancedRLMobility* getMobilityModule();
     virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
     void readJsonFile(const std::string& filepath);
     double readJsonValue(const json& jsonData, const std::string& key);
     int selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic);
-
+    double calculateNormalizedAngle(const Coord& coord1, const Coord& coord2);
 private:
     double lastStateNumberOfPackets;
     std::vector<uint8_t> model_data;
     double random_choice_probability = 0.0;
 
-    // base model inputs:
-    /*
-     *         state = (
-                normalized_expected_send_time +
-                normalized_node_distances +
-                normalized_node_directions +
-                onehot_encoded_recent_packets
-        )
-    */
-    std::vector<cModules*> nodes;
-    std::vector<uint8_t> expected_send_times;
-    std::vector<uint8_t> node_positions;
-    std::vector<uint8_t> recent_packets;
+
+    std::vector<simtime_t> send_intervals;
+    std::vector<simtime_t> expected_send_times;
+    std::vector<Coord> node_positions;
+
+    std::deque<float> recent_packets;
+    std::vector<cModule *> nodes;
 
     // Normalization factors initialized to -1.0
     double latest_packet_rssi_norm_factor = -1.0;    // Normalization factor for packet RSSI
