@@ -47,7 +47,6 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
         # Initial input layer
         x = self.input_layer(observations)
         x = self.activation(x)
-        # x = self.dropout(x)  # TODO: Try to disable this
 
         # Apply residual blocks
         # https://en.wikipedia.org/wiki/Residual_neural_network
@@ -55,7 +54,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
             residual = x  # Save input for skip connection
             x = layer(x)
             x = self.activation(x)
-            x = x + residual  # Add residual (skip connection)
+            #x = x + residual  # Add residual (skip connection)
 
         # Final output layer
         x = self.output_layer(x)
@@ -95,32 +94,26 @@ class TensorboardCallback(BaseCallback):
 
 
 def main():
+    do_vecnorm = False
+
     envs = 16  # TODO: increase again
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
-    # TODO: DONT try VecNormalize with this VecMonitor inbetween. Remember to do the same in test2dmodel
-    #  (https://www.reddit.com/r/reinforcementlearning/comments/1c9krih/dummyvecenv_vecnormalize_makes_the_reward_chart/)
-    #
-    # env = VecMonitor(env)
     gamma = 0.85  # base: 0.85
     ent_coef = 0.005  # base: 0.005
     learning_rate = 1e-4  # base: 6e-5
 
-    def learn_rate_schedule(x: float):
-        initial_learn_rate = 5e-2
-        final_learn_rate = 1e-3
-        progress_so_far = 1.0 - x
-        return initial_learn_rate + (final_learn_rate - initial_learn_rate) * progress_so_far
-
     n_blocks = 3  # # base: 2
-    env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
+    if do_vecnorm:
+        env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4000, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
 
     policy_kwargs = dict(
-        features_extractor_class=CustomPolicyNetwork,
-        features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
+        #features_extractor_class=None,#CustomPolicyNetwork,
+        #features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
+        share_features_extractor=True,
         net_arch=[64, 64, 64]
     )
     if True:
@@ -156,7 +149,8 @@ def main():
 
     print("Learning finished")
     model.save("stable-model")
-    env.save("model_normalization_stats")
+    if do_vecnorm:
+        env.save("model_normalization_stats")
 
 
 if __name__ == '__main__':

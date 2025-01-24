@@ -29,6 +29,8 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
     all_pdr = []  # To store PDR values for each episode
     all_fairness = []  # To store fairness values for each episode
 
+    do_vecnorm = False
+
     test_best = True
     if test_best:
         if True:
@@ -41,9 +43,10 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
     vec_env = make_vec_env(make_skipped_env, n_envs=1,
                            env_kwargs=dict(do_logging=do_logging, log_file=log_file, input_render_mode=None))
     # Load the saved statistics, but do not update them at test time and disable reward normalization.
-    vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-    vec_env.training = False
-    vec_env.norm_reward = False
+    if do_vecnorm:
+        vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+        vec_env.training = False
+        vec_env.norm_reward = False
 
     for ep_idx in range(n_episodes):
         print(f"Starting episode {ep_idx}")
@@ -51,9 +54,10 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             vec_env = make_vec_env(make_skipped_env, n_envs=1,
                                    env_kwargs=dict(do_logging=do_logging, log_file=log_file,
                                                    input_render_mode=rendering_mode))
-            vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-            vec_env.training = False
-            vec_env.norm_reward = False
+            if do_vecnorm:
+                vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+                vec_env.training = False
+                vec_env.norm_reward = False
 
         # print(model.policy)
         obs = vec_env.reset()
@@ -110,4 +114,4 @@ if __name__ == '__main__':
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
     rendering_mode = None  # "cv2"
-    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=1, rendering_mode=rendering_mode)
+    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=100, rendering_mode=rendering_mode)
