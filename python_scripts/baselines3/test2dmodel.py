@@ -103,7 +103,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             #print(f"{final_misseds=}\n{final_receiveds=}\n{final_sents=}\n{final_pdr=}\n{final_fairness=}")
             all_fairness.append(final_fairness)
 
-            if i + 1 == n_episodes:  # only do these plots for the last episode in the batch.
+            if ep_idx + 1 == n_episodes:  # only do these plots for the last episode in the batch.
                 plot_relative_positions(log_file)
                 plot_mobile_gateway_with_nodes_advanced(log_file)
                 plot_heatmap(log_file=log_file)
