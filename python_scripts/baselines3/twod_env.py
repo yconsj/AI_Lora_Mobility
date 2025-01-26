@@ -41,14 +41,13 @@ def _jains_fairness_index(delivery_rates):
     return jains_index
 
 
-def jains_fairness_index(received_per_node: list[int], misses_per_node: list[int]):
-    if len(received_per_node) != len(misses_per_node):
+def jains_fairness_index(received_per_node: list[int], sent_per_node: list[int]):
+    if len(received_per_node) != len(sent_per_node):
         raise ValueError("Error in 'jains_fairness_index'! "
                          "len('received_per_node') must match length of len('misses_per_node')")
-    length = max(len(received_per_node), len(misses_per_node))
+    length = max(len(received_per_node), len(sent_per_node))
     delivery_rates = [
-        0 if (received_per_node[i] + misses_per_node[i]) == 0 else
-        received_per_node[i] / (received_per_node[i] + misses_per_node[i])
+        0 if (sent_per_node[i]) == 0 else received_per_node[i] / (sent_per_node[i])
         for i in range(length)
     ]
     return _jains_fairness_index(delivery_rates)
@@ -483,7 +482,9 @@ class TwoDEnv(gym.Env):
                 self.recent_packets.append(i)
 
                 self.expected_send_time[i] += self.send_intervals[i] + self.send_std
-                self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
+                sent_per_node = [self.received_per_node[i] + self.misses_per_node[i]
+                                 for i in range(len(self.misses_per_node))]
+                self.fairness = jains_fairness_index(self.received_per_node, sent_per_node)
                 # reward += self.fairness * self.fairness_reward  # TODO: Disable this
             elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1

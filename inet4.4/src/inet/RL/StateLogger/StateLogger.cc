@@ -30,22 +30,28 @@ StateLogger::StateLogger() {
 
 void StateLogger::initialize() {
     runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
+    transmission_times_vec.resize(number_of_nodes, std::vector<double>());
+    transmissions_per_node_current_vec.resize(number_of_nodes, 0);
+
     cModule *network = getSimulation()->getSystemModule();
     int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
-    stationary_reception_times_vec.resize(number_of_stationary_gw, std::vector<double>());
     transmission_id_vec.resize(number_of_nodes, -1);
-
-    transmission_times_vec.resize(number_of_nodes, std::vector<double>());
-
+    stationary_gw_received_packets_per_node_current_vec.resize(number_of_nodes, 0);
 }
 
 void StateLogger::addTransmissionTime(int node_index) {
     transmission_times_vec[node_index].push_back(simTime().dbl());
+    transmissions_per_node_current_vec[node_index] += 1;
+    transmissions_per_node_vec.push_back(transmissions_per_node_current_vec);
+
+
 }
 
 void StateLogger::logStationaryGatewayPacketReception(int lora_gw_index, int lora_node_index, int transmitter_sequence_number) {
     // Log the reception time when a packet is received by a stationary gateway
     // But check if the packet has been received by any of the other stationary gateways, already.
+
+    // TODO: Dont split it up by gateway index.
     EV << "lora_gw_index="<< lora_gw_index << endl;
     EV << "lora_node_index="<< lora_node_index << endl;
     EV << "transmitter_sequence_number="<< transmitter_sequence_number << endl;
@@ -54,9 +60,9 @@ void StateLogger::logStationaryGatewayPacketReception(int lora_gw_index, int lor
         return;
     }
     transmission_id_vec[lora_node_index] = std::max(transmission_id_vec[lora_node_index], transmitter_sequence_number);
-
-    stationary_reception_times_vec[lora_gw_index].push_back(simTime().dbl());
-
+    stationary_reception_times_vec.push_back(simTime().dbl());
+    stationary_gw_received_packets_per_node_current_vec[lora_node_index] += 1;
+    stationary_gw_number_of_received_packets_per_node_vec.push_back(stationary_gw_received_packets_per_node_current_vec);
 }
 void StateLogger::logStep(
         Coord gw_pos,
@@ -89,19 +95,22 @@ void StateLogger::writeToFile() {
         json outputJson;
 
 
-        outputJson["gw_data"]["node_distances"] = node_distances_vec;
-        outputJson["gw_data"]["gw_positions_x"] = gw_positions_x_vec;
-        outputJson["gw_data"]["gw_positions_y"] = gw_positions_y_vec;
-        outputJson["gw_data"]["number_of_received_packets_per_node"] = mobile_gw_number_of_received_packets_per_node_vec;
-        outputJson["gw_data"]["times"] = times_vec;
-        outputJson["gw_data"]["actions"] = actions_vec;
+        outputJson["mobile_gw_data"]["node_distances"] = node_distances_vec;
+        outputJson["mobile_gw_data"]["gw_positions_x"] = gw_positions_x_vec;
+        outputJson["mobile_gw_data"]["gw_positions_y"] = gw_positions_y_vec;
+        outputJson["mobile_gw_data"]["number_of_received_packets_per_node"] = mobile_gw_number_of_received_packets_per_node_vec;
+        outputJson["mobile_gw_data"]["times"] = times_vec;
+        outputJson["mobile_gw_data"]["actions"] = actions_vec;
 
 
         // Add transmission times to the JSON object
-        outputJson["transmission_times"] = transmission_times_vec;
+        outputJson["nodes"]["transmission_times"] = transmission_times_vec;
+        outputJson["nodes"]["transmissions_per_node"] = transmissions_per_node_vec;
+
 
         // Add stationary gateway reception times to the JSON object
-        outputJson["stationary_gateway_reception_times"] = stationary_reception_times_vec;
+        outputJson["stationary_gw_data"]["stationary_gateway_reception_times"] = stationary_reception_times_vec;
+        outputJson["stationary_gw_data"]["stationary_gw_number_of_received_packets_per_node"] = stationary_gw_number_of_received_packets_per_node_vec;
 
 
         // Write the JSON object to the file

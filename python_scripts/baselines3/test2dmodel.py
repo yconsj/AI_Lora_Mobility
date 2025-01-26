@@ -99,7 +99,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             final_misseds = [packets_missed_per_node[i][-1] for i in range(len(packets_missed_per_node))]
             final_pdr = sum(final_receiveds) / sum(final_sents)
             all_pdr.append(final_pdr)
-            final_fairness = jains_fairness_index(final_receiveds, final_misseds)
+            final_fairness = jains_fairness_index(final_receiveds, final_sents)
             #print(f"{final_misseds=}\n{final_receiveds=}\n{final_sents=}\n{final_pdr=}\n{final_fairness=}")
             all_fairness.append(final_fairness)
 

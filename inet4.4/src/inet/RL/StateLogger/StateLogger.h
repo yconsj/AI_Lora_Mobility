@@ -62,14 +62,16 @@ private:
     std::vector<float> times_vec;
     std::vector<int> actions_vec;
 
+
+    // Stationary gw logging
     std::vector<int> transmission_id_vec;
-
     std::vector<std::vector<double>> transmission_times_vec;
-    // TODO: consider maintaining count for number of transmissions and number of packets received
-    //std::vector<std::vector<int>> number_of_transmissions_per_node_vec;
+    std::vector<int> transmissions_per_node_current_vec;
+    std::vector<std::vector<int>> transmissions_per_node_vec;
 
-    std::vector<std::vector<double>> stationary_reception_times_vec;  // Store reception times for stationary gateways
-    //std::vector<std::vector<int>> stationary_gw_number_of_received_packets_per_node_vec;
+    std::vector<double> stationary_reception_times_vec;  // Store reception times for stationary gateways
+    std::vector<int> stationary_gw_received_packets_per_node_current_vec;
+    std::vector<std::vector<int>> stationary_gw_number_of_received_packets_per_node_vec;
 
     int runnumber = -1;
 
