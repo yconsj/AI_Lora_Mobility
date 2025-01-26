@@ -143,24 +143,23 @@ void AdvancedLearningModel::nodeValueInitialization() {
     std::vector<cModule *> loRaNodes;
     cModule *network = getSimulation()->getSystemModule();
 
-    // Find LoRa nodes
-    std::string mod_str = "loRaNodes";
-    for (cModule::SubmoduleIterator it(network); !it.end(); ++it) {
-        cModule *submodule = *it;
-        std::string moduleName = submodule->getName();
-        if (mod_str.compare(moduleName) == 0) {
-            loRaNodes.push_back(submodule);
-        } else {
-            EV << "Skipping non-LoRa node submodule: " << submodule->getFullName() << omnetpp::endl;
-        }
+    const char* lora_mod_str = "loRaNodes";
+    int number_of_lora_nodes_in_scenario = network->getSubmoduleVectorSize(lora_mod_str);
+    if (number_of_lora_nodes_in_scenario != number_of_nodes) {
+        throw cRuntimeError("AdvancedLearningModel: Number of LoRa nodes does not match the expected number of nodes in the scenario");
     }
+    for (int i = 0; i < number_of_lora_nodes_in_scenario; i++) {
+        cModule *lora_node_module = network->getSubmodule(lora_mod_str, i);
+        loRaNodes.push_back(lora_node_module);
+    }
+
 
     EV << "loRaNodes.size() = " << loRaNodes.size() << endl;
     nodes.resize(loRaNodes.size(), nullptr);
     node_positions.resize(loRaNodes.size(), Coord(0,0,0));
     expected_send_times.resize(loRaNodes.size(), 0);
     send_intervals.resize(loRaNodes.size(), 0);
-
+    number_of_received_packets_per_node.resize(loRaNodes.size(), 0);
 
     for (size_t i = 0; i < loRaNodes.size(); ++i) {
         cModule *loRaNode = loRaNodes[i];
@@ -174,20 +173,19 @@ void AdvancedLearningModel::nodeValueInitialization() {
             throw cRuntimeError("Invalid LoRa application for node %d", node_index);
         }
 
-        // store node properties
-        // Access the 'timeToFirstPacket' parameter
+        // access & store node properties
 
+        // 'timeToFirstPacket' and 'timeToNextPacket' time parameters
         simtime_t timeToFirstPacket = loRaApp->par("timeToFirstPacket");
         simtime_t timeToNextPacket = loRaApp->par("timeToNextPacket");
-
         expected_send_times[node_index] = timeToFirstPacket;
         send_intervals[node_index] = timeToNextPacket;
         auto *mobility = check_and_cast<StationaryMobility *>(loRaNode->getSubmodule("mobility"));
 
+        // get stationary lora node positions
         if (!mobility) {
             throw cRuntimeError("Error, node missing mobility module in LoRa application for node %d", node_index);
         }
-
         node_positions[node_index] = mobility->getCurrentPosition();
     }
 }
@@ -337,9 +335,6 @@ int AdvancedLearningModel::pollModel()
 
     int output = invokeModel();
     return output;
-    StateLogger* stateLogger = getStateLoggerModule();
-    stateLogger->logStep(output);  // needs some new info
-    return output;
 
 }
 
@@ -348,6 +343,7 @@ int AdvancedLearningModel::selectOutputIndex(float random_choice_probability, co
     int selected_index = -1;
 
     if (deterministic) {
+        EV << "model_output->data.f=" << model_output->data.f << endl;
         // Deterministic mode: choose the index with the highest weight
         selected_index = std::distance(model_output->data.f,
                           std::max_element(model_output->data.f, model_output->data.f + num_outputs));
@@ -385,7 +381,8 @@ int AdvancedLearningModel::selectOutputIndex(float random_choice_probability, co
 
 
 void AdvancedLearningModel::setPacketInfo(int index) {
-    EV << "Packet Info!" << endl;
+    EV << "Packet Info! Received Packet" << endl;
+    number_of_received_packets_per_node[index] += 1;
     // update recent packets
     while (recent_packets.size() >= recent_packets_length) {
         recent_packets.pop_front();
@@ -434,7 +431,6 @@ int AdvancedLearningModel::invokeModel() {
         onehot_encoded_recent_packets
     )
 */
-    EV << "pollmodel chk 2" << endl;
     static cConfigOption simTimeConfig("sim-time-limit", true,cConfigOption::Type::CFG_DOUBLE, "s", "0", "sim-time-limit");
     static simtime_t sim_time_limit = getSimulation()->getActiveEnvir()->getConfig()->getAsDouble(&simTimeConfig, 0);
     EV << "sim_time_limit = " << sim_time_limit << endl;
@@ -443,6 +439,7 @@ int AdvancedLearningModel::invokeModel() {
     Coord gw_pos = getCoord();
 
     std::vector<float> normalized_expected_send_time;
+    std::vector<float> node_distances;
     std::vector<float> normalized_node_distances;
     std::vector<float> normalized_node_directions;
     for (int i = 0; i < nodes.size(); i++) {
@@ -455,7 +452,9 @@ int AdvancedLearningModel::invokeModel() {
         normalized_expected_send_time.push_back(time);
 
         Coord node_pos = node_positions[i];
-        float norm_distance = gw_pos.distance(node_pos) / max_cross_distance;
+        float node_distance = gw_pos.distance(node_pos);
+        node_distances.push_back(node_distance); // used for logging
+        float norm_distance = node_distance / max_cross_distance;
         normalized_node_distances.push_back(norm_distance);
 
         float norm_direction = calculateNormalizedAngle(getCoord(), node_pos);
@@ -534,6 +533,16 @@ int AdvancedLearningModel::invokeModel() {
 
     bool deterministic = true;
     int selected_index = selectOutputIndex(random_choice_probability, model_output, num_outputs, deterministic);
+
+    StateLogger* stateLogger = getStateLoggerModule();
+
+    // gw position
+    // distances
+    // packets
+    // action
+    // time
+    stateLogger->logStep(getCoord(), node_distances, number_of_received_packets_per_node, simTime().dbl(), selected_index);
+
     return selected_index;
 }
 

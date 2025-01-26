@@ -85,10 +85,11 @@ private:
     int selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic);
     double calculateNormalizedAngle(const Coord& coord1, const Coord& coord2);
 private:
-    double lastStateNumberOfPackets;
+
     std::vector<uint8_t> model_data;
     double random_choice_probability = 0.0;
 
+    std::vector<int> number_of_received_packets_per_node;
 
     std::vector<simtime_t> send_intervals;
     std::vector<simtime_t> expected_send_times;

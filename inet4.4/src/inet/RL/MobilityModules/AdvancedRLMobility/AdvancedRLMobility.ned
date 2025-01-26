@@ -12,13 +12,6 @@ package inet.RL.MobilityModules.AdvancedRLMobility;
 import inet.mobility.base.MovingMobilityBase;
 import inet.RL.LearningModels.AdvancedLearningModel.AdvancedLearningModel;
 
-//
-// This is a linear mobility model with speed, angle and acceleration parameters.
-// Angle only changes when the mobile node hits a wall: then it reflects
-// off the wall at the same angle.
-//
-// @author Emin Ilker Cetinbas
-//
 module AdvancedRLMobility extends MovingMobilityBase
 {
     parameters:

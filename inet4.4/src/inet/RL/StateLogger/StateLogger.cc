@@ -15,7 +15,7 @@
 
 #include "inet/RL/StateLogger/StateLogger.h"
 #include "inet/RL/modelfiles/policy_net_model.h"
-
+#include "inet/RL/LearningModels/AdvancedLearningModel/AdvancedLearningModel.h"
 #include <omnetpp.h>
 #include <iostream>
 
@@ -29,32 +29,47 @@ StateLogger::StateLogger() {
 }
 
 void StateLogger::initialize() {
-    inputStateArray.clear(); // Clear any previous data (if needed)
-    choiceArray.clear();
-    transmissionTimes.clear(); // Clear previous transmission times
     runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
+    cModule *network = getSimulation()->getSystemModule();
+    int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
+    stationary_reception_times_vec.resize(number_of_stationary_gw, std::vector<double>());
+    transmission_id_vec.resize(number_of_nodes, -1);
+
+    transmission_times_vec.resize(number_of_nodes, std::vector<double>());
 
 }
 
-void StateLogger::addTransmissionTime() {
-    transmissionTimes.push_back(simTime().dbl());
+void StateLogger::addTransmissionTime(int node_index) {
+    transmission_times_vec[node_index].push_back(simTime().dbl());
 }
 
-void StateLogger::logStationaryGatewayPacketReception(int gwIndex) {
+void StateLogger::logStationaryGatewayPacketReception(int lora_gw_index, int lora_node_index, int transmitter_sequence_number) {
     // Log the reception time when a packet is received by a stationary gateway
-    simtime_t currentTime = simTime();  // Get the current simulation time
-
-    if (gwIndex == 0) {
-        // Log for StationaryLoraGw[0]
-        stationaryReceptionTimes.push_back(currentTime.dbl());
-    } else if (gwIndex == 1) {
-        // Log for StationaryLoraGw[1]
-        stationaryReceptionTimes.push_back(currentTime.dbl());
+    // But check if the packet has been received by any of the other stationary gateways, already.
+    EV << "lora_gw_index="<< lora_gw_index << endl;
+    EV << "lora_node_index="<< lora_node_index << endl;
+    EV << "transmitter_sequence_number="<< transmitter_sequence_number << endl;
+    if (transmission_id_vec[lora_node_index] >= transmitter_sequence_number) {
+        EV << "Duplicate packet received" << endl;
+        return;
     }
-}
+    transmission_id_vec[lora_node_index] = std::max(transmission_id_vec[lora_node_index], transmitter_sequence_number);
 
-void StateLogger::logStep(int choice) {
-    choiceArray.push_back(choice);
+    stationary_reception_times_vec[lora_gw_index].push_back(simTime().dbl());
+
+}
+void StateLogger::logStep(
+        Coord gw_pos,
+        std::vector<float> node_distances,
+        std::vector<int> number_of_received_packets_per_node,
+        double time,
+        int choice) {
+    gw_positions_x_vec.push_back(gw_pos.x);
+    gw_positions_y_vec.push_back(gw_pos.y);
+    node_distances_vec.push_back(node_distances);
+    mobile_gw_number_of_received_packets_per_node_vec.push_back(number_of_received_packets_per_node);
+    times_vec.push_back(time);
+    actions_vec.push_back(choice);
 }
 
 
@@ -73,34 +88,20 @@ void StateLogger::writeToFile() {
         // Create a JSON object
         json outputJson;
 
-        // Format for the state
-        std::vector<std::string> stateFormat = {
-            "gwPosition.x", "gwPosition.y", "stampPos1.x", "stampPos1.y",
-            "stampPos2.x", "stampPos2.y", "timestamp1", "timestamp2",
-            "numReceivedPackets", "timeOfSample"
-        };
 
-        // Add the structure to the JSON object
-        outputJson["gw_data"]["stateformat"] = stateFormat;
+        outputJson["gw_data"]["node_distances"] = node_distances_vec;
+        outputJson["gw_data"]["gw_positions_x"] = gw_positions_x_vec;
+        outputJson["gw_data"]["gw_positions_y"] = gw_positions_y_vec;
+        outputJson["gw_data"]["number_of_received_packets_per_node"] = mobile_gw_number_of_received_packets_per_node_vec;
+        outputJson["gw_data"]["times"] = times_vec;
+        outputJson["gw_data"]["actions"] = actions_vec;
 
-        // Populate states, actions in the JSON structure
-        std::vector<std::vector<double>> states;
-        for (const auto& state : inputStateArray) {
-            states.push_back({
-                state.gwPosition.x, state.gwPosition.y, state.stampPos1.x, state.stampPos1.y,
-                state.stampPos2.x, state.stampPos2.y, state.timestamp1, state.timestamp2,
-                state.numReceivedPackets, state.timeOfSample
-            });
-        }
-
-        outputJson["gw_data"]["states"] = states;
-        outputJson["gw_data"]["actions"] = choiceArray;
 
         // Add transmission times to the JSON object
-        outputJson["transmission_times"] = transmissionTimes;
+        outputJson["transmission_times"] = transmission_times_vec;
 
         // Add stationary gateway reception times to the JSON object
-        outputJson["stationary_gateway_reception_times"] = stationaryReceptionTimes;
+        outputJson["stationary_gateway_reception_times"] = stationary_reception_times_vec;
 
 
         // Write the JSON object to the file

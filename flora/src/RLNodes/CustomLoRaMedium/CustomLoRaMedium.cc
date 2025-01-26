@@ -47,16 +47,28 @@ void CustomLoRaMedium::addTransmission(const IRadio *transmitterRadio, const ITr
     // Call the parent class's addTransmission
     LoRaMedium::addTransmission(transmitterRadio, transmission);
 
-    // Fetch the StateLogger module from the network
-    cModule *network = getSimulation()->getSystemModule();
-    auto stateLogger = check_and_cast<StateLogger*>(network->getSubmodule("stateLogger"));
+    // check if its a loRaNode transmititng:
+    cModule *transmitter_module = transmitterRadio->getRadioGate()->getOwnerModule();
+    std::string lora_node_str = "loRaNodes";
+    // transmitter module (radio) is a submodule of loranic, which is a submodule of loranodes;
+    cModule *loraModule = transmitter_module->getParentModule()->getParentModule();
 
-    if (stateLogger) {
-        // Add the transmission time to the StateLogger
-        stateLogger->addTransmissionTime();
-    } else {
-        EV << "Error: StateLogger module not found in the network." << std::endl;
+    EV << "loraModule name: "<< loraModule->getName() << endl;
+    if (lora_node_str.compare(loraModule->getName()) == 0) {
+        // Fetch the StateLogger module from the network
+       static cModule *network = getSimulation()->getSystemModule();
+       static auto stateLogger = check_and_cast<StateLogger*>(network->getSubmodule("stateLogger"));
+
+       // get the index of the transmitting lora node
+       if (stateLogger) {
+           // Add the transmission time to the StateLogger
+           stateLogger->addTransmissionTime(loraModule->getIndex());
+       } else {
+           EV << "Error: StateLogger module not found in the network." << std::endl;
+       }
     }
+
+
 }
 
 void CustomLoRaMedium::finish() {

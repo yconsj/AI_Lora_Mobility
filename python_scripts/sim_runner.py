@@ -13,8 +13,9 @@ class OmnetEnv:
         self.mingw_tools = os.path.join(self.omnetpp_root, 'tools', 'win32.x86_64', 'opt', 'mingw64', 'bin').replace(
             '\\', '/')
         self.setenv_script = os.path.join(self.omnetpp_root, "setenv").replace('\\', '/')
-        self.sim_path = os.path.join(self.project_dir, 'flora', 'simulations/scenarios/basecase').replace('\\', '/')
-        self.ini_file = os.path.join(self.sim_path, 'omnetpp.ini').replace('\\', '/')
+        self.sim_path = self.config['scenario_path']
+        ini_file_name = self.config['ini_file_name']
+        self.ini_file = os.path.join(self.sim_path, ini_file_name).replace('\\', '/')
         self.mingwenv_cmd_path = os.path.join(self.omnetpp_root, "tools/win32.x86_64/msys2_shell.cmd").replace('\\',
                                                                                                                '/')
 

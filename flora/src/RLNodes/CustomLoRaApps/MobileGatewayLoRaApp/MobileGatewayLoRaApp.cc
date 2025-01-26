@@ -13,7 +13,7 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#include "MobileGatewayLoRaApp.h"
+#include "../../CustomLoRaApps/MobileGatewayLoRaApp/MobileGatewayLoRaApp.h"
 
 #include "inet/RL/LearningModels/AdvancedLearningModel/AdvancedLearningModel.h"
 #include "LoRa/LoRaMac.h"
@@ -30,6 +30,7 @@ Define_Module(MobileGatewayLoRaApp);
 
 
 void MobileGatewayLoRaApp::constructMacSubmoduleTable(cModule *module) {
+
     for (cModule::SubmoduleIterator it(module); !it.end(); ++it) {
         cModule *submodule = *it;
 
