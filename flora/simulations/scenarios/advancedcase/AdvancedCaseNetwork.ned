@@ -2,7 +2,7 @@
 package flora.simulations.scenarios.advancedcase;
 
 import flora.RLNodes.Nodes.MobileLoRaGW;
-import flora.LoraNode.LoRaGW;
+import flora.RLNodes.Nodes.StationaryLoRaGW;
 import inet.node.inet.StandardHost;
 import inet.visualizer.common.IntegratedVisualizer;
 import inet.applications.udpapp.UdpBasicApp;
@@ -15,7 +15,6 @@ import inet.node.inet.StandardHost;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.ethernet.Eth1G;
 import inet.RL.StateLogger.StateLogger;
-import flora.RLNodes.MobileGatewayLoRaApp.MobileGatewayLoRaApp;
 import flora.RLNodes.PacketCounter.PacketCounter;
 
 @namespace(inet);
@@ -37,9 +36,9 @@ network AdvancedCaseNetwork
         MobileLoraGw[numberOfMobileGateways]: MobileLoRaGW {
             @display("p=157,238;is=s");
         };
-        StationaryLoraGw[numberOfStationaryGateways] : LoRaGW;
+        StationaryLoraGw[numberOfStationaryGateways] : StationaryLoRaGW;
         stateLogger : StateLogger;	
-        packetCounter : PacketCounter;
+        //packetCounter : PacketCounter;
         LoRaMedium: CustomLoRaMedium { // LoRaMedium
             @display("p=309,102");
         }

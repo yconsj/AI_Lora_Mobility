@@ -13,11 +13,11 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package inet.RL.LearningModel;
+package inet.RL.LearningModels.AdvancedLearningModel;
 
-module LearningModel
+module AdvancedLearningModel
 {
 	parameters :
-		@class(LearningModel);
+		@class(AdvancedLearningModel);
         
 }

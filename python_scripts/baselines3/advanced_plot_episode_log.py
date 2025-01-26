@@ -200,26 +200,40 @@ def plot_heatmap(log_file):
 
 def plot_batch_episode_performance(all_pdr, all_fairness):
     # Plot the performance of the current batch of episodes
-    fig, ax1 = plt.subplots(figsize=(8, 6))
+    plt.figure(figsize=(8, 6))
 
     n_episodes = min(len(all_pdr), len(all_fairness))
 
-    # Plot PDR and fairness
-    ax1.plot(range(1, n_episodes + 1), all_pdr, label="PDR", color="blue", marker="o")
-    ax1.set_xlabel("Episode")
-    ax1.set_ylabel("PDR", color="blue")
-    ax1.tick_params(axis='y', labelcolor="blue")
-    ax1.set_ylim(0, 1)  # Set y-axis for PDR from 0 to 1
+    # Plot PDR and fairness on the same y-axis
+    plt.plot(range(1, n_episodes + 1), all_pdr, label="PDR", color="blue", marker="o", linestyle="-")
+    plt.plot(range(1, n_episodes + 1), all_fairness, label="Fairness", color="red", marker="x", linestyle="--")
 
-    ax2 = ax1.twinx()  # Create another y-axis for fairness
-    ax2.plot(range(1, n_episodes + 1), all_fairness, label="Fairness", color="red", marker="x")
-    ax2.set_ylabel("Fairness", color="red")
-    ax2.tick_params(axis='y', labelcolor="red")
-    ax2.set_ylim(0, 1)  # Set y-axis for Fairness from 0 to 1
+    plt.xlabel("Episode")
+    plt.ylabel("Values (PDR and Fairness)")
+    plt.ylim(0, 1)  # Set y-axis for both PDR and fairness from 0 to 1
 
-    fig.tight_layout()  # Ensure the layout doesn't overlap
+    # Add title and legend
     plt.title("Performance: PDR and Fairness over Episodes")
+    plt.legend(loc="upper right")  # Place the legend in the upper right corner
+    plt.grid(True, linestyle="--", alpha=0.5)  # Optional grid for clarity
+
+    plt.tight_layout()  # Ensure the layout doesn't overlap
     plt.show()
+
+    # Plot the box plot for PDR and fairness
+    fig2, ax3 = plt.subplots(figsize=(6, 4))
+    ax3.boxplot([all_pdr, all_fairness], labels=["PDR", "Fairness"], patch_artist=True,
+                boxprops=dict(facecolor="lightblue", color="blue"),
+                medianprops=dict(color="black"),
+                whiskerprops=dict(color="blue"),
+                capprops=dict(color="blue"),
+                flierprops=dict(marker="o", color="red", alpha=0.6))
+
+    ax3.set_title("Box Plot: PDR and Fairness Distribution")
+    ax3.set_ylabel("Values")
+    # ax3.set_ylim(0, 1)
+    plt.tight_layout()
+    plt.show()  # Show the box plot
 
 
 if __name__ == '__main__':

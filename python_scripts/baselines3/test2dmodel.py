@@ -29,29 +29,35 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
     all_pdr = []  # To store PDR values for each episode
     all_fairness = []  # To store fairness values for each episode
 
+    do_vecnorm = False
+
     test_best = True
     if test_best:
-        model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
-        # model = DQN.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
+        if True:
+            model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
+        else:
+            model = DQN.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
     else:
         model = PPO.load("stable-model", device="cpu", print_system_info=True)
 
     vec_env = make_vec_env(make_skipped_env, n_envs=1,
                            env_kwargs=dict(do_logging=do_logging, log_file=log_file, input_render_mode=None))
     # Load the saved statistics, but do not update them at test time and disable reward normalization.
-    vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-    vec_env.training = False
-    vec_env.norm_reward = False
+    if do_vecnorm:
+        vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+        vec_env.training = False
+        vec_env.norm_reward = False
 
-    for i in range(n_episodes):
-        print(f"Starting episode {i}")
-        if i == n_episodes - 1:  # only (potentially) render the last episode in the batch.
+    for ep_idx in range(n_episodes):
+        print(f"Starting episode {ep_idx}")
+        if (ep_idx + 1) == n_episodes:  # only (potentially) render the last episode in the batch.
             vec_env = make_vec_env(make_skipped_env, n_envs=1,
                                    env_kwargs=dict(do_logging=do_logging, log_file=log_file,
                                                    input_render_mode=rendering_mode))
-            vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-            vec_env.training = False
-            vec_env.norm_reward = False
+            if do_vecnorm:
+                vec_env = VecNormalize.load("model_normalization_stats", vec_env)
+                vec_env.training = False
+                vec_env.norm_reward = False
 
         # print(model.policy)
         obs = vec_env.reset()
@@ -77,17 +83,24 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             with open(log_file, 'r') as file:
                 data = json.load(file)
             dynamic_data = data["dynamic"]
-            packets_received = [entry['packets_received'] for entry in dynamic_data]
-            packets_sent = [entry['packets_sent'] for entry in dynamic_data]
             packets_received_per_node = [[] for _ in range(len(dynamic_data[0]['packets_received_per_node']))]
             packets_sent_per_node = [[] for _ in range(len(dynamic_data[0]['packets_sent_per_node']))]
+            packets_missed_per_node = [[] for _ in range(len(dynamic_data[0]['packets_missed_per_node']))]
 
-            final_pdr = packets_received[-1] / packets_sent[-1]
+            for entry in dynamic_data:
+                for i, received in enumerate(entry['packets_received_per_node']):
+                    packets_received_per_node[i].append(received)
+                for i, sent in enumerate(entry['packets_sent_per_node']):
+                    packets_sent_per_node[i].append(sent)
+                for i, sent in enumerate(entry['packets_missed_per_node']):
+                    packets_missed_per_node[i].append(sent)
+            final_receiveds = [packets_received_per_node[i][-1] for i in range(len(packets_received_per_node))]
+            final_sents = [packets_sent_per_node[i][-1] for i in range(len(packets_sent_per_node))]
+            final_misseds = [packets_missed_per_node[i][-1] for i in range(len(packets_missed_per_node))]
+            final_pdr = sum(final_receiveds) / sum(final_sents)
             all_pdr.append(final_pdr)
-
-            final_misses = [ps - pr for ps, pr in
-                            zip(packets_received_per_node[-1], packets_sent_per_node[-1])]
-            final_fairness = jains_fairness_index(packets_received_per_node[-1], final_misses)
+            final_fairness = jains_fairness_index(final_receiveds, final_misseds)
+            #print(f"{final_misseds=}\n{final_receiveds=}\n{final_sents=}\n{final_pdr=}\n{final_fairness=}")
             all_fairness.append(final_fairness)
 
             if i + 1 == n_episodes:  # only do these plots for the last episode in the batch.
@@ -102,4 +115,4 @@ if __name__ == '__main__':
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
     rendering_mode = None  # "cv2"
-    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=1, rendering_mode=rendering_mode)
+    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=100, rendering_mode=rendering_mode)

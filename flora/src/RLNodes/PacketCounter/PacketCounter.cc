@@ -19,20 +19,16 @@ void PacketCounter::receiveSignal(omnetpp::cComponent *source, omnetpp::simsigna
     if (strcmp(source->getFullName(), "packetForwarder") == 0) {
         // Get the parent module of the packetForwarder
         cModule *parentModule = source->getParentModule();
-
         if (parentModule != nullptr) {
-            const char *parentName = parentModule->getFullName(); // Get the full name of the parent module
-            cModule* network = getSimulation()->getSystemModule();
-            inet::StateLogger* stateLogger = check_and_cast<inet::StateLogger*>(network->getSubmodule("stateLogger"));
 
-            // Check if the parent module is StationaryLoraGw[0] or StationaryLoraGw[1] (stationary gateways)
-            if (strcmp(parentName, "StationaryLoraGw[0]") == 0) {
-                // Access the StateLogger submodule and call the logStationaryGatewayPacketReception function for StationaryLoraGw[0]
-                stateLogger->logStationaryGatewayPacketReception(0); // Pass index 0 for StationaryLoraGw[0]
-            } else if (strcmp(parentName, "StationaryLoraGw[1]") == 0) {
-                // Access the StateLogger submodule and call the logStationaryGatewayPacketReception function for StationaryLoraGw[1]
-                stateLogger->logStationaryGatewayPacketReception(1); // Pass index 1 for StationaryLoraGw[1]
+            const char *parentName = parentModule->getName(); // Get the full name of the parent module
+            static cModule* network = getSimulation()->getSystemModule();
+            static inet::StateLogger* stateLogger = omnetpp::check_and_cast<inet::StateLogger*>(network->getSubmodule("stateLogger"));
+            EV << "parentmodname: " << parentName << omnetpp::endl;
+            if (strcmp(parentName, "StationaryLoraGw") == 0) {
+                //stateLogger->logStationaryGatewayPacketReception(parentModule->getIndex());
             }
+
         }
     }
 }

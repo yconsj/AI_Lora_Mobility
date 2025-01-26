@@ -1,8 +1,11 @@
 {
     "project_dir": "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility",
     "omnetpp_root": "C:/omnetpp-6.0.3",
-    "logfile_path": "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/flora/simulations/scenarios/basecase/logFile",
+    "logfile_path": "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/flora/simulations/scenarios/advancedcase/logFile",
     "control_logfile_path" : "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/flora/simulations/scenarios/basecontrolcase/stationaryPacketLog.json",
     "training_info_path" : "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/inet4.4/src/inet/RL/modelfiles/training_info.json",
-    "model_path": "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/inet4.4/src/inet/RL/modelfiles/gen_model.tflite"
+    "model_path": "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/inet4.4/src/inet/RL/modelfiles/gen_model.tflite",
+    "scenario_path": "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/flora/simulations/scenarios/advancedcase",
+    "ini_file_name": "omnetpp.ini"
+
 }

@@ -13,9 +13,9 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#include "MobileGatewayLoRaApp.h"
+#include "../../CustomLoRaApps/MobileGatewayLoRaApp/MobileGatewayLoRaApp.h"
 
-#include "../../../../inet4.4/src/inet/RL/LearningModel/LearningModel.h"
+#include "inet/RL/LearningModels/AdvancedLearningModel/AdvancedLearningModel.h"
 #include "LoRa/LoRaMac.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/common/ModuleAccess.h"
@@ -30,10 +30,12 @@ Define_Module(MobileGatewayLoRaApp);
 
 
 void MobileGatewayLoRaApp::constructMacSubmoduleTable(cModule *module) {
+
     for (cModule::SubmoduleIterator it(module); !it.end(); ++it) {
         cModule *submodule = *it;
 
         // Check if the submodule is a LoRaMac
+
         if (auto loRaMac = dynamic_cast<flora::LoRaMac *>(submodule)) {
             // Go 2 levels up to get the LoRaNode module
             cModule *nicModule = loRaMac->getParentModule(); // Assume it's LoRaNic
@@ -157,12 +159,12 @@ void MobileGatewayLoRaApp::logPacketInfoToModel(double rssi, double snir, double
     if (!mobilityModule)
         throw cRuntimeError("SimpleRLMobility module not found!");
 
-    // Get the LearningModel submodule from SimpleRLMobility
-    LearningModel *learningModel = check_and_cast<LearningModel*>(mobilityModule->getSubmodule("learningModel"));
-    if (!learningModel)
-        throw cRuntimeError("LearningModel module not found");
+    // Get the AdvancedLearningModel submodule from SimpleRLMobility
+    AdvancedLearningModel *advancedLearningModel = check_and_cast<AdvancedLearningModel*>(mobilityModule->getSubmodule("advancedLearningModel"));
+    if (!advancedLearningModel)
+        throw cRuntimeError("AdvancedLearningModel module not found");
     // Log the packet information (RSSI, SNIR, and timestamp)
-    learningModel->setPacketInfo(rssi, snir, nReceivedPackets, timestamp, id);
+    advancedLearningModel->setPacketInfo(id);
 }
 
 void MobileGatewayLoRaApp::processLoraMACPacket(Packet *pk)

@@ -14,7 +14,7 @@ import inet.node.inet.StandardHost;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.ethernet.Eth1G;
 import inet.RL.StateLogger.StateLogger;
-import flora.RLNodes.MobileGatewayLoRaApp.MobileGatewayLoRaApp;
+import flora.RLNodes.CustomLoRaApps.MobileGatewayLoRaApp.MobileGatewayLoRaApp;
 
 import flora.RLNodes.PacketCounter.PacketCounter;
 

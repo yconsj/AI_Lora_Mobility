@@ -13,25 +13,35 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef __LORANETWORK_MobileGatewayLoRaApp_H_
-#define __LORANETWORK_MobileGatewayLoRaApp_H_
+#ifndef __LORANETWORK_StationaryGatewayLoRaApp_H_
+#define __LORANETWORK_StationaryGatewayLoRaApp_H_
 
 #include <omnetpp.h>
-#include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
 #include <vector>
-
-#include "inet/common/INETDefs.h"
-
 
 #include "LoRa/LoRaMacControlInfo_m.h"
 #include "LoRa/LoRaMacFrame_m.h"
+#include "LoRa/LoRaMac.h"
+#include "LoRaPhy/LoRaRadioControlInfo_m.h"
+#include "LoRaApp/SimpleLoRaApp.h"
+
+
 #include "inet/applications/base/ApplicationBase.h"
 #include "inet/transportlayer/contract/udp/UdpSocket.h"
-#include "inet/linklayer/common/MacAddress.h"
+#include "inet/common/INETDefs.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/common/ModuleAccess.h"
+#include "inet/applications/base/ApplicationPacket_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
+//#include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
+
+#include "inet/RL/StateLogger/StateLogger.h"
+#include "inet/RL/LearningModels/AdvancedLearningModel/AdvancedLearningModel.h"
+
 
 namespace flora {
 
-class MobileGatewayLoRaApp : public cSimpleModule, public cListener
+class StationaryGatewayLoRaApp : public cSimpleModule, public cListener
 {
   protected:
     std::vector<L3Address> destAddresses;
@@ -39,10 +49,6 @@ class MobileGatewayLoRaApp : public cSimpleModule, public cListener
     // state
     UdpSocket socket;
     cMessage *selfMsg = nullptr;
-    cOutVector rssiVector;
-    cOutVector snirVector;
-    std::map<MacAddress, cModule*> macToModuleMap; // MAC to module mapping
-
 
   protected:
     virtual void initialize(int stage) override;
@@ -54,12 +60,10 @@ class MobileGatewayLoRaApp : public cSimpleModule, public cListener
     void setSocketOptions();
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
-    void logPacketInfoToModel(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id);
-    void constructMacSubmoduleTable(cModule *module);
   public:
       simsignal_t LoRa_GWPacketReceived;
       int counterOfSentPacketsFromNodes = 0;
       int counterOfReceivedPackets = 0;
 };
 } //namespace inet
-#endif
+#endif // __LORANETWORK_StationaryGatewayLoRaApp_H_

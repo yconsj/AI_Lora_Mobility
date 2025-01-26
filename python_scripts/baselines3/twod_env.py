@@ -484,7 +484,7 @@ class TwoDEnv(gym.Env):
 
                 self.expected_send_time[i] += self.send_intervals[i] + self.send_std
                 self.fairness = jains_fairness_index(self.received_per_node, self.misses_per_node)
-                reward += self.fairness * self.fairness_reward  # TODO: Disable this
+                # reward += self.fairness * self.fairness_reward  # TODO: Disable this
             elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
@@ -553,6 +553,7 @@ class TwoDEnv(gym.Env):
             "packets_sent": self.total_received + self.total_misses,
             "transmissions_per_node": transmissions_per_node.copy(),
             "packets_received_per_node": self.received_per_node.copy(),
+            "packets_missed_per_node": self.misses_per_node.copy(),
             "packets_sent_per_node": [
                 self.received_per_node[i] + self.misses_per_node[i] for i in range(len(self.nodes))
             ],

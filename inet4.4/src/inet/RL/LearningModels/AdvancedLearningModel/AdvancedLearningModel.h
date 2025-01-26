@@ -13,8 +13,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_
-#define INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_
+#ifndef INET_RL_LEARNINGMODELS_ADVANCEDLEARNINGMODEL_H_
+#define INET_RL_LEARNINGMODELS_ADVANCEDLEARNINGMODEL_H_
 
 #include "inet/common/geometry/common/Coord.h"
 #include <vector>
@@ -25,54 +25,78 @@
 #include "tensorflow/lite/micro/system_setup.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
+#include "../../MobilityModules/AdvancedRLMobility/AdvancedRLMobility.h"
 #include "inet/RL/InputState.h"
 #include "inet/RL/include/json.hpp"
-#include "inet/RL/SimpleRLMobility/SimpleRLMobility.h"
 #include "inet/RL/StateLogger/StateLogger.h"
+#include "inet/common/InitStages.h"
+#include "inet/common/ModuleAccess.h"
+
+#include <algorithm>  // std::generate
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <omnetpp.h>
+#include <array>
+#include <cmath>
+#include <deque>
+
+#include "inet/common/geometry/common/Coord.h"
+#include "inet/mobility/contract/IMobility.h" // for accessing mobility
+#include <random>  // For random sampling
+
+#include "../../MobilityModules/AdvancedRLMobility/AdvancedRLMobility.h"
+#include "inet/RL/InputState.h"
+#include "inet/RL/modelfiles/policy_net_model.h"
+#include "inet/RL/StateLogger/StateLogger.h"  // Include the StateLogger header
 
 using json = nlohmann::json;
 
 namespace inet {
+const size_t recent_packets_length = 1;
+const size_t number_of_nodes = 4;
 
-
-class LearningModel : public omnetpp::cSimpleModule {
+class AdvancedLearningModel : public omnetpp::cSimpleModule {
 public:
-    virtual void setPacketInfo(double rssi, double snir, double nReceivedPackets, simtime_t timestamp, int id);
-    LearningModel();
-    virtual ~LearningModel();
+    AdvancedLearningModel();
+    virtual ~AdvancedLearningModel();
     virtual int pollModel();
+    virtual void setPacketInfo(int index);
 
 protected:
     // The following redefined virtual function holds the algorithm.
-    virtual void initialize() override;
+    virtual void initialize(int stage) override;
+    int numInitStages() const override { return NUM_INIT_STAGES; }
+
 
 private:
+    virtual void nodeValueInitialization();
     StateLogger* getStateLoggerModule();  // Function to fetch the StateLogger module. should not be virtual
-    int invokeModel(InputStateBasic state);
-    double getReward();
+    int invokeModel();
     const Coord getCoord();
-
-    bool compareArrays(const std::array<double, 3>& predicted, const std::array<double, 3>& expected, double tolerance = 1e-6);
-    void testModelOutput(
-        const std::array<double, 5>& state,
-        int expectedAction,
-        const std::array<double, 3>& expectedActionProbs);
-
-    SimpleRLMobility* getMobilityModule();
+    AdvancedRLMobility* getMobilityModule();
     virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
     void readJsonFile(const std::string& filepath);
     double readJsonValue(const json& jsonData, const std::string& key);
     int selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic);
-
+    double calculateNormalizedAngle(const Coord& coord1, const Coord& coord2);
 private:
-    double lastStateNumberOfPackets;
+
     std::vector<uint8_t> model_data;
-    InputStateBasic currentState;
-    int lastPacketId = -1;
-    double rewardModifier = 1.0;
-    double packet_reward = -1.0;
-    double exploration_reward = -1.0;
     double random_choice_probability = 0.0;
+
+    std::vector<int> number_of_received_packets_per_node;
+
+    std::vector<simtime_t> send_intervals;
+    std::vector<simtime_t> expected_send_times;
+    std::vector<Coord> node_positions;
+
+    std::deque<float> recent_packets;
+    std::vector<cModule *> nodes;
 
     // Normalization factors initialized to -1.0
     double latest_packet_rssi_norm_factor = -1.0;    // Normalization factor for packet RSSI
@@ -86,4 +110,4 @@ private:
 
 } /* namespace inet */
 
-#endif /* INET_RL_LEARNINGMODEL_LEARNINGMODEL_H_ */
+#endif /* INET_RL_LEARNINGMODELS_ADVANCEDLEARNINGMODEL_H_ */

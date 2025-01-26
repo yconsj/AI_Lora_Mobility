@@ -16,19 +16,7 @@ def read_log(batch, log_path):
 
     with open(log_file, 'r') as file:
         data = json.load(file)  # Load the JSON data
-
-    # Extract state format and state data
-    state_format = data["gw_data"]["stateformat"]
-    state_indices = {key: idx for idx, key in enumerate(state_format)}
-
-    states = data["gw_data"]["states"]  # The input state array
-    actions = data["gw_data"]["actions"]  # The choice array
-    rewards = data["gw_data"]["rewards"]  # The reward array
-    transmission_times = data["transmission_times"]  # The transmission times
-    stationary_gateway_reception_times = data[
-        "stationary_gateway_reception_times"]  # The reception times for stationary gateways
-
-    return states, actions, rewards, transmission_times, stationary_gateway_reception_times, state_indices
+    return data
 
 
 def create_jagged_line(x_data, y_data):
@@ -46,80 +34,155 @@ def create_jagged_line(x_data, y_data):
     return jagged_x, jagged_y
 
 
-def plot_all(input_states, state_indices, transmission_times, stationary_gateway_reception_times):
+import matplotlib.pyplot as plt
+import math
+
+
+def plot_all(data_dict):
     """
     Plots:
-    1. Gateway X position over time with transmission times marked
-    2. Number of packets received by mobile and stationary gateways vs transmission times
+    A grid layout where each node has its own subplot, showing:
+    - Distance from the gateway to the node over time
+    - Vertical transmission lines for the node
     """
-    # Access indices from state_indices
-    gw_x_index = state_indices["gwPosition.x"]
-    packet_count_index = state_indices["numReceivedPackets"]
-    timestamp_index = state_indices["timeOfSample"]  # Assuming the timestamp is present in the state
+    # --- First plot: Subplots of distance to each node over time, in a grid-layout ---
+    # Extract data
+    distances = data_dict["gw_data"]["node_distances"]
+    timestamps = data_dict["gw_data"]["times"]
+    transmission_times = data_dict["transmission_times"]
 
-    # Extract relevant data from input states
-    gw_x = [state[gw_x_index] for state in input_states]  # Using the dynamically found index
-    packet_counts = [state[packet_count_index] for state in input_states]  # Using the dynamically found index
-    timestamps = [state[timestamp_index] for state in input_states]  # Using the timestamp for the x-axis
 
-    # Initialize figure with 2 subplots (1 row, 2 columns)
-    fig, axs = plt.subplots(1, 2, figsize=(20, 6))
+    # Restructure distances into a node-wise format
+    number_of_nodes = len(distances[0])
+    distances_restructured = [[] for _ in range(number_of_nodes)]
+    for node_idx in range(number_of_nodes):
+        for distance in distances:
+            distances_restructured[node_idx].append(distance[node_idx])
 
-    # --- First subplot: Gateway X position over time with transmission times ---
-    axs[0].plot(timestamps, gw_x, label="Gateway X Position", color="blue")
-    axs[0].set_xlabel("Time (seconds)")
-    axs[0].set_ylabel("Position (gw_x)")
-    axs[0].set_title("Gateway X Position Over Time")
+    # Calculate grid dimensions (square-like layout)
+    cols = math.ceil(math.sqrt(number_of_nodes))
+    rows = math.ceil(number_of_nodes / cols)
 
-    # Overlay a vertical line for transmission times
-    for time in transmission_times:
-        axs[0].axvline(x=time, color="red", linestyle="--", alpha=0.5)
+    # Create subplots: grid layout
+    fig, axs = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
+    axs = axs.flatten()  # Flatten the 2D array for easier indexing
 
-    axs[0].legend(["Gateway X Position", "Transmission Time"], loc="best")
-    axs[0].grid()
+    # Define a color palette
+    colors = plt.cm.tab10.colors  # Use matplotlib's tab10 color palette
+    color_cycle = len(colors)
 
-    # --- Second subplot: Number of packets received versus transmission times ---
-    axs[1].plot(timestamps[:len(packet_counts)], packet_counts, label="Mobile GW Packets Received", color="green")
+    for node_idx in range(number_of_nodes):
+        ax = axs[node_idx]
 
-    # Create cumulative packets list for transmitted packets (jagged)
-    transmitted_packets = []
-    total_transmitted_packets = 0
-    for time in transmission_times:
-        total_transmitted_packets += 1
-        transmitted_packets.append(total_transmitted_packets)
+        # Plot the distances for the node
+        ax.plot(timestamps, distances_restructured[node_idx], label=f"Distance to Node {node_idx + 1}",
+                color=colors[node_idx % color_cycle])
 
-    # Make the transmitted packets jagged by applying the create_jagged_line function
-    transmitted_x, transmitted_y = create_jagged_line(transmission_times, transmitted_packets)
-    axs[1].plot(transmitted_x, transmitted_y, label="Packets Transmitted", color="black", linestyle='-.', linewidth=2)
+        # Overlay node-wise transmission times as vertical lines
+        for time in transmission_times[node_idx]:
+            ax.axvline(x=float(time), linestyle="--", alpha=0.7, color=colors[(node_idx + 1) % color_cycle],
+                       label="Transmission Time" if time == transmission_times[node_idx][0] else None)
 
-    # Create cumulative packets list for stationary gateways (jagged)
-    cumulative_stationary_packets = []
-    total_stationary_packets = 0
-    for time in stationary_gateway_reception_times:
-        total_stationary_packets += 1
-        cumulative_stationary_packets.append(total_stationary_packets)
+        # Customize each subplot
+        ax.set_xlabel("Time (seconds)")
+        ax.set_ylabel("Distance (meters)")
+        ax.set_title(f"Node {node_idx + 1}")
+        ax.legend(loc="best")
+        ax.grid()
 
-    # Make the stationary gateway packets jagged
-    stationary_x, stationary_y = create_jagged_line(stationary_gateway_reception_times, cumulative_stationary_packets)
+    # Remove empty subplots if any (in case of uneven grid)
+    for ax in axs[number_of_nodes:]:
+        fig.delaxes(ax)
 
-    # Add a small vertical offset to the stationary gateway packet curve
-    offset = 0.1  # Adjust this value for more or less offset
-    axs[1].plot(stationary_x, [y + offset for y in stationary_y], label="Cumulative Stationary GW Packets", color="orange", linestyle='-', linewidth=2)
-
-    # Overlay a vertical line for transmission times (include in legend)
-    for time in transmission_times:
-        axs[1].axvline(x=time, color="red", linestyle="--", alpha=0.5)
-
-    axs[1].set_xlabel("Time (seconds)")
-    axs[1].set_ylabel("Packets Received / Transmission Time")
-    axs[1].set_title("Packets Received vs Transmission Times")
-    axs[1].legend(["Mobile GW Packets Received", "Packets sent", "Stationary GW Packets Received", "Transmission Time"], loc="best")
-    axs[1].grid()
-
-    # Adjust layout and show
     plt.tight_layout()
     plt.show()
 
+    # --- Second plot: Packets received vs transmission times ---
+    timestamps = data_dict["gw_data"]["times"]
+    packets_received_mobile = data_dict["gw_data"]["number_of_received_packets_per_node"]
+    # Flatten packets_received for the mobile gateway (sum over nodes)
+    packet_counts_mobile = [sum(node_packets) for node_packets in packets_received_mobile]
+
+    # Create a new figure for the second plot
+    plt.figure(figsize=(10, 6))
+
+    # Plot packets received by the mobile gateway (over all nodes)
+    plt.plot(timestamps[:len(packet_counts_mobile)], packet_counts_mobile, label="Mobile GW Packets Received", color="green")
+
+    # Overlay cumulative packets sent by all nodes
+    for node_idx, node_times in enumerate(transmission_times):
+        # add extra time stamp at t=0 where
+        cumulative_packets = range(0, len(node_times) + 1)
+        plt.step([0]+node_times, cumulative_packets, linestyle="--", alpha=0.7, where='post',
+                 label=f"Node {node_idx + 1} Packets Sent")
+
+    # Customize plot
+    plt.xlabel("Time (seconds)")
+    plt.ylabel("Packets Received / Transmission Times")
+    plt.title("Packets Sent and Received Over Time")
+    plt.legend(loc="best")
+    plt.grid()
+
+    # Show the plot
+    plt.tight_layout()
+    plt.show()
+
+    # --- Third plot: Packet Delivery Rate ---
+    plt.figure(figsize=(10, 6))
+
+    # Calculate the total number of packets sent up to each timestamp
+    total_packets_sent = []
+    for t in timestamps:
+        total_sent = 0
+        for node_times in transmission_times:
+            # Count how many packets were sent up to and including time t
+            total_sent += sum(1 for time in node_times if time <= t)
+        total_packets_sent.append(total_sent)
+
+    # Calculate Mobile Gateway Packet Delivery Rate (PDR) as Total Received / Total Sent
+    pdr_mobile = [received / sent if sent > 0 else 0 for received, sent in zip(packet_counts_mobile, total_packets_sent)]
+
+    # Calculate total packets received by all stationary gateways at each timestamp
+    stationary_gw_reception_times = data_dict["stationary_gateway_reception_times"]
+    total_packets_received_stationary = []
+    for t in timestamps:
+        total_received = 0
+        for gateway_reception_times in stationary_gw_reception_times:
+            total_received += sum(1 for reception_time in gateway_reception_times if reception_time <= t)
+        total_packets_received_stationary.append(total_received)
+
+    # Calculate PDR for stationary gateways as total_received / total_sent
+    pdr_stationary = [
+        received / sent if sent > 0 else 0
+        for received, sent in zip(total_packets_received_stationary, total_packets_sent)
+    ]
+    # print(f"{total_packets_received_stationary=}\n{total_packets_sent=}")
+
+    # Apply max smoothing: for every pdr[i], set pdr[i] = max(pdr[i], pdr[i+1])
+    # This solves the issue of "dips" in PDR due to a gap in time between transmissions and reception.
+    for i in range(len(pdr_mobile) - 1):  # Avoid going out of bounds
+        pdr_mobile[i] = max(pdr_mobile[i], pdr_mobile[i + 1])
+    for i in range(len(pdr_stationary) - 1):  # Avoid going out of bounds
+        pdr_stationary[i] = max(pdr_stationary[i], pdr_stationary[i + 1])
+
+    # Plot the Packet Delivery Rate (PDR)
+
+    # Plot the Packet Delivery Rate (PDR) for the subsampled points
+    # Plot the Mobile Gateway PDR
+    plt.plot(timestamps[:len(pdr_mobile)], pdr_mobile, label="Mobile GW PDR", color="blue", linestyle=":")
+
+    # Plot the Stationary Gateway PDR
+    plt.plot(timestamps[:len(pdr_stationary)], pdr_stationary, label="Stationary GW PDR", color="green", linestyle="--")
+
+    # Customize plot
+    plt.xlabel("Time (seconds)")
+    plt.ylabel("PDR")
+    plt.title("Packet Delivery Rate (PDR) Over Time")
+    plt.legend(loc="best")
+
+    # Show the plot
+    plt.tight_layout()
+    plt.show()
 
 def main():
     """
@@ -130,7 +193,7 @@ def main():
 
     do_export_sb3_to_tflite = False
     if do_export_sb3_to_tflite:
-        sb3_to_tflite_pipeline("baselines3/stable-model-best/best_model")
+        sb3_to_tflite_pipeline("baselines3/stable-model-2d-best/best_model")
 
     config = load_config("config.json")
     # Get log path from the configuration
@@ -141,17 +204,17 @@ def main():
 
     # Run the simulation
     print("Starting simulation...")
+    # TODO: Reenable
     env.run_simulation()
 
     batch = 0  # Specify the batch number if needed
     # Read the log data
     print("Reading log data...")
-    input_states, actions, rewards, transmission_times, stationary_gateway_reception_times, state_indices = read_log(
-        batch, log_path)
+    data = read_log(batch, log_path)
 
     # Plot all figures (Gateway Position, Packets, Transmission Times)
     print("Plotting results...")
-    plot_all(input_states, state_indices, transmission_times, stationary_gateway_reception_times)
+    plot_all(data)
 
 
 if __name__ == "__main__":

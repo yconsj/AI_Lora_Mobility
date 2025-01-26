@@ -18,9 +18,13 @@
 
 #include <vector>
 #include <fstream>
+#include <algorithm>
+
 
 #include "inet/RL/InputState.h"
 #include "inet/RL/include/json.hpp"
+#include "inet/linklayer/common/MacAddress.h"
+
 using json = nlohmann::json;
 
 
@@ -30,21 +34,43 @@ class StateLogger : public omnetpp::cSimpleModule {
 public:
     StateLogger();
     virtual ~StateLogger();
-    virtual void addTransmissionTime();
-    virtual void logStationaryGatewayPacketReception(int loragwIndex);
-    virtual void logStep(InputStateBasic& inputState, int choice, double reward);
+    virtual void addTransmissionTime(int node_index);
+    virtual void logStationaryGatewayPacketReception(int lora_gw_index,
+            int lora_node_index,
+            int transmitter_sequence_number);
+    virtual void logStep(
+            Coord gw_pos,
+            std::vector<float> node_distances,
+            std::vector<int> number_of_received_packets_per_node,
+            double time,
+            int choice
+            );
     void writeToFile();
-
 
 protected:
     virtual void finish() override;
     virtual void initialize() override;
 private:
-    std::vector<InputStateBasic> inputStateArray;
-    std::vector<int> choiceArray;
-    std::vector<double> rewardArray;
-    std::vector<double> transmissionTimes;
-    std::vector<double> stationaryReceptionTimes;  // Store reception times for stationary gateways
+    std::map<MacAddress, cModule*> macToModuleMap; // MAC to module mapping
+
+
+    // gw logging (logStep()), received from AdvancedLearningModule
+    std::vector<float> gw_positions_x_vec;
+    std::vector<float> gw_positions_y_vec;
+    std::vector<std::vector<float>> node_distances_vec;
+    std::vector<std::vector<int>> mobile_gw_number_of_received_packets_per_node_vec;
+    std::vector<float> times_vec;
+    std::vector<int> actions_vec;
+
+    std::vector<int> transmission_id_vec;
+
+    std::vector<std::vector<double>> transmission_times_vec;
+    // TODO: consider maintaining count for number of transmissions and number of packets received
+    //std::vector<std::vector<int>> number_of_transmissions_per_node_vec;
+
+    std::vector<std::vector<double>> stationary_reception_times_vec;  // Store reception times for stationary gateways
+    //std::vector<std::vector<int>> stationary_gw_number_of_received_packets_per_node_vec;
+
     int runnumber = -1;
 
 };

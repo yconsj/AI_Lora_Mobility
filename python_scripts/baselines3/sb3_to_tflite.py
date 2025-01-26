@@ -9,6 +9,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from baselines3.basecase.simple_env import SimpleBaseEnv
 
 # Define a TensorFlow model that matches the PPO structure
+from baselines3.twod_env import TwoDEnv
 from tf_exporter import rewrite_policy_net_header
 from utilities import load_config, export_training_info, InputMembers
 
@@ -27,13 +28,11 @@ class TFPolicy(tf.keras.Model):
         self.hidden_layers = hidden_layers
         self.policy_output_layer = tf.keras.layers.Softmax()  # tf.keras.layers.Dense(output_dim)
 
-        # Build the model with the provided hidden layers
-        self.dense_layers = hidden_layers
-
 
     def call(self, inputs):
         x = inputs
-        for layer in self.dense_layers:
+        for layer in self.hidden_layers:
+
             x = layer(x)
         return self.policy_output_layer(x)
 
@@ -51,23 +50,30 @@ def extract_torch_layers(module, input_dim):
     prev_dim = input_dim
     for sb3_layer in module:
         print(f"{sb3_layer = }")
-        if isinstance(sb3_layer, torch.nn.Linear):
+        if isinstance(sb3_layer, (torch.nn.Linear, torch.nn.modules.linear.Linear)):
             # Create a Dense layer for TensorFlow and append it to the hidden_layers list
             tf_dense_layer = tf.keras.layers.Dense(sb3_layer.out_features, activation=None)
             tf_dense_layer.build(input_shape=(None, prev_dim))  # Explicitly build the layer with correct input shape
+
+            # Transfer weights and biases from SB3 model to TensorFlow model
+            weights = sb3_layer.weight.detach().cpu().numpy().T  # Transpose to match TensorFlow layer format
+            bias = sb3_layer.bias.detach().cpu().numpy()
+            # print(f"{weights = }\n{bias = }")
+            tf_dense_layer.set_weights([weights, bias])
+
             prev_dim = tf_dense_layer.units  # Update the previous dimension to match the output size of this Dense layer
             layers.append(tf_dense_layer)
         elif isinstance(sb3_layer, torch.nn.Tanh):
             layers.append(tf.keras.layers.Activation("tanh"))
         elif isinstance(sb3_layer, torch.nn.ReLU):
             layers.append(tf.keras.layers.Activation("relu"))
-        if isinstance(sb3_layer, tf.keras.layers.Softmax):
+        elif isinstance(sb3_layer, tf.keras.layers.Softmax):
             # self.dense_layers.append(layer)
             pass
         elif isinstance(sb3_layer, torch.nn.Sequential) or \
                 isinstance(sb3_layer, torch.nn.ModuleList) or \
                 isinstance(sb3_layer, list):
-            layers.extend(extract_torch_layers(sb3_layer))
+            layers.extend(extract_torch_layers(sb3_layer, prev_dim))
         else:
             raise ValueError(f"Unhandled layer type: {type(sb3_layer)}")
     return layers
@@ -79,30 +85,18 @@ def sb3_to_tensorflow(sb3_model, env):
     # Initialize an empty list for the hidden layers
     hidden_layers = []
 
-    print(f"{sb3_model.policy = } \n {sb3_model.policy_class = }")
+    print(f"{input_dim = }\n{output_dim =}\n{sb3_model.policy = } \n {sb3_model.policy_class = }")
     # Extract the layers from SB3 model
     sb3_layers = sb3_model.policy.mlp_extractor.policy_net  # Feature Extractor policy network
     sb3_layers.append(sb3_model.policy.action_net)  # Actor network
     # print(f"{sb3_model.policy.action_net = }")
 
-    hidden_layers.append(extract_torch_layers(sb3_layers, input_dim))
+    hidden_layers.extend(extract_torch_layers(sb3_layers, input_dim))
 
 
     # construct the softmax output layer
     # Initialize TFPolicy with the dynamic hidden layers list
     tf_model = TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=hidden_layers)
-
-    # Transfer weights from SB3 model to TensorFlow model
-    for i, sb3_layer in enumerate(sb3_layers):
-        print(f"layer {i}: {sb3_layer}")
-        if isinstance(sb3_layer, torch.nn.Linear):
-            # Transfer weights and biases
-            weights = sb3_layer.weight.detach().cpu().numpy().T  # Transpose to match TensorFlow layer format
-            bias = sb3_layer.bias.detach().cpu().numpy()
-            # print(f"{weights = }\n{bias = }")
-            tf_model.dense_layers[i].set_weights([weights, bias])
-            # print(f"tf_model layer {i}: {tf_model.dense_layers[i] = }."
-            # f"{tf_model.dense_layers[i].get_weights() = }")
 
     return tf_model
 
@@ -151,7 +145,7 @@ def tf_to_tflite(tf_model, export_path, training_info_export_path):
 
 def sb3_to_tflite_pipeline(relative_model_path):
     model = PPO.load(relative_model_path, print_system_info=True)
-    env = make_vec_env(SimpleBaseEnv, n_envs=1, env_kwargs=dict())
+    env = make_vec_env(TwoDEnv, n_envs=1, env_kwargs=dict())
 
     tf_model = sb3_to_tensorflow(model, env)
 

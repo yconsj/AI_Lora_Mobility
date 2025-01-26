@@ -16,14 +16,13 @@
 package flora.RLNodes.Nodes;
 
 import inet.node.contract.INetworkNode;
-import inet.RL.MobilityModules.AdvancedRLMobility.AdvancedRLMobility;
 import inet.mobility.static.StationaryMobility;
 import inet.networklayer.common.InterfaceTable;
 import inet.networklayer.contract.INetworkLayer;
 import inet.linklayer.loopback.LoopbackInterface;
 import flora.LoRa.LoRaGWNic;
 import flora.LoRaApp.SimpleLoRaApp;
-import flora.RLNodes.CustomLoRaApps.MobileGatewayLoRaApp.MobileGatewayLoRaApp;
+import flora.LoRa.PacketForwarder;
 import inet.linklayer.contract.IEthernetInterface;
 import inet.applications.contract.IApp;
 import inet.transportlayer.contract.IUdp;
@@ -31,9 +30,9 @@ import inet.networklayer.contract.IRoutingTable;
 import inet.common.MessageDispatcher;
 import inet.linklayer.ethernet.contract.IEthernetLayer;
 import inet.protocolelement.contract.IProtocolLayer;
-import flora.RLNodes.CustomLoRaGWRadio.CustomLoRaGWRadio;
+import flora.RLNodes.CustomLoRaApps.StationaryGatewayLoRaApp.StationaryGatewayLoRaApp;
 
-module MobileLoRaGW like INetworkNode
+module StationaryLoRaGW like INetworkNode
 {
     parameters:
         @networkNode();
@@ -50,7 +49,7 @@ module MobileLoRaGW like INetworkNode
         int numUdpApps = default(0);
         bool hasUdp = default(firstAvailableOrEmpty("Udp") != "");
         string udpType = default(firstAvailableOrEmpty("UDP"));
-        
+
         LoRaGWNic.radio.antenna.mobilityModule = default("^.^.^.mobility");
 
         *.mobilityModule = default(exists(mobility) ? absPath(".mobility") : "");
@@ -88,13 +87,13 @@ module MobileLoRaGW like INetworkNode
         interfaceTable: InterfaceTable {
             @display("p=135.36,69.936005");
         }
-        mobility: AdvancedRLMobility {
+        mobility: StationaryMobility {
             @display("p=135.36,199.656");
         }
         LoRaGWNic: LoRaGWNic {
             @display("p=626.04004,94.75201");
         }
-        mobileGatewayLoRaApp: MobileGatewayLoRaApp {
+        stationaryGatewayLoRaApp: StationaryGatewayLoRaApp {
             @display("p=394.80002,69.936005;is=vl");
         }
         eth[sizeof(ethg)]: <default("EthernetInterface")> like IEthernetInterface {
@@ -124,10 +123,10 @@ module MobileLoRaGW like INetworkNode
         at.out++ --> udp.appIn;
         at.in++ <-- udp.appOut;
 
-        mobileGatewayLoRaApp.lowerLayerOut --> LoRaGWNic.upperLayerIn;
-        LoRaGWNic.upperLayerOut --> mobileGatewayLoRaApp.lowerLayerIn;
-        mobileGatewayLoRaApp.socketOut --> at.in++;
-        mobileGatewayLoRaApp.socketIn <-- at.out++;
+        stationaryGatewayLoRaApp.lowerLayerOut --> LoRaGWNic.upperLayerIn;
+        LoRaGWNic.upperLayerOut --> stationaryGatewayLoRaApp.lowerLayerIn;
+        stationaryGatewayLoRaApp.socketOut --> at.in++;
+        stationaryGatewayLoRaApp.socketIn <-- at.out++;
 
         for i=0..sizeof(ethg)-1 {
             ethg[i] <--> { @display("m=s"); } <--> eth[i].phys;
