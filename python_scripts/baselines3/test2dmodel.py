@@ -5,7 +5,7 @@ from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize
 
 from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap, \
-    plot_batch_episode_performance
+    plot_batch_episode_performance, plot_relative_positions
 from twod_env import TwoDEnv, FrameSkip, jains_fairness_index
 from stable_baselines3.common.env_util import make_vec_env
 
@@ -91,6 +91,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             all_fairness.append(final_fairness)
 
             if i + 1 == n_episodes:  # only do these plots for the last episode in the batch.
+                plot_relative_positions(log_file)
                 plot_mobile_gateway_with_nodes_advanced(log_file)
                 plot_heatmap(log_file=log_file)
     if do_logging:
