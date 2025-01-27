@@ -151,6 +151,11 @@ def plot_all(data_dict):
 
     # Calculate Mobile Gateway Packet Delivery Rate (PDR) as Total Received / Total Sent
     pdr_mobile = [received / sent if sent > 0 else 0 for received, sent in zip(packet_counts_mobile, total_packets_sent)]
+    fairness_mobile = [
+        jains_fairness_index(received, sent) for received, sent in
+        zip(packets_received_mobile, packets_sent_per_node)
+    ]
+
 
     # Calculate total packets received by all stationary gateways at each timestamp
     stationary_gw_reception_times = data_dict["stationary_gw_data"]["stationary_gateway_reception_times"]
@@ -191,12 +196,17 @@ def plot_all(data_dict):
         pdr_stationary[i] = max(pdr_stationary[i], pdr_stationary[i + 1])
     for i in range(len(fairness_stationary) - 1):  # Avoid going out of bounds
         fairness_stationary[i] = max(fairness_stationary[i], fairness_stationary[i + 1])
+    for i in range(len(fairness_mobile) - 1):  # Avoid going out of bounds
+        fairness_mobile[i] = max(fairness_mobile[i], fairness_mobile[i + 1])
 
     # Plot the Packet Delivery Rate (PDR)
 
     # Plot the Packet Delivery Rate (PDR) for the subsampled points
     # Plot the Mobile Gateway PDR
     plt.plot(timestamps[:len(pdr_mobile)], pdr_mobile, label="Mobile GW PDR", color="blue", linestyle="--")
+    # Plot the Stationary Gateway Fairness
+    plt.plot(timestamps[:len(fairness_mobile)], fairness_mobile, label="Mobile GW Fairness", color="blue", linestyle=":")
+
 
     # Plot the Stationary Gateway PDR
     plt.plot(timestamps[:len(pdr_stationary)], pdr_stationary, label="Stationary GW PDR", color="green", linestyle="--")
