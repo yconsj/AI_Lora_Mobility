@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+import random
 
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize
@@ -10,7 +11,7 @@ from twod_env import TwoDEnv, FrameSkip, jains_fairness_index
 from stable_baselines3.common.env_util import make_vec_env
 
 
-def get_action_probabilities(input_state, input_model):
+def sb3_get_action_probabilities(input_state, input_model):
     obs = input_model.policy.obs_to_tensor(input_state)[0]
     dis = input_model.policy.get_distribution(obs)
     probabilities = dis.distribution.probs
@@ -112,6 +113,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
 
 
 if __name__ == '__main__':
+    random.seed(0)
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
     rendering_mode = None  # "cv2"

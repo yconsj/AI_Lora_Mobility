@@ -54,7 +54,7 @@ class CustomPolicyNetwork(BaseFeaturesExtractor):
             residual = x  # Save input for skip connection
             x = layer(x)
             x = self.activation(x)
-            #x = x + residual  # Add residual (skip connection)
+            x = x + residual  # Add residual (skip connection)
 
         # Final output layer
         x = self.output_layer(x)
@@ -96,7 +96,7 @@ class TensorboardCallback(BaseCallback):
 def main():
     do_vecnorm = False
 
-    envs = 16  # TODO: increase again
+    envs = 16
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
     gamma = 0.85  # base: 0.85
     ent_coef = 0.005  # base: 0.005
@@ -111,10 +111,10 @@ def main():
                                  verbose=1, best_model_save_path="stable-model-2d-best")
 
     policy_kwargs = dict(
-        #features_extractor_class=None,#CustomPolicyNetwork,
-        #features_extractor_kwargs=dict(features_dim=32, num_blocks=n_blocks),
+        features_extractor_class=CustomPolicyNetwork,
+        features_extractor_kwargs=dict(features_dim=64, num_blocks=n_blocks),
         share_features_extractor=True,
-        net_arch=[64, 64, 64]
+        #net_arch=[64, 64, 64]
     )
     if True:
         model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=ent_coef,
@@ -144,7 +144,7 @@ def main():
     tb_log_name = f"{model_type}_ept_sm;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
-    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
+    model = model.learn(6_000_000, callback=[eval_callback, TensorboardCallback()],
                         tb_log_name=tb_log_name)
 
     print("Learning finished")
