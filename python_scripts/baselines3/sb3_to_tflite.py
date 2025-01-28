@@ -78,32 +78,6 @@ def extract_torch_layers(module, input_dim):
             # Handle nested structures
             sub_layers, prev_dim = extract_torch_layers(layer, prev_dim)
             layers.extend(sub_layers)
-        elif type(layer).__name__ == "CustomPolicyNetwork":
-            # input layer
-            sb3_input_layer = layer.input_layer
-
-            tf_layer = tf.keras.layers.Dense(sb3_input_layer.out_features, activation=None) # (tf.keras.layers.Input(shape=(prev_dim,)))
-            tf_layer.build(input_shape=(None, prev_dim))
-            print(f"{tf_layer = }")
-            tf_layer.set_weights([sb3_input_layer.weight.detach().cpu().numpy().T, sb3_input_layer.bias.detach().cpu().numpy()])
-            prev_dim = sb3_input_layer.out_features
-            layers.append(tf_layer)
-            # residual block:
-            # Process residual blocks
-            for sb3_residual_block in layer.residual_blocks:
-                print(f"{sb3_residual_block = }")
-                # Define the residual block layer
-                residual_block = tf.keras.layers.Dense(sb3_residual_block.out_features, activation=None) # (tf.keras.layers.Input(shape=(prev_dim,)))  # "relu"
-                residual_block.build(input_shape=(None, prev_dim))
-                # Set weights for the residual block
-                residual_block.set_weights([sb3_residual_block.weight.detach().cpu().numpy().T, sb3_residual_block.bias.detach().cpu().numpy()])
-                print(f"{residual_block = }")
-                # Add residual connection
-                out = tf.keras.layers.add([tf_layer, residual_block]) #()(])  # Add the residual connection
-                out = tf.keras.layers.ReLU()(out)  # Apply ReLU to the output after the addition
-                layers.append(out)  # Append the result to the list
-                tf_layer = out  # Update the reference to input_dense for next layers
-
         else:
             raise ValueError(f"Unhandled layer type: {type(layer)}")
 
@@ -117,9 +91,10 @@ def sb3_to_tensorflow(sb3_model, env) -> TFPolicy:
     input_dim = env.observation_space.shape[0]
     output_dim = env.action_space.n
 
+    print(f"{sb3_model.policy = }")
     # Extract layers from SB3 model
     sb3_layers = [
-        sb3_model.policy.features_extractor,
+        sb3_model.policy.mlp_extractor.policy_net,
         sb3_model.policy.action_net
     ]
     tf_layers, _ = extract_torch_layers(sb3_layers, input_dim)
@@ -184,7 +159,7 @@ def test_sb3_tf_model_conversion(sb3_model, tf_model: TFPolicy):
         tf_output = tf_model.call(tf.convert_to_tensor(random_input)).numpy().flatten()
         if not np.allclose(sb3_output, tf_output, atol=tolerance["abs"], rtol=tolerance["rel"]):
             print(f"Mismatch detected!\nSB3: {sb3_output}\nTF: {tf_output}")
-
+    print("Completed test")
 
 def sb3_to_tflite_pipeline(relative_model_path):
     model = PPO.load(relative_model_path, print_system_info=True)
@@ -194,12 +169,12 @@ def sb3_to_tflite_pipeline(relative_model_path):
     test_sb3_tf_model_conversion(sb3_model=model, tf_model=tf_model)
 
     config = load_config("config.json")
-    # gen_model = config['model_path']
-    # export_model_path = gen_model
-    # training_info_export_path = config["training_info_path"]
-    # tf_to_tflite(tf_model, export_model_path, training_info_export_path)
+    export_model_path = config['model_path']
+    #training_info_export_path = config["training_info_path"]
+    #tf_to_tflite(tf_model, export_model_path, training_info_export_path)
 
 
 if __name__ == '__main__':
     random.seed(0)
     sb3_to_tflite_pipeline("stable-model-2d-best/best_model")
+
