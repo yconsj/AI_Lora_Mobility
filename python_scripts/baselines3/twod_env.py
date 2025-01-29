@@ -150,10 +150,8 @@ class TwoDEnv(gym.Env):
         self.min_send_interval = 1500
         self.max_send_interval = 3000
         self.base_send_interval = random.choice([1500, 1750, 2000])  # 1500  #  # TODO: try with random send intervals?
-        self.send_intervals = [ random.randint(self.min_send_interval, self.max_send_interval),
-                                random.randint(self.min_send_interval, self.max_send_interval),
-                                random.randint(self.min_send_interval, self.max_send_interval),
-                                random.randint(self.min_send_interval, self.max_send_interval)]
+        self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
+                               self.base_send_interval * 2]
         random.shuffle(self.send_intervals)
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
 
@@ -267,10 +265,8 @@ class TwoDEnv(gym.Env):
         positions = self.get_random_node_positions(num_positions=len(self.nodes),
                                                    min_dist=2*self.node_max_transmission_distance)
         self.base_send_interval = random.choice([1500, 1750, 2000])  # 1500  #  # TODO: try with random send intervals?
-        self.send_intervals = [ random.randint(self.min_send_interval, self.max_send_interval),
-                        random.randint(self.min_send_interval, self.max_send_interval),
-                        random.randint(self.min_send_interval, self.max_send_interval),
-                        random.randint(self.min_send_interval, self.max_send_interval)]
+        self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
+                               self.base_send_interval * 2]
         random.shuffle(self.send_intervals)
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
         for i in range(len(self.nodes)):
