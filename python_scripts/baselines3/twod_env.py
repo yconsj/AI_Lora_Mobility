@@ -125,9 +125,6 @@ class TwoDEnv(gym.Env):
             (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
         ]
 
-
-        self.min_send_interval = 1500
-        self.max_send_interval = 3000
         self.base_send_interval = random.choice([1500, 1750, 2000])  # 1500  #  # TODO: try with random send intervals?
         self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
                                self.base_send_interval * 2]
@@ -242,7 +239,7 @@ class TwoDEnv(gym.Env):
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
         positions = self.get_random_node_positions(num_positions=len(self.nodes),
                                                    min_dist=2*self.node_max_transmission_distance)
-        self.base_send_interval = random.choice([1500, 1750, 2000])  # 1500  #  # TODO: try with random send intervals?
+        self.base_send_interval = random.choice([1500, 1750, 2000])
         self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
                                self.base_send_interval * 2]
         random.shuffle(self.send_intervals)

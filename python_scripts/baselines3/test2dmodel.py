@@ -7,7 +7,6 @@ from stable_baselines3 import PPO, DQN
 from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap, \
     plot_batch_episode_performance, plot_relative_positions
 from twod_env import TwoDEnv, FrameSkip
-from utilities import jains_fairness_index
 from stable_baselines3.common.env_util import make_vec_env
 
 
@@ -27,8 +26,10 @@ def make_skipped_env(do_logging, log_file, input_render_mode):
 
 
 def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
-    all_pdr = []  # To store PDR values for each episode
-    all_fairness = []  # To store fairness values for each episode
+    # Store the number of packets received by gw and sent, for each node, at the final state of each episode.
+    all_final_receives = []
+    all_final_sents = []
+
 
     test_best = True
     if test_best:
@@ -85,19 +86,16 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
                     packets_missed_per_node[i].append(sent)
             final_receiveds = [packets_received_per_node[i][-1] for i in range(len(packets_received_per_node))]
             final_sents = [packets_sent_per_node[i][-1] for i in range(len(packets_sent_per_node))]
-            final_misseds = [packets_missed_per_node[i][-1] for i in range(len(packets_missed_per_node))]
-            final_pdr = sum(final_receiveds) / sum(final_sents)
-            all_pdr.append(final_pdr)
-            final_fairness = jains_fairness_index(final_receiveds, final_sents)
-            #print(f"{final_misseds=}\n{final_receiveds=}\n{final_sents=}\n{final_pdr=}\n{final_fairness=}")
-            all_fairness.append(final_fairness)
+            # final_misseds = [packets_missed_per_node[i][-1] for i in range(len(packets_missed_per_node))]
+            all_final_receives.append(final_receiveds)
+            all_final_sents.append(final_sents)
 
             if ep_idx + 1 == n_episodes:  # only do these plots for the last episode in the batch.
                 plot_relative_positions(log_file)
                 plot_mobile_gateway_with_nodes_advanced(log_file)
                 plot_heatmap(log_file=log_file)
     if do_logging:
-        plot_batch_episode_performance(all_pdr, all_fairness)
+        plot_batch_episode_performance(all_final_receives, all_final_sents)
 
 
 if __name__ == '__main__':

@@ -3,6 +3,8 @@ from matplotlib import lines
 import matplotlib.pyplot as plt
 import numpy as np
 
+from utilities import jains_fairness_index
+
 
 def plot_relative_positions(log_file):
     with open(log_file, 'r') as file:
@@ -24,7 +26,7 @@ def plot_relative_positions(log_file):
     # Colors for different nodes
     node_colors = ["tab:red", "xkcd:bluish", "xkcd:dark grass green", "tab:orange"]
 
-        # Initialize figure with 2 subplots
+    # Initialize figure with 2 subplots
     fig, axs = plt.subplots(2, 2, figsize=(16, 8))  # Adjusted figure size for better spacing
 
     # Flatten the 2x2 array of axes for easier indexing
@@ -34,7 +36,7 @@ def plot_relative_positions(log_file):
     # Plot distances for each node
     for idx, color in enumerate(node_colors):
         axs[idx].plot(timestamps, [dist[idx] for dist in node_distances], label=f"Distance to Node {idx}",
-                    color=color, linestyle="-", linewidth=1.5, alpha=0.9)
+                      color=color, linestyle="-", linewidth=1.5, alpha=0.9)
 
     # Plot transmission times for each node (vertical lines)
     for i in range(len(transmission_occureds)):
@@ -68,11 +70,9 @@ def plot_relative_positions(log_file):
     plt.tight_layout(pad=3)  # Add padding to prevent overlap
     plt.subplots_adjust(bottom=0.15)  # Ensure space at the bottom for legends
     plt.show()
-def plot_mobile_gateway_with_nodes_advanced(log_file):
-    import json
-    import matplotlib.pyplot as plt
-    from matplotlib import lines
 
+
+def plot_mobile_gateway_with_nodes_advanced(log_file):
     # Load log data
     with open(log_file, 'r') as file:
         data = json.load(file)
@@ -132,6 +132,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.25)  # Add extra space at the bottom for the legend
     plt.show()
+
 
 def create_heatmap(gw_positions, grid_size_x, grid_size_y):
     """
@@ -198,10 +199,16 @@ def plot_heatmap(log_file):
     _plot_heatmap(heatmap_grid, node_positions)
 
 
-def plot_batch_episode_performance(all_pdr, all_fairness):
+def plot_batch_episode_performance(all_final_receives: list[list[int]], all_final_sents: list[list[int]]):
+
     # Plot the performance of the current batch of episodes
     plt.figure(figsize=(8, 6))
+    assert len(all_final_receives) == len(all_final_sents), f"{len(all_final_receives) =} and {len(all_final_sents) =} must be equal."
 
+    all_pdr = [sum(final_receives) / sum(final_sents)
+               for final_receives, final_sents in zip(all_final_receives, all_final_sents)]
+    all_fairness = [jains_fairness_index(final_receives, final_sents)
+                    for final_receives, final_sents in zip(all_final_receives, all_final_sents)]
     n_episodes = min(len(all_pdr), len(all_fairness))
 
     # Plot PDR and fairness on the same y-axis
@@ -235,8 +242,45 @@ def plot_batch_episode_performance(all_pdr, all_fairness):
     plt.tight_layout()
     plt.show()  # Show the box plot
 
+    # Third plot: Bar plot for PDR & Fairness per node
+    num_nodes = len(all_final_receives[0])
+    pdr_per_node = [sum(received) / sum(sent) if sum(sent) > 0 else 0
+                    for received, sent in zip(zip(*all_final_receives), zip(*all_final_sents))]
+    pdr_std_per_node = [np.std([r / s if s > 0 else 0 for r, s in zip(received, sent)])
+                        for received, sent in zip(zip(*all_final_receives), zip(*all_final_sents))]
+    overall_pdr = np.mean(all_pdr)
+    overall_fairness = np.mean(all_fairness)
 
-if __name__ == '__main__':
-    # Parameters
-    log_file = "env_log.json"
-    plot_heatmap(log_file)
+    fig3, ax3 = plt.subplots(figsize=(8, 5))
+    bar_width = 0.4
+    x_indices = np.arange(num_nodes)
+
+    bars_pdr = ax3.bar(x_indices - bar_width / 2, np.array(pdr_per_node) * 100,
+                       yerr=np.array(pdr_std_per_node) * 100, capsize=5,
+                       color='steelblue', alpha=0.7, width=bar_width, label="PDR")
+
+    # Annotate bars
+    for bar, pdr in zip(bars_pdr, pdr_per_node):
+        height = bar.get_height()
+        ax3.text(bar.get_x() + bar.get_width() / 2, height + 2, f"{pdr * 100:.1f}%",
+                 ha="center", fontsize=10, fontweight="bold")
+
+    ax3.set_xticks(x_indices)
+    ax3.set_xticklabels([f"Node {i + 1}" for i in range(num_nodes)])
+
+    ax3.set_xlabel("Nodes")
+    ax3.set_ylabel("Percentage (%)")
+    ax3.set_title("PDR for Each Node")
+    ax3.set_ylim(0, 100)
+    ax3.grid(axis="y", linestyle="--", alpha=0.6)
+
+    # Display Overall PDR & Jain's Fairness
+    ax3.text(num_nodes - 0.5, 80, f"Jain's Fairness Index = {overall_fairness:.2f}",
+             color="purple", fontsize=12, fontweight="bold")
+    ax3.text(num_nodes - 0.5, 70, f"Overall PDR = {overall_pdr * 100:.2f}%",
+             fontsize=12, fontweight="bold")
+
+    ax3.legend()
+    plt.tight_layout()
+    plt.show()
+
