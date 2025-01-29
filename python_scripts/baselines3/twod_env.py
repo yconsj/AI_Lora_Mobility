@@ -389,10 +389,6 @@ class TwoDEnv(gym.Env):
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
 
-        penalty_immunity_period = 20.0
-        if elapsed_time < penalty_immunity_period:
-            reward = max(0.0, reward)
-
         # if distance < self.node_max_transmission_distance:
         #    reward *= 2
         return reward
