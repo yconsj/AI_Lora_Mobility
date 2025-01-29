@@ -15,7 +15,6 @@ import inet.node.inet.StandardHost;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.ethernet.Eth1G;
 import inet.RL.StateLogger.StateLogger;
-import flora.RLNodes.PacketCounter.PacketCounter;
 
 @namespace(inet);
 
@@ -37,8 +36,7 @@ network AdvancedCaseNetwork
             @display("p=157,238;is=s");
         };
         StationaryLoraGw[numberOfStationaryGateways] : StationaryLoRaGW;
-        stateLogger : StateLogger;	
-        //packetCounter : PacketCounter;
+        stateLogger : StateLogger;
         LoRaMedium: CustomLoRaMedium { // LoRaMedium
             @display("p=309,102");
         }

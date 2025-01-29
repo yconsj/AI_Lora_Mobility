@@ -2,7 +2,7 @@
 # OMNeT++/OMNEST Makefile for $(LIB_PREFIX)tflite-micro-arduino-examples
 #
 # This file was generated with the command:
-#  opp_makemake --make-lib -f --deep -O out -I. -IC:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility/tflite-micro-arduino-examples/src/third_party/cmsis/CMSIS/Core/Include -Lout/$$\(CONFIGNAME\)/src -d src -X.
+#  opp_makemake --make-lib -f --deep -O out -I. -Isrc/third_party/cmsis/CMSIS/Core/Include -Lout/$$\(CONFIGNAME\)/src -d src -X.
 #
 
 # Name of target to be created (-o option)

@@ -26,7 +26,6 @@
 #include "tensorflow/lite/schema/schema_generated.h"
 
 #include "../../MobilityModules/AdvancedRLMobility/AdvancedRLMobility.h"
-#include "inet/RL/InputState.h"
 #include "inet/RL/include/json.hpp"
 #include "inet/RL/StateLogger/StateLogger.h"
 #include "inet/common/InitStages.h"
@@ -50,7 +49,6 @@
 #include <random>  // For random sampling
 
 #include "../../MobilityModules/AdvancedRLMobility/AdvancedRLMobility.h"
-#include "inet/RL/InputState.h"
 #include "inet/RL/modelfiles/policy_net_model.h"
 #include "inet/RL/StateLogger/StateLogger.h"  // Include the StateLogger header
 
@@ -71,7 +69,6 @@ protected:
     // The following redefined virtual function holds the algorithm.
     virtual void initialize(int stage) override;
     int numInitStages() const override { return NUM_INIT_STAGES; }
-
 
 private:
     virtual void nodeValueInitialization();

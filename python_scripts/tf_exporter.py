@@ -48,7 +48,7 @@ def tf_export(concrete_func, export_path, episode_num):
     #     print("xxd command not found. Please ensure WSL is installed and xxd is available.")
 
 
-def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length, episode_num):
+def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length):
     # TODO: EPISODE_NUM should be written in some other file, since Header is only parsed at compile-time, meaning EPISODE_NUM won't be updated during training
     config = load_config("config.json")
 

@@ -21,9 +21,9 @@
 #include <algorithm>
 
 
-#include "inet/RL/InputState.h"
 #include "inet/RL/include/json.hpp"
 #include "inet/linklayer/common/MacAddress.h"
+#include "inet/common/geometry/common/Coord.h"
 
 using json = nlohmann::json;
 

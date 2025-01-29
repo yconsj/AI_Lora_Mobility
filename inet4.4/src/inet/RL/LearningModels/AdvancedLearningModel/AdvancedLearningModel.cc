@@ -73,7 +73,6 @@ void AdvancedLearningModel::initialize(int stage)
 
         EV << "initializing AdvancedLearningModel " << endl;
 
-        // get rewards from training_info_file
         // Load the model data from a file
         model_data = ReadModelFromFile(model_file_path);
 
@@ -99,7 +98,7 @@ void AdvancedLearningModel::initialize(int stage)
         // Allocate memory from the tensor_arena for the model's tensors.
         TfLiteStatus allocate_status = interpreter->AllocateTensors();
         if (allocate_status != kTfLiteOk) {
-          throw cRuntimeError("AdvancedLearningModel.cc: AllocateTensors() failed");
+          throw cRuntimeError("AdvancedLearningModel.cc: AllocateTensors() failed with error code: " );
         }
 
         // Retrieve input tensor
@@ -343,7 +342,8 @@ int AdvancedLearningModel::selectOutputIndex(float random_choice_probability, co
     int selected_index = -1;
 
     if (deterministic) {
-        EV << "model_output->data.f=" << model_output->data.f << endl;
+        float output = *(model_output->data.f);
+        EV << "model_output->data.f=" << output << endl;
         // Deterministic mode: choose the index with the highest weight
         selected_index = std::distance(model_output->data.f,
                           std::max_element(model_output->data.f, model_output->data.f + num_outputs));
