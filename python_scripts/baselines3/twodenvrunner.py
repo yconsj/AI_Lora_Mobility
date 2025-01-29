@@ -106,14 +106,14 @@ def main():
     if do_vecnorm:
         env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
-    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=100, min_evals=100, verbose=1)
+    stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4000, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
 
     policy_kwargs = dict(
         #features_extractor_class=CustomPolicyNetwork,
         #features_extractor_kwargs=dict(features_dim=64, num_blocks=n_blocks),
-        #activation_fn=nn.ReLU,
+        activation_fn=nn.ReLU,
         share_features_extractor=True,
         net_arch=[64, 64, 64]
     )
@@ -145,7 +145,7 @@ def main():
     tb_log_name = f"{model_type}_ept_sm;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
-    model = model.learn(2_000_000, callback=[eval_callback, TensorboardCallback()],
+    model = model.learn(10_000_000, callback=[eval_callback, TensorboardCallback()],
                         tb_log_name=tb_log_name)
 
     print("Learning finished")

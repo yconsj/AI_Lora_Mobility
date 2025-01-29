@@ -98,7 +98,6 @@ def schedule_first_packets(send_intervals, initial_delay=0):
     min_value_fp = min(first_packets)
     first_packets = [(fp_t - min_value_fp) + initial_delay for fp_t in first_packets]
     random.shuffle(first_packets)
-    assert len(first_packets) == len(send_intervals)
     return first_packets
 
 
