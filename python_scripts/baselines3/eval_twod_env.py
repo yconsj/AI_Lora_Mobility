@@ -25,6 +25,7 @@ class eval_twod_env(TwoDEnv):
         self.prev_pos = self.pos
         self.total_misses = 0
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
+        self.nodes[2].transmission_model.probability_modifier = 0 # set node 3 to have 0 prob of success transmit
         for i in range(len(self.nodes)):
             self.nodes[i].pos = self.positions[i]
             self.nodes[i].set_send_interval(self.send_intervals[i])
