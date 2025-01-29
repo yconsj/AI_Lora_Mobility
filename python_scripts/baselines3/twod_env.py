@@ -102,16 +102,14 @@ def schedule_first_packets(send_intervals, initial_delay=0):
 
 
 class TwoDEnv(gym.Env):
-    def __init__(self, render_mode="none", timeskip=1, action_history_length=3, do_logging=False, log_file=None,
+    def __init__(self, render_mode="none", do_logging=False, log_file=None,
                  use_deterministic_transmissions=False):
         super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
         self.num_discrete_actions = 5
-        self.action_space = spaces.Discrete(self.num_discrete_actions, start=0)
-        self.timeskip = timeskip
+        self.action_space = spaces.Discrete(self.num_discrete_actions, start=0) 
 
-        self.action_history_length = action_history_length
         self.recent_packets_length = 1
 
         self.render_mode = render_mode
@@ -138,7 +136,6 @@ class TwoDEnv(gym.Env):
         self.max_distance_y = int(self.max_distance)
         self.max_cross_distance = math.dist((0, 0), (self.max_distance_x, self.max_distance_y))
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
-        self.prev_pos = self.pos
         self.steps = 0
         self.ploss_scale = 50  # adjusts the dropoff of transmission probability by distance
         self.node_max_transmission_distance = 40
@@ -159,13 +156,8 @@ class TwoDEnv(gym.Env):
                                 random.randint(self.min_send_interval, self.max_send_interval)]
         random.shuffle(self.send_intervals)
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
-        # print(f"{self.first_packets =}")
-        # [int(max(self.send_intervals) * fraction / len(self.send_intervals))
-        #                  for fraction in range(1, len(self.send_intervals) + 1)]
-        # example of above code can be seen as:
-        # if send_intervals is [2000,2000,4000,4000], then self.first_packets will be
-        # [2000 * 1/4, 2000 * 2/4, 2000 * 3/4, 2000*4/4]
-        self.send_std = 5  # used to be 5  # TODO: Try with higher deviation?
+
+        self.send_std = 5 
 
         # random.shuffle(self.first_packets)
         self.nodes = [
@@ -191,7 +183,6 @@ class TwoDEnv(gym.Env):
         self.fairness = 0.0
         self.received_per_node = [0] * len(self.nodes)
         self.misses_per_node = [0] * len(self.nodes)
-        self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
         # Observation_space =
         #                     expected time until sending                      |n
@@ -270,9 +261,7 @@ class TwoDEnv(gym.Env):
         return grid
 
     def reset(self, seed=None, options=None):
-        self.prev_actions = deque([0] * self.action_history_length, maxlen=self.action_history_length)
         self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
-        self.prev_pos = self.pos
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
         positions = self.get_random_node_positions(num_positions=len(self.nodes),
@@ -314,10 +303,6 @@ class TwoDEnv(gym.Env):
 
     def get_state(self):
         # One-hot encode and normalize previous actions
-        onehot_encoded_actions = []
-        for action in self.prev_actions:
-            onehot = [1.0 if i == action else 0.0 for i in range(self.num_discrete_actions)]
-            onehot_encoded_actions.extend(onehot)
 
         onehot_encoded_recent_packets = []
         for recent_packet in self.recent_packets:
@@ -326,7 +311,6 @@ class TwoDEnv(gym.Env):
             onehot_encoded_recent_packets.extend(onehot)
 
         # Other normalized components
-        normalized_send_time = [(node.time_of_next_packet - self.steps) / self.max_steps for node in self.nodes]
         normalized_expected_send_time = [(expected_time - self.steps) / self.max_steps for expected_time in
                                          self.expected_send_time]
 
@@ -339,39 +323,13 @@ class TwoDEnv(gym.Env):
             calculate_direction(*self.pos, *node.pos) / 360
             for node in self.nodes
         ]
-
-        normalized_elapsed_times = [
-            elapsed_time / self.max_steps
-            for elapsed_time in self.elapsed_times
-        ]
-        normalized_send_intervals = [
-            send_interval / max(self.send_intervals)
-            for send_interval in self.send_intervals
-        ]
-        normalized_send_intervals_steps = [
-            send_interval / self.max_steps
-            for send_interval in self.send_intervals
-        ]
-        normalized_received_packets = [
-            num_received_packets / self.expected_max_packets_sent
-            for num_received_packets in self.received_per_node
-        ]
-
         # Combine all normalized and one-hot encoded components into the state
         state = (
-            # onehot_encoded_actions +
-            # [self.pos[0] / self.max_distance_x, self.pos[1] / self.max_distance_y] +
-            # [self.steps / self.max_steps] +
                 normalized_expected_send_time +
-                # normalized_send_time +
                 normalized_node_distances +
                 normalized_node_directions +
-                # normalized_received_packets +
                 onehot_encoded_recent_packets
-        )
-        # print(f"{normalized_expected_send_time=}\n{normalized_node_distances=}\n{normalized_node_directions=}\n"
-        #      f"{onehot_encoded_recent_packets=}")
-        # print(f"{len(state)=}\n{state=}")
+                )
         return state
 
     def get_packet_reward(self, sending_node: 'Node'):
@@ -487,7 +445,6 @@ class TwoDEnv(gym.Env):
                 sent_per_node = [self.received_per_node[i] + self.misses_per_node[i]
                                  for i in range(len(self.misses_per_node))]
                 self.fairness = jains_fairness_index(self.received_per_node, sent_per_node)
-                # reward += self.fairness * self.fairness_reward  # TODO: Disable this
             elif received == PACKET_STATUS.LOST:
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
@@ -504,9 +461,6 @@ class TwoDEnv(gym.Env):
         done = truncated or terminated
         self.total_reward += reward
         state = self.get_state()
-
-        if self.steps % self.timeskip == 0:
-            self.prev_actions.append(action)
         info = {'total_received': self.total_received,
                 'total_misses': self.total_misses,
                 'fairness': self.fairness}
