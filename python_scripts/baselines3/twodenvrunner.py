@@ -113,7 +113,7 @@ def main():
     policy_kwargs = dict(
         #features_extractor_class=CustomPolicyNetwork,
         #features_extractor_kwargs=dict(features_dim=64, num_blocks=n_blocks),
-        activation_fn=nn.ReLU,
+        #activation_fn=nn.ReLU,
         share_features_extractor=True,
         net_arch=[64, 64, 64]
     )
