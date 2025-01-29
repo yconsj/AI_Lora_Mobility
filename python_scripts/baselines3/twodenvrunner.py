@@ -7,7 +7,7 @@ from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement, BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from twod_env import TwoDEnv, FrameSkip
 
@@ -20,7 +20,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 def make_skipped_env():
     time_skip = 10
     # TODO: use_deterministic_transmissions=False
-    env = TwoDEnv(render_mode="none", timeskip=time_skip, use_deterministic_transmissions=False)
+    env = TwoDEnv(render_mode="none", use_deterministic_transmissions=False)
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
@@ -94,7 +94,6 @@ class TensorboardCallback(BaseCallback):
 
 
 def main():
-    do_vecnorm = False
 
     envs = 16
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
@@ -103,8 +102,6 @@ def main():
     learning_rate = 1e-4  # base: 6e-5
 
     n_blocks = 3  # # base: 2
-    if do_vecnorm:
-        env = VecNormalize(env, gamma=gamma, norm_obs=True, norm_reward=True)  # TODO: this
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=100, verbose=1)
     eval_callback = EvalCallback(env, eval_freq=4000, callback_after_eval=stop_train_callback,
@@ -147,8 +144,6 @@ def main():
 
     print("Learning finished")
     model.save("stable-model")
-    if do_vecnorm:
-        env.save("model_normalization_stats")
 
 
 if __name__ == '__main__':

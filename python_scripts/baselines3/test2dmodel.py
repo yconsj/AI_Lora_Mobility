@@ -3,7 +3,6 @@ import multiprocessing
 import random
 
 from stable_baselines3 import PPO, DQN
-from stable_baselines3.common.vec_env import VecNormalize
 
 from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap, \
     plot_batch_episode_performance, plot_relative_positions
@@ -22,7 +21,7 @@ def sb3_get_action_probabilities(input_state, input_model):
 
 def make_skipped_env(do_logging, log_file, input_render_mode):
     time_skip = 10
-    env = TwoDEnv(render_mode=input_render_mode, timeskip=time_skip, do_logging=do_logging, log_file=log_file)
+    env = TwoDEnv(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file)
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
@@ -30,8 +29,6 @@ def make_skipped_env(do_logging, log_file, input_render_mode):
 def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
     all_pdr = []  # To store PDR values for each episode
     all_fairness = []  # To store fairness values for each episode
-
-    do_vecnorm = False
 
     test_best = True
     if test_best:
@@ -44,22 +41,12 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
 
     vec_env = make_vec_env(make_skipped_env, n_envs=1,
                            env_kwargs=dict(do_logging=do_logging, log_file=log_file, input_render_mode=None))
-    # Load the saved statistics, but do not update them at test time and disable reward normalization.
-    if do_vecnorm:
-        vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-        vec_env.training = False
-        vec_env.norm_reward = False
-
     for ep_idx in range(n_episodes):
         print(f"Starting episode {ep_idx}")
         if (ep_idx + 1) == n_episodes:  # only (potentially) render the last episode in the batch.
             vec_env = make_vec_env(make_skipped_env, n_envs=1,
                                    env_kwargs=dict(do_logging=do_logging, log_file=log_file,
                                                    input_render_mode=rendering_mode))
-            if do_vecnorm:
-                vec_env = VecNormalize.load("model_normalization_stats", vec_env)
-                vec_env.training = False
-                vec_env.norm_reward = False
 
         # print(model.policy)
         obs = vec_env.reset()
