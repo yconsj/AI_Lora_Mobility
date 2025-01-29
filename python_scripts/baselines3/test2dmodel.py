@@ -7,7 +7,8 @@ from stable_baselines3.common.vec_env import VecNormalize
 
 from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap, \
     plot_batch_episode_performance, plot_relative_positions
-from twod_env import TwoDEnv, FrameSkip, jains_fairness_index
+from twod_env import TwoDEnv, FrameSkip
+from utilities import jains_fairness_index
 from stable_baselines3.common.env_util import make_vec_env
 
 

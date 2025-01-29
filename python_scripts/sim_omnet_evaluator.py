@@ -3,9 +3,9 @@ import json
 import matplotlib.pyplot as plt
 
 from baselines3.sb3_to_tflite import sb3_to_tflite_pipeline
-from baselines3.twod_env import jains_fairness_index
-from utilities import load_config
+from utilities import load_config, jains_fairness_index
 from sim_runner import OmnetEnv
+import math
 
 
 def read_log(batch, log_path):
@@ -35,10 +35,6 @@ def create_jagged_line(x_data, y_data):
     return jagged_x, jagged_y
 
 
-import matplotlib.pyplot as plt
-import math
-
-
 def plot_all(data_dict):
     """
     Plots:
@@ -51,7 +47,6 @@ def plot_all(data_dict):
     distances = data_dict["mobile_gw_data"]["node_distances"]
     timestamps = data_dict["mobile_gw_data"]["times"]
     transmission_times = data_dict["nodes"]["transmission_times"]
-
 
     # Restructure distances into a node-wise format
     number_of_nodes = len(distances[0])
@@ -126,13 +121,15 @@ def plot_all(data_dict):
     plt.figure(figsize=(10, 6))
 
     # Plot packets received by the mobile gateway (over all nodes)
-    plt.plot(timestamps[:len(packet_counts_mobile)], packet_counts_mobile, label="Mobile GW Packets Received", color="green")
-    plt.plot(timestamps[:len(total_packets_sent)], total_packets_sent, label="Total packets sent", color="black", linestyle="--")
+    plt.plot(timestamps[:len(packet_counts_mobile)], packet_counts_mobile, label="Mobile GW Packets Received",
+             color="green")
+    plt.plot(timestamps[:len(total_packets_sent)], total_packets_sent, label="Total packets sent", color="black",
+             linestyle="--")
     # Overlay cumulative packets sent by all nodes
     for node_idx, node_times in enumerate(transmission_times):
         # add extra time stamp at t=0 where
-        cumulative_packets = range(0, len(node_times) + 1)
-        plt.step([0]+node_times, cumulative_packets, linestyle="--", alpha=0.7, where='post',
+        cumulative_packets = list(range(0, len(node_times) + 1))
+        plt.step([0] + node_times, cumulative_packets, linestyle="--", alpha=0.7, where='post',
                  label=f"Node {node_idx + 1} Packets Sent")
 
     # Customize plot
@@ -150,12 +147,12 @@ def plot_all(data_dict):
     plt.figure(figsize=(10, 6))
 
     # Calculate Mobile Gateway Packet Delivery Rate (PDR) as Total Received / Total Sent
-    pdr_mobile = [received / sent if sent > 0 else 0 for received, sent in zip(packet_counts_mobile, total_packets_sent)]
+    pdr_mobile = [received / sent if sent > 0 else 0 for received, sent in
+                  zip(packet_counts_mobile, total_packets_sent)]
     fairness_mobile = [
         jains_fairness_index(received, sent) for received, sent in
         zip(packets_received_mobile, packets_sent_per_node)
     ]
-
 
     # Calculate total packets received by all stationary gateways at each timestamp
     stationary_gw_reception_times = data_dict["stationary_gw_data"]["stationary_gateway_reception_times"]
@@ -188,7 +185,7 @@ def plot_all(data_dict):
         zip(packets_received_per_node_stationary, packets_sent_per_node)
     ]
 
-    # Apply max smoothing: for every pdr[i], set pdr[i] = max(pdr[i], pdr[i+1])
+    # Apply max smoothing:
     # This solves the issue of "dips" in PDR due to a gap in time between transmissions and reception.
     for i in range(len(pdr_mobile) - 1):  # Avoid going out of bounds
         pdr_mobile[i] = max(pdr_mobile[i], pdr_mobile[i + 1])
@@ -199,21 +196,17 @@ def plot_all(data_dict):
     for i in range(len(fairness_mobile) - 1):  # Avoid going out of bounds
         fairness_mobile[i] = max(fairness_mobile[i], fairness_mobile[i + 1])
 
-    # Plot the Packet Delivery Rate (PDR)
-
-    # Plot the Packet Delivery Rate (PDR) for the subsampled points
     # Plot the Mobile Gateway PDR
     plt.plot(timestamps[:len(pdr_mobile)], pdr_mobile, label="Mobile GW PDR", color="blue", linestyle="--")
     # Plot the Stationary Gateway Fairness
-    plt.plot(timestamps[:len(fairness_mobile)], fairness_mobile, label="Mobile GW Fairness", color="blue", linestyle=":")
-
+    plt.plot(timestamps[:len(fairness_mobile)], fairness_mobile, label="Mobile GW Fairness", color="blue",
+             linestyle=":")
 
     # Plot the Stationary Gateway PDR
     plt.plot(timestamps[:len(pdr_stationary)], pdr_stationary, label="Stationary GW PDR", color="green", linestyle="--")
     # Plot the Stationary Gateway Fairness
-    plt.plot(timestamps[:len(fairness_stationary)], fairness_stationary, label="Stationary GW Fairness", color="green", linestyle=":")
-
-
+    plt.plot(timestamps[:len(fairness_stationary)], fairness_stationary, label="Stationary GW Fairness", color="green",
+             linestyle=":")
 
     # Customize plot
     plt.xlabel("Time (seconds)")
@@ -224,6 +217,7 @@ def plot_all(data_dict):
     # Show the plot
     plt.tight_layout()
     plt.show()
+
 
 def main():
     """
@@ -245,7 +239,6 @@ def main():
 
     # Run the simulation
     print("Starting simulation...")
-    # TODO: Reenable
     env.run_simulation()
 
     batch = 0  # Specify the batch number if needed

@@ -3,15 +3,14 @@ import math
 import random
 from collections import deque
 from enum import Enum
-
 import cv2
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from scipy.stats import truncnorm
+from utilities import jains_fairness_index
 
 
-# Define a custom FrameSkip wrapper
 class FrameSkip(gym.Wrapper):
     def __init__(self, env, skip):
         """Return only every `skip`-th frame."""
@@ -30,27 +29,6 @@ class FrameSkip(gym.Wrapper):
             if done:
                 break
         return obs, total_reward, done, trunc, info
-
-
-def _jains_fairness_index(delivery_rates):
-    n = len(delivery_rates)
-    temp = sum([(x ** 2) for x in delivery_rates])
-    if temp == 0:
-        return 0.0
-    jains_index = sum(delivery_rates) ** 2 / (n * temp)
-    return jains_index
-
-
-def jains_fairness_index(received_per_node: list[int], sent_per_node: list[int]):
-    if len(received_per_node) != len(sent_per_node):
-        raise ValueError("Error in 'jains_fairness_index'! "
-                         "len('received_per_node') must match length of len('misses_per_node')")
-    length = max(len(received_per_node), len(sent_per_node))
-    delivery_rates = [
-        0 if (sent_per_node[i]) == 0 else received_per_node[i] / (sent_per_node[i])
-        for i in range(length)
-    ]
-    return _jains_fairness_index(delivery_rates)
 
 
 def _generate_color_frame(grid):
@@ -128,7 +106,8 @@ class TwoDEnv(gym.Env):
         self.packet_reward_min = 0.0
         self.fairness_reward = 0.0625
 
-        unscaled_speed = 11  # meter per second based on this article http://unmannedcargo.org/chinese-supermarket-delivery-drone/
+        # speed of gw is based on this article http://unmannedcargo.org/chinese-supermarket-delivery-drone/
+        unscaled_speed = 11  # meter per second
         unscaled_max_distance = 3000  # meters
         self.max_distance = 300  # env grid size
         self.scaled_speed = unscaled_speed * (self.max_distance / unscaled_max_distance)

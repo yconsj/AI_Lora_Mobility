@@ -133,9 +133,6 @@ def main():
                     tensorboard_log="./tensorboard/",
                     )
     model_type = type(model).__name__
-    # TODO: learning_rate=1e-3, learning steps = 500000, ent_coef=0.0075, {"net_arch": [64, 64, 64]}, batch_size=256, n_steps=4096*2,?
-
-    # default timesteps: 500000
 
     # "si": send interval input state, not using the time_of_next_packet of each node.
     # "ept": 'expected packet time' in input state. uses send interval to deduce when the packets should be approximately sent.
