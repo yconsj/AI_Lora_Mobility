@@ -311,25 +311,18 @@ class TwoDEnv(gym.Env):
         reward = self.packet_reward_max * sending_node.transmission_model.get_reception_prob(distance)
         return reward
 
-    def get_pos_reward(self, node: 'Node', elapsed_time: float):
+    def get_pos_reward(self, node: 'Node'):
         distance = math.dist(self.pos, node.pos)
-
-        failure_probability = 1 - node.transmission_model.get_reception_prob(distance)
         scaled_distance = distance / self.max_cross_distance
 
-        # weight = (scaled_distance + failure_probability) / 2 #TODO: try enable, but change min reward
         # Return reward based on scaled distance between a min and max reward
         # Exponential reward calculation
         k = 6  # Adjust this scaling factor to control the sharpness of the exponential decay
         reward = self.pos_reward_max * math.exp(-k * scaled_distance)
 
-        # reward = self.pos_reward_max - (scaled_distance * (self.pos_reward_max - self.pos_reward_min))
-
         # Ensure reward is within bounds in case of rounding errors
         reward = max(self.pos_reward_min, min(self.pos_reward_max, reward))
 
-        # if distance < self.node_max_transmission_distance:
-        #    reward *= 2
         return reward
 
     def get_next_sending_node_index(self):
@@ -394,15 +387,14 @@ class TwoDEnv(gym.Env):
         elif action == 4:  # down
             self.pos = self.pos[0], max((self.pos[1] - self.scaled_speed), 0)
 
-        reward += self.get_pos_reward(self.nodes[idx_next_sending_node],
-                                      self.elapsed_times[idx_next_sending_node])  # TODO: try disable
+        reward += self.get_pos_reward(self.nodes[idx_next_sending_node])
         distance_after_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
-        reward += self.get_good_action_reward(distance_prior_action, distance_after_action)  # TODO: try enable
+        reward += self.get_good_action_reward(distance_prior_action, distance_after_action)
 
         # Track transmissions for each node
         transmission_occurred_per_node = [True] * len(self.nodes)
         for i in range(len(self.nodes)):
-            received, rssi, snir = self.nodes[i].send(self.steps, self.pos)
+            received = self.nodes[i].send(self.steps, self.pos)
             self.elapsed_times[i] = min(self.max_steps, self.elapsed_times[i] + 1)
             if received == PACKET_STATUS.NOT_SENT:
                 transmission_occurred_per_node[i] = False
@@ -423,14 +415,14 @@ class TwoDEnv(gym.Env):
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
-                reward += self.get_miss_penalty(self.nodes[i])  # * self.loss_counts[i]
+                reward += self.get_miss_penalty(self.nodes[i])
 
         # update send time approximation
         for i in range(len(self.expected_send_time)):
             if self.steps >= self.expected_send_time[i]:
                 self.expected_send_time[i] += self.send_intervals[i] + self.send_std
 
-        terminated = False  # self.total_misses >= 20  # TODO: Disable this
+        terminated = False
         truncated = self.steps >= self.max_steps
         done = truncated or terminated
         self.total_reward += reward
@@ -494,8 +486,6 @@ class TwoDEnv(gym.Env):
 
     def render(self):
         """Render the environment with reception-based background and dynamic elements."""
-        x = int(self.pos[0])
-        y = int(self.pos[1])
 
         # Calculate padding for top, left, bottom, and right
         pad_top, pad_left = self.offset_y, self.offset_x
@@ -519,11 +509,6 @@ class TwoDEnv(gym.Env):
             :self.width
             ]
 
-        # Draw the moving point
-        cv2.rectangle(frame, pt1=(self.offset_x + x - 2, self.offset_y + y - 2),
-                      pt2=(self.offset_x + x + 2, self.offset_y + y + 2),
-                      color=self.point_color)
-
         # Draw nodes and their transmission circles
         for node in self.nodes:
             cv2.circle(frame, center=(self.offset_x + node.pos[0], self.offset_y + node.pos[1]),
@@ -533,6 +518,14 @@ class TwoDEnv(gym.Env):
             cv2.putText(frame, str(i), (node.pos[0], self.offset_y + node.pos[1]),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=1)
             i += 1
+
+        # Draw the moving point
+        gw_x = int(self.pos[0])
+        gw_y = int(self.pos[1])
+        gw_box_size = 2
+        cv2.rectangle(frame, pt1=(self.offset_x + gw_x - gw_box_size, self.offset_y + gw_y - gw_box_size),
+                      pt2=(self.offset_x + gw_x + gw_box_size, self.offset_y + gw_y + gw_box_size),
+                      color=self.point_color)
 
         # Resize frame for better visualization
         enlarged_image = cv2.resize(frame, (0, 0), fx=1.5, fy=1.5, interpolation=cv2.INTER_NEAREST)
@@ -616,19 +609,10 @@ class TwoDEnv(gym.Env):
 
 class TransmissionModel:
     def __init__(self, max_transmission_distance=50, ploss_scale=300, use_deterministic_transmissions=False,
-                 rssi_ref=-30, path_loss_exponent=2.7,
-                 noise_floor=-100,
-                 rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30, probability_modifier=1):
+                 probability_modifier=1):
         self.max_transmission_distance = max_transmission_distance
         self.ploss_scale = ploss_scale
         self.use_deterministic_transmissions = use_deterministic_transmissions
-        self.rssi_ref = rssi_ref
-        self.path_loss_exponent = path_loss_exponent
-        self.noise_floor = noise_floor
-        self.rssi_min = rssi_min
-        self.rssi_max = rssi_max
-        self.snir_min = snir_min
-        self.snir_max = snir_max
         self.probability_modifier = probability_modifier
 
     def get_reception_prob(self, distance):
@@ -644,40 +628,6 @@ class TransmissionModel:
         receive_choice = self.get_reception_prob(distance) > np.random.rand()
         return receive_choice
 
-    def generate_rssi(self, distance):
-        if distance < 0:
-            raise ValueError("Distance must be greater than 0.")
-        distance = max(distance, 0.00001)  # avoid log of 0
-        rssi = self.rssi_ref - 10 * self.path_loss_exponent * np.log10(distance)
-        # Scale RSSI between 0 and 1
-        rssi_scaled = (rssi - self.rssi_min) / (self.rssi_max - self.rssi_min)
-        return np.clip(rssi_scaled, 0, 1)  # Ensure it’s within [0, 1]
-
-    def inverse_generate_rssi(self, rssi_scaled):
-        # Ensure rssi_scaled is within the valid range [0, 1]
-        rssi_scaled = np.clip(rssi_scaled, 0, 1)
-
-        # Step 1: Undo the scaling to get rssi
-        rssi = self.rssi_min + rssi_scaled * (self.rssi_max - self.rssi_min)
-
-        # Step 2: Solve for distance using the path loss model
-        distance = 10 ** ((self.rssi_ref - rssi) / (10 * self.path_loss_exponent))
-        return distance
-
-    def generate_snir(self, distance):
-        if distance < 0:
-            raise ValueError("Distance must be greater than 0.")
-        distance = max(distance, 0.00001)  # avoid log of 0
-        rssi_linear = 10 ** ((self.rssi_ref - 10 * self.path_loss_exponent * np.log10(distance)) / 10)
-        noise_linear = 10 ** (self.noise_floor / 10)
-        snir = 10 * np.log10(rssi_linear / noise_linear)
-        # Scale SNIR between 0 and 1, inverted scale
-        snir_scaled = 1 - (snir - self.snir_min) / (self.snir_max - self.snir_min)
-        return np.clip(snir_scaled, 0, 1)  # Ensure it’s within [0, 1]
-
-    def inverse_RSSI(self, rssi):
-        return self.inverse_generate_rssi(rssi)
-
 
 class PACKET_STATUS(Enum):
     RECEIVED = 1
@@ -688,14 +638,19 @@ class PACKET_STATUS(Enum):
 class Node:
     def __init__(self, pos: tuple[int, int], transmission_model: TransmissionModel, time_to_first_packet: int,
                  send_interval: int, send_std=10, use_deterministic_transmissions=False):
+        self.use_deterministic_transmissions = use_deterministic_transmissions
+
         self.pos = pos
+        self.transmission_model = transmission_model
+
         self.time_to_first_packet = time_to_first_packet
         self.time_of_next_packet = time_to_first_packet
-        self.set_send_interval(send_interval)
-        self.use_deterministic_transmissions = use_deterministic_transmissions
         self.send_std = send_std  # standard deviation
 
-        self.transmission_model = transmission_model
+        self.send_interval = None
+        self.lower_bound_send_time = None
+        self.upper_bound_send_time = None
+        self.set_send_interval(send_interval)
 
     def set_send_interval(self, send_interval):
         self.send_interval = send_interval
@@ -714,29 +669,22 @@ class Node:
         a, b = (self.lower_bound_send_time - self.send_interval) / self.send_std, (
                 self.upper_bound_send_time - self.send_interval) / self.send_std
         interval = truncnorm.rvs(a, b, loc=self.send_interval, scale=self.send_std)
-        # print(f"{self.send_interval=}, {interval=}")
         return interval
 
     def transmission(self, gpos):
         distance = math.dist(self.pos, gpos)
         if self.transmission_model.is_transmission_success(distance):
-            rssi_scaled = self.transmission_model.generate_rssi(distance)
-            snir_scaled = self.transmission_model.generate_snir(distance)
-            return True, rssi_scaled, snir_scaled
-        return False, 0, 0
+            return True
+        return False
 
     def send(self, time, gpos):
         # Decides whether a packet should be send and if it gets lost
-        # Pobability of success is based of last time send and distance
+        # Pobability of success is based of distance
         if time >= self.time_of_next_packet:
-            # print(f"prior: {self.time_of_next_packet =}")
             self.time_of_next_packet = time + self.generate_next_interval()
-            # print(f"after: {self.time_of_next_packet =}")
-            # f"time of next packet: {self.time_of_next_packet}" )
-            is_received, rssi, snir = self.transmission(gpos)
+            is_received = self.transmission(gpos)
             if is_received:
-                # print(f"packet is_received ")
-                return PACKET_STATUS.RECEIVED, rssi, snir
+                return PACKET_STATUS.RECEIVED
             else:
-                return PACKET_STATUS.LOST, 0, 0
-        return PACKET_STATUS.NOT_SENT, 0, 0
+                return PACKET_STATUS.LOST
+        return PACKET_STATUS.NOT_SENT
