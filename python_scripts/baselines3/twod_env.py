@@ -206,7 +206,6 @@ class TwoDEnv(gym.Env):
                         self.recent_packets_length * (len(self.nodes))  # One-hot encoded recent_packets)
                 )
                 , dtype=np.float32))
-
         # rendering attributes
         self.width, self.height = self.max_distance_x + 50, self.max_distance_y + 50  # Size of the window
         self.offset_x = int((self.width - self.max_distance_x) / 2)
@@ -640,7 +639,7 @@ class TransmissionModel:
     def __init__(self, max_transmission_distance=50, ploss_scale=300, use_deterministic_transmissions=False,
                  rssi_ref=-30, path_loss_exponent=2.7,
                  noise_floor=-100,
-                 rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30):
+                 rssi_min=-100, rssi_max=-30, snir_min=0, snir_max=30, probability_modifier=1):
         self.max_transmission_distance = max_transmission_distance
         self.ploss_scale = ploss_scale
         self.use_deterministic_transmissions = use_deterministic_transmissions
@@ -651,6 +650,7 @@ class TransmissionModel:
         self.rssi_max = rssi_max
         self.snir_min = snir_min
         self.snir_max = snir_max
+        self.probability_modifier = probability_modifier
 
     def get_reception_prob(self, distance):
         # P(Reception) = probability of receiving packet.
@@ -659,7 +659,7 @@ class TransmissionModel:
             return 0.0
         if self.use_deterministic_transmissions:
             return 1.0
-        return np.exp(- distance / self.ploss_scale)
+        return np.exp(- distance / self.ploss_scale) * self.probability_modifier
 
     def is_transmission_success(self, distance):
         receive_choice = self.get_reception_prob(distance) > np.random.rand()
