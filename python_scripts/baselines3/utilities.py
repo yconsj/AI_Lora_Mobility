@@ -3,13 +3,15 @@ import os
 import sys
 
 
-def load_config(config_file):
-    # Get the directory where the main script was executed
-    script_dir = sys.path[0]  # This should be python_scripts/
+def load_config(config_filename):
+    # Get the absolute path of the current script (utilities.py inside baselines3)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Get the directory of the currently running script and Build the full path to the config file
-    config_path = os.path.join(script_dir, config_file)
+    # Check if config.json exists in the current script's parent directory (expected location)
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
+    config_path = os.path.join(project_root, config_filename)
 
+    # Load JSON
     with open(config_path, 'r') as f:
         return json.load(f)
 
