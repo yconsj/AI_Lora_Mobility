@@ -9,7 +9,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
-from baselines3.twod_env import TwoDEnv, FrameSkip
+from twod_env import TwoDEnv, FrameSkip
 
 # Set TensorFlow logging to errors only (ignores warnings and info)
 tf.get_logger().setLevel('ERROR')
@@ -104,7 +104,7 @@ def main():
     n_blocks = 3  # # base: 2
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=100, verbose=1)
-    eval_callback = EvalCallback(env, eval_freq=4000, callback_after_eval=stop_train_callback,
+    eval_callback = EvalCallback(env, eval_freq=86400 / 40, callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
 
     policy_kwargs = dict(
@@ -139,7 +139,7 @@ def main():
     tb_log_name = f"{model_type}_ept_sm;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
-    model = model.learn(10_000_000, callback=[eval_callback, TensorboardCallback()],
+    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
                         tb_log_name=tb_log_name)
 
     print("Learning finished")
