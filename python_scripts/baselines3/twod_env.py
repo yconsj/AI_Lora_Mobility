@@ -9,7 +9,7 @@ import numpy as np
 from gymnasium import spaces
 from scipy.stats import truncnorm
 
-from baselines3.utilities import jains_fairness_index
+from utilities import jains_fairness_index
 
 
 class FrameSkip(gym.Wrapper):
@@ -82,7 +82,8 @@ def schedule_first_packets(send_intervals, initial_delay=0):
 
 class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none", do_logging=False, log_file=None,
-                 use_deterministic_transmissions=False, max_steps = 86400):
+                 use_deterministic_transmissions=False, max_steps=86400 / 4):
+
         super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
