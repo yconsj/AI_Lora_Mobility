@@ -5,7 +5,7 @@ import tensorflow as tf
 from sim_runner import OmnetEnv
 from tf_exporter import tf_export
 import ast
-from utilities import load_config, export_training_info, InputMembers, denormalize_input_state
+from baselines3.utilities import load_config, export_training_info, InputMembers, denormalize_input_state
 import matplotlib.pyplot as plt
 
 

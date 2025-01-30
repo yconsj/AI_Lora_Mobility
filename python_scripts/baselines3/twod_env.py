@@ -8,7 +8,8 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from scipy.stats import truncnorm
-from utilities import jains_fairness_index
+
+from baselines3.utilities import jains_fairness_index
 
 
 class FrameSkip(gym.Wrapper):
@@ -86,7 +87,7 @@ class TwoDEnv(gym.Env):
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
         self.num_discrete_actions = 5
-        self.action_space = spaces.Discrete(self.num_discrete_actions, start=0) 
+        self.action_space = spaces.Discrete(self.num_discrete_actions, start=0)
 
         self.recent_packets_length = 1
 
@@ -131,7 +132,7 @@ class TwoDEnv(gym.Env):
         random.shuffle(self.send_intervals)
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
 
-        self.send_std = 5 
+        self.send_std = 5
 
         # random.shuffle(self.first_packets)
         self.nodes = [
@@ -238,7 +239,7 @@ class TwoDEnv(gym.Env):
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
         positions = self.get_random_node_positions(num_positions=len(self.nodes),
-                                                   min_dist=2*self.node_max_transmission_distance)
+                                                   min_dist=2 * self.node_max_transmission_distance)
         self.base_send_interval = random.choice([1500, 1750, 2000])
         self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
                                self.base_send_interval * 2]
@@ -300,7 +301,7 @@ class TwoDEnv(gym.Env):
                 normalized_node_distances +
                 normalized_node_directions +
                 onehot_encoded_recent_packets
-                )
+        )
         return state
 
     def get_packet_reward(self, sending_node: 'Node'):
@@ -349,7 +350,6 @@ class TwoDEnv(gym.Env):
         # Ensure reward is within bounds in case of rounding errors
         penalty = min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
         return -penalty
-
 
     def get_good_action_reward(self, distance_prior_action, distance_after_action):
         is_good_action = distance_after_action < distance_prior_action
