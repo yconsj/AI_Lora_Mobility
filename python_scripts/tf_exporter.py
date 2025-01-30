@@ -1,8 +1,7 @@
 import os
 
 import tensorflow as tf
-import subprocess
-from utilities import load_config
+from baselines3.utilities import load_config
 
 def tf_export(concrete_func, export_path, episode_num):
     header_file_name = "policy_net_model.h"

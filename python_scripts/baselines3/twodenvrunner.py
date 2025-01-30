@@ -9,7 +9,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
-from twod_env import TwoDEnv, FrameSkip
+from baselines3.twod_env import TwoDEnv, FrameSkip
 
 # Set TensorFlow logging to errors only (ignores warnings and info)
 tf.get_logger().setLevel('ERROR')

@@ -3,7 +3,7 @@ from matplotlib import lines
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utilities import jains_fairness_index
+from baselines3.utilities import jains_fairness_index
 
 
 def plot_relative_positions(log_file):

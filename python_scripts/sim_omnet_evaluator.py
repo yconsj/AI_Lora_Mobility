@@ -2,8 +2,8 @@ import json
 
 import matplotlib.pyplot as plt
 
+from baselines3.utilities import load_config, jains_fairness_index
 from baselines3.sb3_to_tflite import sb3_to_tflite_pipeline
-from utilities import load_config, jains_fairness_index
 from sim_runner import OmnetEnv
 import math
 
@@ -229,7 +229,6 @@ def main():
     do_export_sb3_to_tflite = False
     if do_export_sb3_to_tflite:
         sb3_to_tflite_pipeline("baselines3/stable-model-2d-best/best_model")
-
     config = load_config("config.json")
     # Get log path from the configuration
     log_path = config['logfile_path']

@@ -1,5 +1,5 @@
-from twod_env import TwoDEnv, FrameSkip
 from stable_baselines3.common.env_checker import check_env
+from baselines3.twod_env import TwoDEnv, FrameSkip
 
 skip = 10
 env = TwoDEnv(render_mode="cv2")

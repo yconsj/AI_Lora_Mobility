@@ -11,7 +11,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from scipy.stats import truncnorm
-from twod_env import TwoDEnv, schedule_first_packets, _generate_color_frame
+from baselines3.twod_env import TwoDEnv, schedule_first_packets, _generate_color_frame
 
 
 class eval_twod_env(TwoDEnv):
