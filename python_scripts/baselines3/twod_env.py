@@ -81,7 +81,7 @@ def schedule_first_packets(send_intervals, initial_delay=0):
 
 class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none", do_logging=False, log_file=None,
-                 use_deterministic_transmissions=False):
+                 use_deterministic_transmissions=False, max_steps = 86400):
         super(TwoDEnv, self).__init__()
         # Define action and observation space
         # The action space is discrete, either -1, 0, or +1
@@ -93,7 +93,7 @@ class TwoDEnv(gym.Env):
         self.render_mode = render_mode
         # Environment.pos
         self.steps = 0
-        self.max_steps = 40000  # Maximum steps per episode
+        self.max_steps = max_steps  # Maximum steps per episode
 
         # Environment state
         # Scaled reward values preserving relative ratios
