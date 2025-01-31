@@ -95,7 +95,7 @@ class TwoDEnv(gym.Env):
         # Environment.pos
         self.steps = 0
         self.max_steps = max_steps  # Maximum steps per episode
-
+        self.max_time = 86400
         # Environment state
         # Scaled reward values preserving relative ratios
         self.pos_reward_max = 0.0125
@@ -283,7 +283,7 @@ class TwoDEnv(gym.Env):
             onehot_encoded_recent_packets.extend(onehot)
 
         # Other normalized components
-        normalized_expected_send_time = [(expected_time - self.steps) / self.max_steps for expected_time in
+        normalized_expected_send_time = [(expected_time - self.steps) / self.max_time for expected_time in
                                          self.expected_send_time]
 
         normalized_node_distances = [
