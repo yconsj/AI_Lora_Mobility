@@ -39,7 +39,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             model = DQN.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
     else:
         model = PPO.load("stable-model", device="cpu", print_system_info=True)
-
+    model.set_random_seed(0)
     vec_env = make_vec_env(make_skipped_env, n_envs=1,
                            env_kwargs=dict(do_logging=do_logging, log_file=log_file, input_render_mode=None))
     for ep_idx in range(n_episodes):
