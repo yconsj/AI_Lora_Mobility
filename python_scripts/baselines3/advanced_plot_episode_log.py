@@ -5,8 +5,10 @@ import numpy as np
 
 from utilities import jains_fairness_index
 
-
 def plot_relative_positions(log_file):
+    for i in range(4):
+        plot_relative_position(log_file, i)
+def plot_relative_position(log_file, node_idx):
     with open(log_file, 'r') as file:
         data = json.load(file)
     dynamic_data = data["dynamic"]
@@ -27,45 +29,39 @@ def plot_relative_positions(log_file):
     node_colors = ["tab:red", "xkcd:bluish", "xkcd:dark grass green", "tab:orange"]
 
     # Initialize figure with 2 subplots
-    fig, axs = plt.subplots(2, 2, figsize=(16, 8))  # Adjusted figure size for better spacing
-
-    # Flatten the 2x2 array of axes for easier indexing
-    axs = axs.flatten()
+    fig, axs = plt.subplots(1, 1, figsize=(16, 8))  # Adjusted figure size for better spacing
 
     # --- First subplot: Distance from Gateway to each node over time ---
     # Plot distances for each node
-    for idx, color in enumerate(node_colors):
-        axs[idx].plot(timestamps, [dist[idx] for dist in node_distances], label=f"Distance to Node {idx}",
-                      color=color, linestyle="-", linewidth=1.5, alpha=0.9)
+    axs.plot(timestamps, [dist[node_idx] for dist in node_distances], label=f"Distance to Node {node_idx}",
+                color= node_colors[node_idx], linestyle="-", linewidth=1.5, alpha=0.9)
 
     # Plot transmission times for each node (vertical lines)
     for i in range(len(transmission_occureds)):
         time = timestamps[i]
-        for node_idx in range(len(transmission_occureds[0])):
-            if transmission_occureds[i][node_idx]:
-                color = node_colors[node_idx]
-                axs[node_idx].axvline(x=time, color="black", linestyle="--", alpha=0.7)
+        if transmission_occureds[i][node_idx]:
+            color = node_colors[node_idx]
+            axs.axvline(x=time, color="black", linestyle="--", alpha=0.7)
 
     # Custom legend for node-specific distances and transmission times
-    for idx, color in enumerate(node_colors):
-        custom_transmission_lines = [
-            lines.Line2D([], [], color="black", linestyle='--', label=f"Node {idx} Transmission")
-        ]
-        custom_distance_lines = [
-            lines.Line2D([], [], color=color, linestyle='-', label=f"Node {idx} Distance")
-        ]
+    custom_transmission_lines = [
+        lines.Line2D([], [], color="black", linestyle='--', label=f"Node {node_idx} Transmission")
+    ]
+    custom_distance_lines = [
+        lines.Line2D([], [], color= node_colors[node_idx], linestyle='-', label=f"Node {node_idx} Distance")
+    ]
 
-        axs[idx].legend(
-            handles=custom_transmission_lines + custom_distance_lines,
-            loc="upper center",  # Position the legend outside the plot area
-            bbox_to_anchor=(0.5, -0.2),  # Move legend below the plot
-            borderaxespad=0.0,
-            ncol=2  # Two columns for better spacing
-        )
-        axs[idx].set_xlabel("Time (steps)")
-        axs[idx].set_ylabel("Distance (meters)")
-        axs[idx].set_title("Distance from Gateway to Nodes Over Time")
-        axs[idx].grid()
+    axs.legend(
+        handles=custom_transmission_lines + custom_distance_lines,
+        loc="upper center",  # Position the legend outside the plot area
+        bbox_to_anchor=(0.5, -0.2),  # Move legend below the plot
+        borderaxespad=0.0,
+        ncol=2,  # Two columns for better spacing
+    )
+    axs.set_xlabel("Time (steps)", fontsize=24)  # Increase x-axis label size
+    axs.set_ylabel("Distance (meters)", fontsize=24)  # Increase y-axis label size
+    axs.set_title("Distance from Gateway to Nodes Over Time", fontsize=24)  # Increase title size
+    axs.grid()
 
     plt.tight_layout(pad=3)  # Add padding to prevent overlap
     plt.subplots_adjust(bottom=0.15)  # Ensure space at the bottom for legends
