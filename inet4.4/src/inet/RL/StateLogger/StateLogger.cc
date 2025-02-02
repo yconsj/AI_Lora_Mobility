@@ -37,14 +37,11 @@ void StateLogger::initialize() {
     int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
     transmission_id_vec.resize(number_of_nodes, -1);
     stationary_gw_received_packets_per_node_current_vec.resize(number_of_nodes, 0);
-    node_distances_vec.resize(number_of_nodes, std::vector<float>());
 }
 
 void StateLogger::addTransmissionTime(int node_index) {
     transmission_times_vec[node_index].push_back(simTime().dbl());
     transmissions_per_node_current_vec[node_index] += 1;
-    transmissions_per_node_vec.push_back(transmissions_per_node_current_vec);
-
 
 }
 
@@ -63,7 +60,7 @@ void StateLogger::logStationaryGatewayPacketReception(int lora_gw_index, int lor
     transmission_id_vec[lora_node_index] = std::max(transmission_id_vec[lora_node_index], transmitter_sequence_number);
     stationary_reception_times_vec.push_back(simTime().dbl());
     stationary_gw_received_packets_per_node_current_vec[lora_node_index] += 1;
-    stationary_gw_number_of_received_packets_per_node_vec.push_back(stationary_gw_received_packets_per_node_current_vec);
+
 }
 void StateLogger::logStep(
         Coord gw_pos,
@@ -73,12 +70,14 @@ void StateLogger::logStep(
         int choice) {
     gw_positions_x_vec.push_back(gw_pos.x);
     gw_positions_y_vec.push_back(gw_pos.y);
-    for (int i = 0; i < number_of_nodes; i++) {
-        node_distances_vec[i].push_back(node_distances[i]);
-    }
+    node_distances_vec.push_back(node_distances);
+
     mobile_gw_number_of_received_packets_per_node_vec.push_back(number_of_received_packets_per_node);
     times_vec.push_back(time);
     actions_vec.push_back(choice);
+
+    transmissions_per_node_vec.push_back(transmissions_per_node_current_vec);
+    stationary_gw_number_of_received_packets_per_node_vec.push_back(stationary_gw_received_packets_per_node_current_vec);
 }
 
 
@@ -97,7 +96,7 @@ void StateLogger::writeToFile() {
         // Create a JSON object
         json outputJson;
 
-
+        outputJson["static"]["number_of_nodes"] = number_of_nodes;
         outputJson["mobile_gw_data"]["node_distances"] = node_distances_vec;
         outputJson["mobile_gw_data"]["gw_positions_x"] = gw_positions_x_vec;
         outputJson["mobile_gw_data"]["gw_positions_y"] = gw_positions_y_vec;
