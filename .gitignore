@@ -18,7 +18,7 @@ tflite-micro-arduino-examples/out/
 # modelfiles and training data:
 flora/simulations/scenarios/basecase/logFile.txt
 flora/simulations/scenarios/basecase/logFile_*.txt
-flora/simulations/scenarios/advancedcase/logFile_*.txt
+flora/simulations/scenarios/advancedcase/logFile_*.json
 python_scripts/g_model
 flora/simulations/scenarios/basecontrolcase/stationaryPacketLog.json
 inet4.4/src/inet/mobility/RL/modelfiles/
