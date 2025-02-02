@@ -37,6 +37,7 @@ void StateLogger::initialize() {
     int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
     transmission_id_vec.resize(number_of_nodes, -1);
     stationary_gw_received_packets_per_node_current_vec.resize(number_of_nodes, 0);
+    node_distances_vec.resize(number_of_nodes, std::vector<float>());
 }
 
 void StateLogger::addTransmissionTime(int node_index) {
@@ -72,7 +73,9 @@ void StateLogger::logStep(
         int choice) {
     gw_positions_x_vec.push_back(gw_pos.x);
     gw_positions_y_vec.push_back(gw_pos.y);
-    node_distances_vec.push_back(node_distances);
+    for (int i = 0; i < number_of_nodes; i++) {
+        node_distances_vec[i].push_back(node_distances[i]);
+    }
     mobile_gw_number_of_received_packets_per_node_vec.push_back(number_of_received_packets_per_node);
     times_vec.push_back(time);
     actions_vec.push_back(choice);

@@ -154,8 +154,8 @@ void StationaryGatewayLoRaApp::processLoraMACPacket(Packet *pk)
 
 
     // Added feature:
-    static cModule* network = getSimulation()->getSystemModule();
-    static inet::StateLogger* stateLogger = omnetpp::check_and_cast<inet::StateLogger*>(network->getSubmodule("stateLogger"));
+    cModule* network = getSimulation()->getSystemModule();
+    inet::StateLogger* stateLogger = omnetpp::check_and_cast<inet::StateLogger*>(network->getSubmodule("stateLogger"));
     cModule *parentModule = getParentModule();
 
 

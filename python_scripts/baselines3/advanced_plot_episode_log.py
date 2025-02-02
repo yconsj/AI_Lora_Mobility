@@ -2,12 +2,14 @@ import json
 from matplotlib import lines
 import matplotlib.pyplot as plt
 import numpy as np
-
 from utilities import jains_fairness_index
 
-def plot_relative_positions(log_file):
-    for i in range(4):
-        plot_relative_position(log_file, i)
+
+def plot_relative_positions(log_file, number_of_nodes=4):
+    for node_idx in range(number_of_nodes):
+        plot_relative_position(log_file, node_idx)
+
+
 def plot_relative_position(log_file, node_idx):
     with open(log_file, 'r') as file:
         data = json.load(file)
@@ -34,7 +36,7 @@ def plot_relative_position(log_file, node_idx):
     # --- First subplot: Distance from Gateway to each node over time ---
     # Plot distances for each node
     axs.plot(timestamps, [dist[node_idx] for dist in node_distances], label=f"Distance to Node {node_idx}",
-                color= node_colors[node_idx], linestyle="-", linewidth=1.5, alpha=0.9)
+             color=node_colors[node_idx], linestyle="-", linewidth=1.5, alpha=0.9)
 
     # Plot transmission times for each node (vertical lines)
     for i in range(len(transmission_occureds)):
@@ -48,7 +50,7 @@ def plot_relative_position(log_file, node_idx):
         lines.Line2D([], [], color="black", linestyle='--', label=f"Node {node_idx} Transmission")
     ]
     custom_distance_lines = [
-        lines.Line2D([], [], color= node_colors[node_idx], linestyle='-', label=f"Node {node_idx} Distance")
+        lines.Line2D([], [], color=node_colors[node_idx], linestyle='-', label=f"Node {node_idx} Distance")
     ]
 
     axs.legend(
@@ -196,10 +198,10 @@ def plot_heatmap(log_file):
 
 
 def plot_batch_episode_performance(all_final_receives: list[list[int]], all_final_sents: list[list[int]]):
-
     # Plot the performance of the current batch of episodes
     plt.figure(figsize=(8, 6))
-    assert len(all_final_receives) == len(all_final_sents), f"{len(all_final_receives) =} and {len(all_final_sents) =} must be equal."
+    assert len(all_final_receives) == len(
+        all_final_sents), f"{len(all_final_receives) =} and {len(all_final_sents) =} must be equal."
 
     all_pdr = [sum(final_receives) / sum(final_sents)
                for final_receives, final_sents in zip(all_final_receives, all_final_sents)]
@@ -279,4 +281,3 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     ax3.legend()
     plt.tight_layout()
     plt.show()
-

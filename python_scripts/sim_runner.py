@@ -56,14 +56,15 @@ class OmnetEnv:
         os.environ["PYTHONPATH"] = os.path.join(self.omnetpp_root, 'python').replace('\\', '/') + ";" + os.environ.get(
             "PYTHONPATH", "")
 
-    def run_simulation(self, episode_seed=0, batch_size = 1):
+    def run_simulation(self, episode_seed=0, batch_size=1):
         # Construct the command to run OMNeT++ simulation
         # Note flora dll after inet dll, in opp_run cmd
         command = (
                 f'"{self.mingwenv_cmd_path}" -mingw64 -no-start -defterm -c '
                 f'"cd {self.sim_path} && '
                 f'source {self.setenv_script} && ' +
-                f'opp_run --repeat={batch_size} --seed-set={episode_seed} -m -u Cmdenv -n ../../../src:../..:../../../../inet4.4/examples:../../../../inet4.4/showcases:../../../../inet4.4/src:../../../../inet4.4/tests/validation:../../../../inet4.4/tests/networks:../../../../inet4.4/tutorials:../../../../tflite-micro-arduino-examples -x inet.common.selfdoc:inet.linklayer.configurator.gatescheduling.z3:inet.emulation:inet.showcases.visualizer.osg:inet.examples.emulation:inet.showcases.emulation:inet.transportlayer.tcp_lwip:inet.applications.voipstream:inet.visualizer.osg:inet.examples.voipstream --image-path=../../../../inet4.4/images -l ../../../../inet4.4/src/libINET.dll -l ../../../src/libflora.dll omnetpp.ini "'
+                f'opp_run --repeat={batch_size}'  # --seed-set={episode_seed}
+                f' -m -u Cmdenv -n ../../../src:../..:../../../../inet4.4/examples:../../../../inet4.4/showcases:../../../../inet4.4/src:../../../../inet4.4/tests/validation:../../../../inet4.4/tests/networks:../../../../inet4.4/tutorials:../../../../tflite-micro-arduino-examples -x inet.common.selfdoc:inet.linklayer.configurator.gatescheduling.z3:inet.emulation:inet.showcases.visualizer.osg:inet.examples.emulation:inet.showcases.emulation:inet.transportlayer.tcp_lwip:inet.applications.voipstream:inet.visualizer.osg:inet.examples.voipstream --image-path=../../../../inet4.4/images -l ../../../../inet4.4/src/libINET.dll -l ../../../src/libflora.dll omnetpp.ini "'
         )
 
         print(f'Running Omnet simulation command!')
