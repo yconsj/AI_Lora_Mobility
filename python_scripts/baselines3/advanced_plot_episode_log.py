@@ -60,7 +60,7 @@ def plot_relative_position(log_file, node_idx):
     )
     axs.set_xlabel("Time (steps)", fontsize=24)  # Increase x-axis label size
     axs.set_ylabel("Distance (meters)", fontsize=24)  # Increase y-axis label size
-    axs.set_title("Distance from Gateway to Nodes Over Time", fontsize=24)  # Increase title size
+    axs.set_title(f"Distance from Gateway to Node {node_idx} Over Time", fontsize=24)  # Increase title size
     axs.grid()
 
     plt.tight_layout(pad=3)  # Add padding to prevent overlap
