@@ -38,6 +38,8 @@ public:
     virtual void logStationaryGatewayPacketReception(int lora_gw_index,
             int lora_node_index,
             int transmitter_sequence_number);
+    virtual void logStaticMobilityGatewayPacketReception(int lora_node_index,
+                int transmitter_sequence_number);
     virtual void logStep(
             Coord gw_pos,
             std::vector<float> node_distances,
@@ -52,9 +54,11 @@ protected:
     virtual void initialize() override;
 private:
     std::map<MacAddress, cModule*> macToModuleMap; // MAC to module mapping
+    std::vector<std::vector<double>> transmission_times_vec;
+    std::vector<int> transmissions_per_node_current_vec;
+    std::vector<std::vector<int>> transmissions_per_node_vec;
 
-
-    // gw logging (logStep()), received from AdvancedLearningModule
+    // RL Mobile gw logging (logStep()), received from AdvancedLearningModule
     std::vector<float> gw_positions_x_vec;
     std::vector<float> gw_positions_y_vec;
     std::vector<std::vector<float>> node_distances_vec;
@@ -62,16 +66,15 @@ private:
     std::vector<float> times_vec;
     std::vector<int> actions_vec;
 
-
-    // Stationary gw logging
     std::vector<int> transmission_id_vec;
-    std::vector<std::vector<double>> transmission_times_vec;
-    std::vector<int> transmissions_per_node_current_vec;
-    std::vector<std::vector<int>> transmissions_per_node_vec;
-
-    std::vector<double> stationary_reception_times_vec;  // Store reception times for stationary gateways
+    // Stationary gw logging
     std::vector<int> stationary_gw_received_packets_per_node_current_vec;
     std::vector<std::vector<int>> stationary_gw_number_of_received_packets_per_node_vec;
+
+    // StaticMobility gw logging
+    std::vector<int> static_mobility_gw_received_packets_per_node_current_vec;
+    std::vector<std::vector<int>> static_mobility_gw_number_of_received_packets_per_node_vec;
+
 
     int runnumber = -1;
 

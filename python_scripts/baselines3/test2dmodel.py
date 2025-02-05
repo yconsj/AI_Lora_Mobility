@@ -91,7 +91,8 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             all_final_sents.append(final_sents)
 
             if ep_idx + 1 == n_episodes:  # only do these plots for the last episode in the batch.
-                plot_relative_positions(log_file)
+                number_of_nodes = data["static"]["number_of_nodes"]
+                plot_relative_positions(log_file, number_of_nodes=number_of_nodes)
                 plot_mobile_gateway_with_nodes_advanced(log_file)
                 plot_heatmap(log_file=log_file)
     if do_logging:

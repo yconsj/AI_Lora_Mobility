@@ -57,8 +57,8 @@ def extract_episode_stats(data_dict: dict):
     distances = data_dict["mobile_gw_data"]["node_distances"]
     timestamps = data_dict["mobile_gw_data"]["times"]
     transmission_times = data_dict["nodes"]["transmission_times"]
-
     number_of_nodes = data_dict["static"]["number_of_nodes"]
+
     packets_received_mobile_per_node = np.array(data_dict["mobile_gw_data"]["number_of_received_packets_per_node"])
     packets_received_mobile = packets_received_mobile_per_node.sum(axis=1)
 
@@ -81,9 +81,9 @@ def extract_episode_stats(data_dict: dict):
                                                                                       packets_sent_per_node)]
 
     # Process stationary gateway reception
-    stationary_gw_reception_times = data_dict["stationary_gw_data"]["stationary_gateway_reception_times"]
     packets_received_per_node_stationary = np.array(
-        data_dict["stationary_gw_data"]["stationary_gw_number_of_received_packets_per_node"])
+        data_dict["stationary_gw_data"]["stationary_gw_number_of_received_packets_per_node"]
+    )
 
     total_packets_received_stationary = packets_received_per_node_stationary.sum(axis=1)
 
@@ -97,12 +97,38 @@ def extract_episode_stats(data_dict: dict):
     fairness_stationary = [jains_fairness_index(received, sent)
                            for received, sent in zip(packets_received_per_node_stationary, packets_sent_per_node)]
 
+    # Process static mobility gateway reception
+    packets_received_per_node_static_mobility = np.array(
+        data_dict["static_mobility_gw_data"]["static_mobility_gw_number_of_received_packets_per_node"]
+    )
+    total_packets_received_static_mobility = packets_received_per_node_static_mobility.sum(axis=1)
+
+    # Calculate PDR and fairness for static mobility gateways
+    pdr_static_mobility_per_node = np.divide(
+        packets_received_per_node_static_mobility, packets_sent_per_node,
+        where=packets_sent_per_node > 0,
+        out=np.zeros_like(packets_sent_per_node, dtype=float)
+    )
+    pdr_static_mobility = np.divide(
+        total_packets_received_static_mobility, total_packets_sent,
+        where=total_packets_sent > 0,
+        out=np.zeros_like(total_packets_sent, dtype=float)
+    )
+    fairness_static_mobility = [
+        jains_fairness_index(received, sent)
+        for received, sent in zip(packets_received_per_node_static_mobility, packets_sent_per_node)
+    ]
+
     # Apply smoothing
     pdr_mobile = max_smooth(pdr_mobile)
     pdr_mobile_per_node = max_smooth(pdr_mobile_per_node, axis=0)
     pdr_stationary = max_smooth(pdr_stationary)
+    pdr_stationary_per_node = max_smooth(pdr_stationary_per_node, axis=0)
     fairness_stationary = max_smooth(fairness_stationary)
     fairness_mobile = max_smooth(fairness_mobile)
+    pdr_static_mobility = max_smooth(pdr_static_mobility)
+    pdr_static_mobility_per_node = max_smooth(pdr_static_mobility_per_node, axis=0)
+    fairness_static_mobility = max_smooth(fairness_static_mobility)
 
     stats = {
         "number_of_nodes": number_of_nodes,
@@ -110,23 +136,31 @@ def extract_episode_stats(data_dict: dict):
         "transmission_times": transmission_times,
         "packets_sent": total_packets_sent.tolist(),
         "packets_sent_per_node": packets_sent_per_node.tolist(),
+
         "packets_received_mobile": packets_received_mobile.tolist(),
         "packets_received_mobile_per_node": packets_received_mobile_per_node.tolist(),
         "pdr_mobile": pdr_mobile.tolist(),
         "pdr_mobile_per_node": pdr_mobile_per_node.tolist(),
         "fairness_mobile": fairness_mobile,
+
         "packets_received_stationary": total_packets_received_stationary.tolist(),
         "packets_received_per_node_stationary": packets_received_per_node_stationary.tolist(),
         "pdr_stationary": pdr_stationary.tolist(),
         "pdr_stationary_per_node": pdr_stationary_per_node.tolist(),
         "fairness_stationary": fairness_stationary,
-        "data_timestamps": timestamps,
+
+        "packets_received_static_mobility": total_packets_received_static_mobility.tolist(),
+        "packets_received_per_node_static_mobility": packets_received_per_node_static_mobility.tolist(),
+        "pdr_static_mobility": pdr_static_mobility.tolist(),
+        "pdr_static_mobility_per_node": pdr_static_mobility_per_node.tolist(),
+        "fairness_static_mobility": fairness_static_mobility,
+
+        "data_timestamps": timestamps
     }
-    #print(f"{stats = }")
     return stats
 
 
-def plot_omnet_episode(stats_dict, include_stationary=True):
+def plot_omnet_episode(stats_dict, include_stationary=True, include_static_mobility=True):
     """
     Main function to plot all the stats, controlling whether to include stationary gateway data.
     """
@@ -134,10 +168,12 @@ def plot_omnet_episode(stats_dict, include_stationary=True):
     plot_distances(stats_dict)
 
     # Plot packets received and transmission times
-    plot_packets_received(stats_dict, include_stationary)
+    plot_packets_received(stats_dict, include_stationary=include_stationary,
+                          include_static_mobility=include_static_mobility)
 
     # Plot PDR and fairness
-    plot_pdr_fairness(stats_dict, include_stationary)
+    plot_pdr_fairness(stats_dict, include_stationary=include_stationary,
+                      include_static_mobility=include_static_mobility)
 
 
 def plot_distances(stats_dict):
@@ -149,49 +185,37 @@ def plot_distances(stats_dict):
     timestamps = stats_dict["data_timestamps"]
     transmission_times = stats_dict["transmission_times"]
 
-    # Calculate grid dimensions (square-like layout)
-    cols = math.ceil(math.sqrt(number_of_nodes))
-    rows = math.ceil(number_of_nodes / cols)
-
-    # Create subplots: grid layout
-    fig, axs = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-    axs = axs.flatten()  # Flatten the 2D array for easier indexing
-
     # Define a color palette
     colors = plt.cm.tab10.colors  # Use matplotlib's tab10 color palette
     color_cycle = len(colors)
 
     for node_idx in range(number_of_nodes):
-        ax = axs[node_idx]
+        plt.figure(figsize=(7, 5))  # Create a new figure for each node
 
-        # Extract distance values for the current node (no transposing needed)
+        # Extract distance values for the current node
         node_distances = [distances[t][node_idx] for t in range(len(timestamps))]
 
         # Plot the distances for the node
-        ax.plot(timestamps, node_distances, label=f"Distance to Node {node_idx + 1}",
-                color=colors[node_idx % color_cycle])
+        plt.plot(timestamps, node_distances, label=f"Distance to Node {node_idx}",
+                 color=colors[node_idx % color_cycle])
 
         # Overlay node-wise transmission times as vertical lines
-        for time in transmission_times[node_idx]:
-            ax.axvline(x=float(time), linestyle="--", alpha=0.7, color='black',
-                       label="Transmission Time" if time == transmission_times[node_idx][0] else None)
+        for i, time in enumerate(transmission_times[node_idx]):
+            plt.axvline(x=float(time), linestyle="--", alpha=0.7, color='black',
+                        label="Transmission Time" if i == 0 else None)
 
-        # Customize each subplot
-        ax.set_xlabel("Time (seconds)")
-        ax.set_ylabel("Distance (meters)")
-        ax.set_title(f"Node {node_idx + 1}")
-        ax.legend(loc="best")
-        ax.grid()
+        # Customize the plot
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Distance (meters)")
+        plt.title(f"Node {node_idx}")
+        plt.legend(loc="best")
+        plt.grid()
 
-    # Remove empty subplots if any (in case of uneven grid)
-    for ax in axs[number_of_nodes:]:
-        fig.delaxes(ax)
-
-    plt.tight_layout()
-    plt.show()
+        # Show the figure (one per node)
+        plt.show()
 
 
-def plot_packets_received(stats_dict, include_stationary=True):
+def plot_packets_received(stats_dict, include_stationary=True, include_static_mobility=True):
     """
     Plot packets received by the mobile gateway, total packets sent, and cumulative packets sent by each node.
     Optionally include data for stationary gateways.
@@ -199,37 +223,46 @@ def plot_packets_received(stats_dict, include_stationary=True):
     packets_sent_per_node = stats_dict["packets_sent_per_node"]
     total_packets_sent = stats_dict["packets_sent"]
     packets_received_mobile = stats_dict["packets_received_mobile"]
-    packets_received_mobile_per_node = stats_dict["packets_received_mobile_per_node"]
-    packets_received_stationary_per_node = stats_dict.get("packets_received_stationary_per_node", [])
+    packets_received_stationary = stats_dict["packets_received_stationary"]
+    packets_received_static_mobility = stats_dict["packets_received_static_mobility"]
+
     timestamps = stats_dict["data_timestamps"]
     transmission_times = stats_dict["transmission_times"]
 
     # Create a new figure for the second plot
     plt.figure(figsize=(10, 6))
 
+
+    plt.plot(timestamps[:len(total_packets_sent)], total_packets_sent,
+             label="Packets sent",
+             color="black", linestyle="-", alpha=0.7)
     # Plot packets received by the mobile gateway (over all nodes)
-    plt.plot(timestamps[:len(packets_received_mobile)], packets_received_mobile, label="Mobile GW Packets Received",
-             color="green")
-    plt.plot(timestamps[:len(total_packets_sent)], total_packets_sent, label="Total packets sent", color="black",
-             linestyle="--")
-
+    plt.plot(timestamps[:len(packets_received_mobile)], packets_received_mobile,
+             label="Mobile GW",
+             color="C1", linestyle=":")
     # Plot packets received by each stationary node if `include_stationary` is True
-    if include_stationary and packets_received_stationary_per_node:
-        for node_idx, node_packets in enumerate(packets_received_stationary_per_node):
-            plt.plot(timestamps[:len(node_packets)], node_packets, label=f"Stationary Node {node_idx + 1} Packets Received",
-                     linestyle=":", color=f"C{(node_idx + 1) % 10}")
+    if include_stationary:
+        plt.plot(timestamps[:len(packets_received_stationary)], packets_received_stationary,
+                 label=f"Stationary GW",
+                 color=f"C2", linestyle=":")
+    if include_static_mobility:
+        plt.plot(timestamps[:len(packets_received_static_mobility)], packets_received_static_mobility,
+                 label=f"Static Mobility GW Packets Received",
+                 color=f"C3", linestyle=":")
 
-    # Overlay cumulative packets sent by all nodes
-    for node_idx, node_times in enumerate(transmission_times):
-        # Add extra time stamp at t=0 where number of packets transmitted is 0,
-        cumulative_packets = list(range(0, len(node_times) + 1))
-        plt.step([0] + node_times, cumulative_packets, linestyle="--", alpha=0.7, where='post',
-                 label=f"Node {node_idx + 1} Packets Sent")
+    do_plot_packets_sent = False
+    if do_plot_packets_sent:
+        # Overlay cumulative packets sent by all nodes
+        for node_idx, node_times in enumerate(transmission_times):
+            # Add extra time stamp at t=0 where number of packets transmitted is 0,
+            cumulative_packets = list(range(len(node_times)))  # 0, len(node_times) + 1
+            plt.step(node_times, cumulative_packets, linestyle="--", alpha=0.7, where='post',
+                     label=f"Node {node_idx} Packets Sent", color=f"C{3 + node_idx}")  # [0] + ..
 
     # Customize plot
-    plt.xlabel("Time (seconds)")
-    plt.ylabel("Packets Received / Transmission Times")
-    plt.title("Packets Sent and Received Over Time")
+    plt.xlabel("Time (seconds)", fontsize=14)
+    plt.ylabel("Packets Sent and Received", fontsize=14)
+    plt.title(f"Packets {'Sent and ' if do_plot_packets_sent else ''}Received Over Time", fontsize=16)
     plt.legend(loc="best")
     plt.grid()
 
@@ -238,141 +271,209 @@ def plot_packets_received(stats_dict, include_stationary=True):
     plt.show()
 
 
-def plot_pdr_fairness(stats_dict, include_stationary=True):
+def plot_pdr_fairness(stats_dict, include_stationary=True, include_static_mobility=True):
     """
-    Plot PDR and fairness for both mobile and stationary gateways.
+    Plot PDR and fairness for mobile, stationary, and static mobility gateways.
     """
     timestamps = stats_dict["data_timestamps"]
-    pdr_mobile = stats_dict.get("pdr_mobile", [])
-    fairness_mobile = stats_dict.get("fairness_mobile", [])
-    pdr_stationary = stats_dict.get("pdr_stationary", [])
-    fairness_stationary = stats_dict.get("fairness_stationary", [])
+    pdr_mobile = stats_dict["pdr_mobile"]
+    fairness_mobile = stats_dict["fairness_mobile"]
+    pdr_stationary = stats_dict["pdr_stationary"]
+    fairness_stationary = stats_dict["fairness_stationary"]
+    pdr_static_mobility = stats_dict["pdr_static_mobility"]
+    fairness_static_mobility = stats_dict["fairness_static_mobility"]
 
     plt.figure(figsize=(10, 6))
 
-    # Plot the Mobile Gateway PDR
+    # Plot Mobile Gateway PDR and Fairness
     plt.plot(timestamps[:len(pdr_mobile)], pdr_mobile, label="Mobile GW PDR", color="blue", linestyle="--")
-    # Plot the Stationary Gateway Fairness if include_stationary is True
+    plt.plot(timestamps[:len(fairness_mobile)], fairness_mobile, label="Mobile GW Fairness", color="blue",
+             linestyle=":")
+
+    # Plot Stationary Gateway PDR and Fairness if enabled
     if include_stationary:
-        plt.plot(timestamps[:len(fairness_mobile)], fairness_mobile, label="Mobile GW Fairness", color="blue", linestyle=":")
-        plt.plot(timestamps[:len(pdr_stationary)], pdr_stationary, label="Stationary GW PDR", color="green", linestyle="--")
-        plt.plot(timestamps[:len(fairness_stationary)], fairness_stationary, label="Stationary GW Fairness", color="green", linestyle=":")
-    else:
-        plt.plot(timestamps[:len(fairness_mobile)], fairness_mobile, label="Mobile GW Fairness", color="blue", linestyle=":")
+        plt.plot(timestamps[:len(pdr_stationary)], pdr_stationary, label="Stationary GW PDR", color="green",
+                 linestyle="--")
+        plt.plot(timestamps[:len(fairness_stationary)], fairness_stationary, label="Stationary GW Fairness",
+                 color="green", linestyle=":")
+
+    # Plot Static Mobility Gateway PDR and Fairness if enabled
+    if include_static_mobility:
+        plt.plot(timestamps[:len(pdr_static_mobility)], pdr_static_mobility, label="Static Mobility GW PDR",
+                 color="red", linestyle="--")
+        plt.plot(timestamps[:len(fairness_static_mobility)], fairness_static_mobility,
+                 label="Static Mobility GW Fairness", color="red", linestyle=":")
 
     # Customize plot
-    plt.xlabel("Time (seconds)")
-    plt.ylabel("PDR")
-    plt.title("Packet Delivery Rate (PDR) Over Time")
+    plt.xlabel("Time (seconds)", fontsize=14)
+    plt.ylabel("PDR / Fairness", fontsize=14)
+    plt.title("Packet Delivery Rate (PDR) and Fairness Over Time", fontsize=16)
     plt.legend(loc="best")
+    plt.grid()
 
     # Show the plot
     plt.tight_layout()
     plt.show()
 
 
-def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_per_node_list,
-                           final_pdr_mobile_list, final_pdr_stationary_list,
-                           final_fairness_mobile_list, final_fairness_stationary_list,
-                           include_stationary=True):
-    assert len(final_pdr_mobile_per_node_list) == len(final_pdr_stationary_per_node_list), \
-        f"{len(final_pdr_mobile_per_node_list)} and {len(final_pdr_stationary_per_node_list)} must be equal."
-    assert len(final_fairness_mobile_list) == len(final_fairness_stationary_list), \
-        f"{len(final_fairness_mobile_list)} and {len(final_fairness_stationary_list)} must be equal."
+def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_per_node_list, final_pdr_static_mobility_per_node_list,
+                           final_pdr_mobile_list, final_pdr_stationary_list, final_pdr_static_mobility_list,
+                           final_fairness_mobile_list, final_fairness_stationary_list, final_fairness_static_mobility_list,
+                           include_stationary=True, include_static_mobility=True):
+    assert len(final_pdr_mobile_per_node_list) == len(final_pdr_stationary_per_node_list) == len(final_pdr_static_mobility_per_node_list), \
+        "Lengths of PDR lists for mobile, stationary, and static mobility must be equal."
+    assert len(final_fairness_mobile_list) == len(final_fairness_stationary_list) == len(final_fairness_static_mobility_list), \
+        "Lengths of fairness lists for mobile, stationary, and static mobility must be equal."
 
     # Scale values to percentage
+
     final_pdr_mobile_list = [x * 100 for x in final_pdr_mobile_list]
-    final_fairness_mobile_list = [x * 100 for x in final_fairness_mobile_list]
+    final_pdr_stationary_list = [x * 100 for x in final_pdr_stationary_list]
+    final_pdr_static_mobility_list = [x * 100 for x in final_pdr_static_mobility_list]
+
+    #final_fairness_mobile_list = [x * 100 for x in final_fairness_mobile_list]
+    #final_fairness_stationary_list = [x * 100 for x in final_fairness_stationary_list]
+    #final_fairness_static_mobility_list = [x * 100 for x in final_fairness_static_mobility_list]
+
+    # Plot PDR Box Plot
+    fig_pdr, ax_pdr = plt.subplots(figsize=(6, 4))
+    box_data_pdr = [final_pdr_mobile_list]
+    tick_labels_pdr = ["PDR (Mobile)"]
 
     if include_stationary:
-        final_pdr_stationary_list = [x * 100 for x in final_pdr_stationary_list]
-        final_fairness_stationary_list = [x * 100 for x in final_fairness_stationary_list]
+        box_data_pdr.append(final_pdr_stationary_list)
+        tick_labels_pdr.append("PDR (Stationary)")
 
-    # Box plot setup
-    fig2, ax3 = plt.subplots(figsize=(6, 4))
+    if include_static_mobility:
+        box_data_pdr.append(final_pdr_static_mobility_list)
+        tick_labels_pdr.append("PDR (Static Mobility)")
 
-    # Construct data for box plot
-    box_data = [final_pdr_mobile_list, final_fairness_mobile_list]
-    tick_labels = ["PDR (Mobile)", "Fairness (Mobile)"]
+    ax_pdr.boxplot(box_data_pdr,
+                   patch_artist=True,
+                   boxprops=dict(facecolor="lightblue", color="blue"),
+                   medianprops=dict(color="black"),
+                   whiskerprops=dict(color="blue"),
+                   capprops=dict(color="blue"),
+                   flierprops=dict(marker="o", color="red", alpha=0.6))
+
+    ax_pdr.set_xticklabels(tick_labels_pdr)
+    ax_pdr.set_ylim(0, 102)  # Slightly above 100
+    ax_pdr.set_yticks(np.arange(0, 101, 20))  # Ensure last y-tick is exactly 100
+    ax_pdr.set_title("Box Plot: PDR Distribution")
+    ax_pdr.set_ylabel("PDR (%)", fontsize=12)
+    plt.tight_layout()
+    plt.show()
+
+    # Plot Fairness Box Plot
+    fig_fairness, ax_fairness = plt.subplots(figsize=(6, 4))
+    box_data_fairness = [final_fairness_mobile_list]
+    tick_labels_fairness = ["Fairness (Mobile)"]
 
     if include_stationary:
-        box_data.insert(1, final_pdr_stationary_list)
-        box_data.append(final_fairness_stationary_list)
-        tick_labels.insert(1, "PDR (Stationary)")
-        tick_labels.append("Fairness (Stationary)")
+        box_data_fairness.append(final_fairness_stationary_list)
+        tick_labels_fairness.append("Fairness (Stationary)")
 
-    ax3.boxplot(box_data,
-                patch_artist=True,
-                boxprops=dict(facecolor="lightblue", color="blue"),
-                medianprops=dict(color="black"),
-                whiskerprops=dict(color="blue"),
-                capprops=dict(color="blue"),
-                flierprops=dict(marker="o", color="red", alpha=0.6))
+    if include_static_mobility:
+        box_data_fairness.append(final_fairness_static_mobility_list)
+        tick_labels_fairness.append("Fairness (Static Mobility)")
 
-    ax3.set_xticklabels(tick_labels)
-    ax3.set_ylim(0, 100)
-    ax3.set_title("Box Plot: PDR and Fairness Distribution")
-    ax3.set_ylabel("Values (%)")
+    ax_fairness.boxplot(box_data_fairness,
+                        patch_artist=True,
+                        boxprops=dict(facecolor="lightcoral", color="red"),
+                        medianprops=dict(color="black"),
+                        whiskerprops=dict(color="red"),
+                        capprops=dict(color="red"),
+                        flierprops=dict(marker="o", color="darkred", alpha=0.6))
+
+    ax_fairness.set_xticklabels(tick_labels_fairness)
+    ax_fairness.set_ylim(0, 1.02)  # Fairness remains in [0,1]
+    ax_fairness.set_yticks(np.arange(0, 1.01, 0.20))  # Ensure last y-tick is exactly 100
+    ax_fairness.set_title("Box Plot: Fairness Distribution")
+    ax_fairness.set_ylabel("Fairness", fontsize=12)
     plt.tight_layout()
     plt.show()
 
     # Bar plot for PDR per node
+    # TODO: Consider changing from standard-deviation 'error bars' to 'min/max values in batch' bars
+
     fig3, ax4 = plt.subplots(figsize=(8, 5))
+    axis_right_x_pos = 1.02  # ax4.get_xlim()[1] + 0.2  # Get the maximum x value in the plot
 
     num_nodes = len(final_pdr_mobile_per_node_list[0])
     pdr_mobile_per_node = np.mean(final_pdr_mobile_per_node_list, axis=0) * 100
     pdr_std_mobile = np.std(final_pdr_mobile_per_node_list, axis=0) * 100
+    max_pdr_value = 100
 
     x_indices = np.arange(num_nodes)
-    bar_width = 0.35
+    ax4.set_xticks(x_indices)
+    ax4.set_xticklabels([f"Node {i}" for i in range(num_nodes)])
 
-    bars_mobile = ax4.bar(x_indices - bar_width / 2, pdr_mobile_per_node, yerr=pdr_std_mobile, capsize=5,
+    bar_width = 0.25 if include_stationary and include_static_mobility else 0.35
+
+    bars_mobile = ax4.bar(x_indices - bar_width, pdr_mobile_per_node, yerr=pdr_std_mobile, capsize=5,
                           color='steelblue', alpha=0.7, width=bar_width, label="Mobile")
+    for bar, pdr in zip(bars_mobile, pdr_mobile_per_node): # Annotate bars
+        ax4.text(bar.get_x() + bar.get_width() / 2, max_pdr_value + 6,
+                 f"{pdr:.1f}%", ha="center", va="bottom",
+                 fontsize=10, fontweight="bold")
 
     if include_stationary:
         pdr_stationary_per_node = np.mean(final_pdr_stationary_per_node_list, axis=0) * 100
         pdr_std_stationary = np.std(final_pdr_stationary_per_node_list, axis=0) * 100
 
-        bars_stationary = ax4.bar(x_indices + bar_width / 2, pdr_stationary_per_node, yerr=pdr_std_stationary,
-                                  capsize=5,
+        bars_stationary = ax4.bar(x_indices, pdr_stationary_per_node, yerr=pdr_std_stationary, capsize=5,
                                   color='lightgreen', alpha=0.7, width=bar_width, label="Stationary")
-
-    ax4.set_xticks(x_indices)
-    ax4.set_xticklabels([f"Node {i + 1}" for i in range(num_nodes)])
-
-    # Annotate bars
-    for bar, pdr in zip(bars_mobile, pdr_mobile_per_node):
-        ax4.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 2, f"{pdr:.1f}%", ha="center", fontsize=10,
-                 fontweight="bold")
-
-    if include_stationary:
         for bar, pdr in zip(bars_stationary, pdr_stationary_per_node):
-            ax4.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 2, f"{pdr:.1f}%", ha="center", fontsize=10,
-                     fontweight="bold")
+            ax4.text(bar.get_x() + bar.get_width() / 2, max_pdr_value + 3,
+                     f"{pdr:.1f}%", ha="center", va="bottom",
+                     fontsize=10, fontweight="bold")
+
+    if include_static_mobility:
+        pdr_static_mobility_per_node = np.mean(final_pdr_static_mobility_per_node_list, axis=0) * 100
+        pdr_std_static_mobility = np.std(final_pdr_static_mobility_per_node_list, axis=0) * 100
+
+        bars_static_mobility = ax4.bar(x_indices + bar_width, pdr_static_mobility_per_node, yerr=pdr_std_static_mobility,
+                                       capsize=5, color='tomato', alpha=0.7, width=bar_width, label="Static Mobility")
+        for bar, pdr in zip(bars_static_mobility, pdr_static_mobility_per_node):
+            ax4.text(bar.get_x() + bar.get_width() / 2, max_pdr_value + 0,
+                     f"{pdr:.1f}%", ha="center", va="bottom",
+                     fontsize=10, fontweight="bold")
 
     ax4.set_xlabel("Nodes")
-    ax4.set_ylabel("PDR (%)")
-    fig3.suptitle(f"PDR for Each Node ({'Mobile vs Stationary' if include_stationary else 'Mobile'})", fontsize=14, fontweight="bold", x=0.5, y=0.95)
-    ax4.set_ylim(0, 100)
+    ax4.set_ylabel("PDR (%)", fontsize=12)
+    fig3.suptitle(f"PDR for Each Node (Mobile"
+                  f"{' vs Stationary' if include_stationary else ''}"
+                  f"{' vs Static Mobility' if include_static_mobility else ''})",
+                  fontsize=14, fontweight="bold", x=0.5, y=0.95)
+    ax4.set_ylim(0, max_pdr_value)
     ax4.grid(axis="y", linestyle="--", alpha=0.6)
 
     # Display Overall PDR & Jain's Fairness
     overall_pdr_mobile = np.mean(final_pdr_mobile_list)
     overall_fairness_mobile = np.mean(final_fairness_mobile_list)
 
-    ax4.text(num_nodes - 0.3, 70, f"Jain's Fairness (Mobile) = {overall_fairness_mobile:.2f}",
-             color="purple", fontsize=12, fontweight="bold")
-    ax4.text(num_nodes - 0.3, 60, f"Overall PDR (Mobile) = {overall_pdr_mobile:.2f}%",
-             fontsize=12, fontweight="bold")
+    ax4.text(axis_right_x_pos, .70, f"Fairness (Mobile) = {overall_fairness_mobile:.2f}",
+             color="purple", fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
+    ax4.text(axis_right_x_pos , .60, f"Overall PDR (Mobile) = {overall_pdr_mobile:.2f}%",
+             fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
 
     if include_stationary:
         overall_pdr_stationary = np.mean(final_pdr_stationary_list)
         overall_fairness_stationary = np.mean(final_fairness_stationary_list)
 
-        ax4.text(num_nodes - 0.3, 50, f"Jain's Fairness (Stationary) = {overall_fairness_stationary:.2f}",
-                 color="green", fontsize=12, fontweight="bold")
-        ax4.text(num_nodes - 0.3, 40, f"Overall PDR (Stationary) = {overall_pdr_stationary:.2f}%",
-                 fontsize=12, fontweight="bold")
+        ax4.text(axis_right_x_pos, .50, f"Fairness (Stationary) = {overall_fairness_stationary:.2f}",
+                 color="green", fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
+        ax4.text(axis_right_x_pos, .40, f"Overall PDR (Stationary) = {overall_pdr_stationary:.2f}%",
+                 fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
+
+    if include_static_mobility:
+        overall_pdr_static_mobility = np.mean(final_pdr_static_mobility_list)
+        overall_fairness_static_mobility = np.mean(final_fairness_static_mobility_list)
+
+        ax4.text(axis_right_x_pos, .30, f"Fairness (Static Mobility) = {overall_fairness_static_mobility:.2f}",
+                 color="red", fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
+        ax4.text(axis_right_x_pos, .20, f"Overall PDR (Static Mobility) = {overall_pdr_static_mobility:.2f}%",
+                 fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
 
     plt.subplots_adjust(top=0.85)
     ax4.legend()
@@ -387,8 +488,7 @@ def main():
     # Initialize OmnetEnv from the existing module
     env = OmnetEnv()
 
-    do_export_sb3_to_tflite = False
-    if do_export_sb3_to_tflite:
+    if False:
         sb3_to_tflite_pipeline("baselines3/stable-model-2d-best/best_model")
     config = load_config("config.json")
     # Get log path from the configuration
@@ -397,12 +497,14 @@ def main():
         print("Log file path is not specified in the configuration.")
         return
 
-    include_stationary = False
-    batch_size = 10
-    # Run the simulation
-    print("Starting simulation...")
-    env.run_simulation(batch_size=batch_size)
+    include_stationary = True
+    include_static_mobility = False
+    batch_size = 100
+    if False:
+        print("Starting simulation...")
+        env.run_simulation(ini_config="scenario_4_a", batch_size=batch_size)
 
+    # Data storage for batch results
     final_pdr_mobile_per_node_list = []
     final_pdr_mobile_list = []
     final_fairness_mobile_list = []
@@ -411,41 +513,45 @@ def main():
     final_pdr_stationary_list = []
     final_fairness_stationary_list = []
 
+    final_pdr_static_mobility_per_node_list = []
+    final_pdr_static_mobility_list = []
+    final_fairness_static_mobility_list = []
+
     print("Reading log data...")
     for batch_idx in range(batch_size):
-        # Read the log data, process it
-        data = extract_episode_stats(read_log(batch_idx, log_path))
+        # Read and process log data
+        log_data = read_log(batch_idx, log_path)
+        data = extract_episode_stats(log_data)
 
-        # Retrieve the final PDR for mobile and stationary gateways
-        final_pdr_mobile_per_node = data["pdr_mobile_per_node"][-1]  # Last value of mobile PDR
-        final_pdr_mobile = data["pdr_mobile"][-1]
-        final_pdr_stationary_per_node = data["pdr_stationary_per_node"][-1]  # Last value of stationary PDR
-        final_pdr_stationary = data["pdr_stationary"][-1]
+        # Extract final batch values
+        final_pdr_mobile_per_node_list.append(data["pdr_mobile_per_node"][-1])
+        final_pdr_mobile_list.append(data["pdr_mobile"][-1])
+        final_fairness_mobile_list.append(data["fairness_mobile"][-1])
 
-        # Retrieve the final fairness for mobile and stationary gateways
-        final_fairness_mobile = data["fairness_mobile"][-1]  # Last value of mobile fairness
-        final_fairness_stationary = data["fairness_stationary"][-1]  # Last value of stationary fairness
+        final_pdr_stationary_per_node_list.append(data["pdr_stationary_per_node"][-1])
+        final_pdr_stationary_list.append(data["pdr_stationary"][-1])
+        final_fairness_stationary_list.append(data["fairness_stationary"][-1])
 
-        # Append the final values to their respective lists
-        final_pdr_mobile_per_node_list.append(final_pdr_mobile_per_node)
-        final_pdr_mobile_list.append(final_pdr_mobile)
-        final_fairness_mobile_list.append(final_fairness_mobile)
+        final_pdr_static_mobility_per_node_list.append(data["pdr_static_mobility_per_node"][-1])
+        final_pdr_static_mobility_list.append(data["pdr_static_mobility"][-1])
+        final_fairness_static_mobility_list.append(data["fairness_static_mobility"][-1])
 
-        final_pdr_stationary_per_node_list.append(final_pdr_stationary_per_node)
-        final_pdr_stationary_list.append(final_pdr_stationary)
-        final_fairness_stationary_list.append(final_fairness_stationary)
-
-        if batch_idx + 1 == batch_size:  # Only do these plots for the last episode in the batch
-            # Plot all figures (Gateway Position, Packets, Transmission Times)
-            print("Plotting results...")
-            plot_omnet_episode(data, include_stationary=include_stationary)
+        # Plot only for the last batch
+        if batch_idx + 1 == batch_size:
+            print(f"Plotting episode {batch_idx + 1} results...")
+            plot_omnet_episode(data,
+                               include_stationary=include_stationary,
+                               include_static_mobility=include_static_mobility)
 
     # After reading and processing all batches, plot the batch performance (PDR and fairness)
-    plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_per_node_list,
-                           final_pdr_mobile_list, final_pdr_stationary_list,
-                           final_fairness_mobile_list, final_fairness_stationary_list,
-                           include_stationary=include_stationary
-                           )
+    print("Plotting batch performance...")
+
+    plot_batch_performance(
+        final_pdr_mobile_per_node_list, final_pdr_stationary_per_node_list, final_pdr_static_mobility_per_node_list,
+        final_pdr_mobile_list, final_pdr_stationary_list, final_pdr_static_mobility_list,
+        final_fairness_mobile_list, final_fairness_stationary_list, final_fairness_static_mobility_list,
+        include_stationary=include_stationary, include_static_mobility=include_static_mobility
+    )
 
 
 if __name__ == "__main__":

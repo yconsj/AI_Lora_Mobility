@@ -37,6 +37,8 @@ void StateLogger::initialize() {
     int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
     transmission_id_vec.resize(number_of_nodes, -1);
     stationary_gw_received_packets_per_node_current_vec.resize(number_of_nodes, 0);
+
+    static_mobility_gw_received_packets_per_node_current_vec.resize(number_of_nodes, 0);
 }
 
 void StateLogger::addTransmissionTime(int node_index) {
@@ -58,10 +60,26 @@ void StateLogger::logStationaryGatewayPacketReception(int lora_gw_index, int lor
         return;
     }
     transmission_id_vec[lora_node_index] = std::max(transmission_id_vec[lora_node_index], transmitter_sequence_number);
-    stationary_reception_times_vec.push_back(simTime().dbl());
     stationary_gw_received_packets_per_node_current_vec[lora_node_index] += 1;
-
 }
+
+void StateLogger::logStaticMobilityGatewayPacketReception( int lora_node_index, int transmitter_sequence_number) {
+    // TODO: Consider adding node distances
+    EV << "lora_node_index="<< lora_node_index << endl;
+    EV << "transmitter_sequence_number="<< transmitter_sequence_number << endl;
+    /*
+    if (transmission_id_vec[lora_node_index] >= transmitter_sequence_number) {
+        EV << "Duplicate packet received" << endl;
+        return;
+    }
+    transmission_id_vec[lora_node_index] = std::max(transmission_id_vec[lora_node_index], transmitter_sequence_number);
+    */
+
+    static_mobility_gw_received_packets_per_node_current_vec[lora_node_index] += 1;
+}
+
+
+
 void StateLogger::logStep(
         Coord gw_pos,
         std::vector<float> node_distances,
@@ -78,6 +96,7 @@ void StateLogger::logStep(
 
     transmissions_per_node_vec.push_back(transmissions_per_node_current_vec);
     stationary_gw_number_of_received_packets_per_node_vec.push_back(stationary_gw_received_packets_per_node_current_vec);
+    static_mobility_gw_number_of_received_packets_per_node_vec.push_back(static_mobility_gw_received_packets_per_node_current_vec);
 }
 
 
@@ -109,11 +128,11 @@ void StateLogger::writeToFile() {
         outputJson["nodes"]["transmission_times"] = transmission_times_vec;
         outputJson["nodes"]["transmissions_per_node"] = transmissions_per_node_vec;
 
+        outputJson["stationary_gw_data"]["stationary_gw_number_of_received_packets_per_node"] =
+                stationary_gw_number_of_received_packets_per_node_vec;
 
-        // Add stationary gateway reception times to the JSON object
-        outputJson["stationary_gw_data"]["stationary_gateway_reception_times"] = stationary_reception_times_vec;
-        outputJson["stationary_gw_data"]["stationary_gw_number_of_received_packets_per_node"] = stationary_gw_number_of_received_packets_per_node_vec;
-
+        outputJson["static_mobility_gw_data"]["static_mobility_gw_number_of_received_packets_per_node"] =
+                static_mobility_gw_number_of_received_packets_per_node_vec;
 
         // Write the JSON object to the file
         outFile << outputJson.dump(4);  // Pretty print with 4-space indentation
