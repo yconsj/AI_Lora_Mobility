@@ -142,7 +142,14 @@ def test_sb3_tf_model_conversion(sb3_model, tf_model: TFPolicy):
 
 
 def sb3_to_tflite_pipeline(relative_model_path):
-    model = PPO.load(relative_model_path, print_system_info=True)
+    # For loading models generated in python3.7
+    custom_objects = {
+        "learning_rate": 0.0,
+        "lr_schedule": lambda _: 0.0,
+        "clip_range": lambda _: 0.0,
+    }
+
+    model = PPO.load(relative_model_path, print_system_info=True, custom_objects=custom_objects, device="cpu")
     env = make_vec_env(TwoDEnv, n_envs=1, env_kwargs=dict())
 
     tf_model = sb3_to_tensorflow(model, env)

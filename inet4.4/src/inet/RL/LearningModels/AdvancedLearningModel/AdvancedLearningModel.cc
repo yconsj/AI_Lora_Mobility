@@ -36,7 +36,7 @@ float* model_output_buffer = nullptr;
 // Define dimensions
 
 const int kInputHeight = 1;
-const int kInputWidth = 3 * number_of_nodes + (recent_packets_length * number_of_nodes);
+const int kInputWidth = 3 * number_of_nodes;
 const int kOutputHeight = 1;
 const int kOutputWidth = 5;
 
@@ -134,6 +134,14 @@ void AdvancedLearningModel::initialize(int stage)
    else if (stage == INITSTAGE_LAST) {
        EV << "initstage after mobility. fetch node values" <<omnetpp::endl;
        nodeValueInitialization();
+
+
+       cConfigOption simTimeConfig("sim-time-limit", true,cConfigOption::Type::CFG_DOUBLE, "s", "0", "sim-time-limit");
+       sim_time_limit = getSimulation()->getActiveEnvir()->getConfig()->getAsDouble(&simTimeConfig, 0);
+       EV << "sim_time_limit = " << sim_time_limit << endl;
+       max_cross_distance = getMobilityModule()->getMaxCrossDistance();
+
+
    }
 }
 
@@ -190,52 +198,8 @@ void AdvancedLearningModel::nodeValueInitialization() {
 }
 
 
-double AdvancedLearningModel::readJsonValue(const json& jsonData, const std::string& key) {
-    if (jsonData.contains(key)) {
-        return jsonData[key].get<double>(); // Retrieve the value and return it as a double
-    } else {
-        throw cRuntimeError("Missing '%s' in JSON file.", key.c_str());
-    }
-}
 
-void AdvancedLearningModel::readJsonFile(const std::string& filepath) {
-    // Open the JSON file
-    std::ifstream inputFile(filepath);
-    if (!inputFile.is_open()) {
-        throw cRuntimeError("Error opening file: %s", filepath.c_str());
-    }
 
-    // Parse the JSON
-    json jsonData;
-    try {
-        inputFile >> jsonData;
-    } catch (json::parse_error& e) {
-        throw cRuntimeError("JSON parsing error in file %s: %s", filepath.c_str(), e.what());
-    }
-
-    // Check and retrieve required keys
-    if (!jsonData.contains("packet_reward") || !jsonData.contains("exploration_reward")) {
-        throw cRuntimeError("JSON file %s does not contain required keys 'packet_reward' or 'exploration_reward'.", filepath.c_str());
-    }
-
-    // Retrieve values using the generic readJsonValue function
-    try {
-        random_choice_probability = readJsonValue(jsonData, "random_choice_probability");
-
-        const json& normalization = jsonData["normalization"];
-
-        // Read normalization factors
-        latest_packet_rssi_norm_factor = readJsonValue(normalization, "latest_packet_rssi");
-        latest_packet_snir_norm_factor = readJsonValue(normalization, "latest_packet_snir");
-        latest_packet_timestamp_norm_factor = readJsonValue(normalization, "latest_packet_timestamp");
-        num_received_packets_norm_factor = readJsonValue(normalization, "num_received_packets");
-        current_timestamp_norm_factor = readJsonValue(normalization, "current_timestamp");
-        coord_x_norm_factor = readJsonValue(normalization, "coord_x");
-
-    } catch (const cRuntimeError& e) {
-        throw cRuntimeError("Error reading JSON values: %s", e.what());
-    }
-}
 
 StateLogger* AdvancedLearningModel::getStateLoggerModule() {
     // Retrieve the network module directly
@@ -353,7 +317,7 @@ int AdvancedLearningModel::selectOutputIndex(float random_choice_probability, co
     }
 
     // Stochastic mode
-    float random_value = static_cast<float>(rand()) / RAND_MAX; // Random value in [0, 1)
+    float random_value = (float)(rand()) / RAND_MAX; // Random value in [0, 1)
     if (random_choice_probability > random_value) {
         // Choose a random integer from 0 to num_outputs - 1
         selected_index = rand() % num_outputs;
@@ -431,10 +395,6 @@ int AdvancedLearningModel::invokeModel() {
         onehot_encoded_recent_packets
     )
 */
-    static cConfigOption simTimeConfig("sim-time-limit", true,cConfigOption::Type::CFG_DOUBLE, "s", "0", "sim-time-limit");
-    static simtime_t sim_time_limit = getSimulation()->getActiveEnvir()->getConfig()->getAsDouble(&simTimeConfig, 0);
-    EV << "sim_time_limit = " << sim_time_limit << endl;
-    static float max_cross_distance = getMobilityModule()->getMaxCrossDistance();
 
     Coord gw_pos = getCoord();
 
@@ -461,19 +421,6 @@ int AdvancedLearningModel::invokeModel() {
         normalized_node_directions.push_back(norm_direction);
     }
 
-    std::vector<std::vector<float>> onehot_encoded_recent_packets;
-    for (int recent_packet : recent_packets) {
-        // Create a one-hot vector initialized with 0.0
-        std::vector<float> onehot(nodes.size(), 0.0);
-
-        // Set the corresponding index to 1.0 if the recent_packet is valid
-        if (recent_packet >= 0 && recent_packet < nodes.size()) {
-            onehot[recent_packet] = 1.0;
-        }
-
-        // Add the one-hot encoded vector to the result
-        onehot_encoded_recent_packets.push_back(onehot);
-    }
 
     // Insert input data for the model from state values
     // Inserting the normalized expected send times
@@ -498,13 +445,6 @@ int AdvancedLearningModel::invokeModel() {
         index++;
     }
 
-    // Inserting the one-hot encoded recent packets
-    for (const std::vector<float>& onehot : onehot_encoded_recent_packets) {
-        for (int i = 0; i < onehot.size(); ++i) {
-            model_input->data.f[index] = onehot[i];
-            index++;
-        }
-    }
 
     // Place the quantized input in the model's input tensor
     for (size_t i = 0; i < kInputWidth; ++i) { // Adjust based on your actual number of inputs

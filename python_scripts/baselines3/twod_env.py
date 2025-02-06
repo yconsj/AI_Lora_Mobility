@@ -431,6 +431,7 @@ class TwoDEnv(gym.Env):
     def log_done(self):
         episode_data = {
             "static": {
+                "number_of_nodes": len(self.nodes),
                 "node_positions_x":
                     [node.pos[0] for node in self.nodes],
                 "node_positions_y":

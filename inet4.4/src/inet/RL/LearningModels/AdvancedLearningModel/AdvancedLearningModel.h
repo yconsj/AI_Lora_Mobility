@@ -77,14 +77,15 @@ private:
     const Coord getCoord();
     AdvancedRLMobility* getMobilityModule();
     virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
-    void readJsonFile(const std::string& filepath);
-    double readJsonValue(const json& jsonData, const std::string& key);
     int selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic);
     double calculateNormalizedAngle(const Coord& coord1, const Coord& coord2);
 private:
 
     std::vector<uint8_t> model_data;
     double random_choice_probability = 0.0;
+
+    simtime_t sim_time_limit;
+    float max_cross_distance;
 
     std::vector<int> number_of_received_packets_per_node;
 
@@ -95,13 +96,6 @@ private:
     std::deque<float> recent_packets;
     std::vector<cModule *> nodes;
 
-    // Normalization factors initialized to -1.0
-    double latest_packet_rssi_norm_factor = -1.0;    // Normalization factor for packet RSSI
-    double latest_packet_snir_norm_factor = -1.0;    // Normalization factor for packet SNIR
-    double latest_packet_timestamp_norm_factor = -1.0; // Normalization factor for packet timestamp
-    double num_received_packets_norm_factor = -1.0;  // Normalization factor for number of received packets
-    double current_timestamp_norm_factor = -1.0;     // Normalization factor for current timestamp
-    double coord_x_norm_factor = -1.0;               // Normalization factor for x-coordinate
 
 };
 

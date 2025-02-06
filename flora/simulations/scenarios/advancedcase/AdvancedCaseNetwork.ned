@@ -3,6 +3,7 @@ package flora.simulations.scenarios.advancedcase;
 
 import flora.RLNodes.Nodes.MobileLoRaGW;
 import flora.RLNodes.Nodes.StationaryLoRaGW;
+import flora.RLNodes.Nodes.StaticMobilityLoRaGW;
 import inet.node.inet.StandardHost;
 import inet.visualizer.common.IntegratedVisualizer;
 import inet.applications.udpapp.UdpBasicApp;
@@ -36,6 +37,7 @@ network AdvancedCaseNetwork
             @display("p=157,238;is=s");
         };
         StationaryLoraGw[numberOfStationaryGateways] : StationaryLoRaGW;
+        StaticMobilityLoRaGW: StaticMobilityLoRaGW;
         stateLogger : StateLogger;
         LoRaMedium: CustomLoRaMedium { // LoRaMedium
             @display("p=309,102");
@@ -53,7 +55,7 @@ network AdvancedCaseNetwork
         internetCloud: InternetCloud {
             @display("p=231,44");
         }
-        gwRouter[numberOfMobileGateways + numberOfStationaryGateways]: Router {
+        gwRouter[numberOfMobileGateways + numberOfStationaryGateways + 1]: Router {
             @display("p=231,134");
         }
         nsRouter: Router {
@@ -70,4 +72,7 @@ network AdvancedCaseNetwork
             internetCloud.pppg++ <--> Eth1G <--> gwRouter[numberOfMobileGateways + i].pppg++;
             gwRouter[numberOfMobileGateways + i].ethg++ <--> Eth1G <--> StationaryLoraGw[i].ethg++;
         }
+        internetCloud.pppg++ <--> Eth1G <--> gwRouter[numberOfMobileGateways + numberOfStationaryGateways].pppg++;
+        gwRouter[numberOfMobileGateways + numberOfStationaryGateways].ethg++ <--> Eth1G <--> StaticMobilityLoRaGW.ethg++;
+        
 }
