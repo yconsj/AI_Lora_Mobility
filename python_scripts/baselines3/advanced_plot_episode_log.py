@@ -216,9 +216,9 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     fig2, axes = plt.subplots(1, 2, figsize=(10, 4))  # 1 row, 2 columns
     plt.tight_layout()  # Ensure the layout doesn't overlap
     # Box plot for PDR
-    axes[0].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0f} %'))
-
-    axes[0].boxplot(all_pdr, patch_artist=True,
+    axes[0].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f} %'))
+    all_pdr_scaled = [x * 100 for x in all_pdr]
+    axes[0].boxplot(all_pdr_scaled, patch_artist=True,
                     boxprops=dict(facecolor="lightblue", color="blue"),
                     medianprops=dict(color="black"),
                     whiskerprops=dict(color="blue"),
@@ -272,7 +272,7 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
         height = bar.get_height()
         ax3.text(bar.get_x() + bar.get_width() / 2, height + 2, f"{pdr * 100:.1f}%",
                  ha="center", fontsize=10, fontweight="bold")
-
+    ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0f} %'))
     ax3.set_xticks(x_indices)
     ax3.set_xticklabels([f"Node {i}" for i in range(num_nodes)])
 
