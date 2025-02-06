@@ -212,34 +212,35 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     all_fairness = [jains_fairness_index(final_receives, final_sents)
                     for final_receives, final_sents in zip(all_final_receives, all_final_sents)]
     n_episodes = min(len(all_pdr), len(all_fairness))
-
-    # Plot PDR and fairness on the same y-axis
-    plt.plot(range(1, n_episodes + 1), all_pdr, label="PDR", color="blue", marker="o", linestyle="-")
-    plt.plot(range(1, n_episodes + 1), all_fairness, label="Fairness", color="red", marker="x", linestyle="--")
-
-    plt.xlabel("Episode")
-    plt.ylabel("Values (PDR and Fairness)")
-    plt.ylim(0, 1)  # Set y-axis for both PDR and fairness from 0 to 1
-
-    # Add title and legend
-    plt.title("Performance: PDR and Fairness over Episodes")
-    plt.legend(loc="upper right")  # Place the legend in the upper right corner
-    plt.grid(True, linestyle="--", alpha=0.5)  # Optional grid for clarity
-
+    # Create side-by-side boxplots
+    fig2, axes = plt.subplots(1, 2, figsize=(10, 4))  # 1 row, 2 columns
     plt.tight_layout()  # Ensure the layout doesn't overlap
-    #plt.show()
+    # Box plot for PDR
+    axes[0].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0f} %'))
 
-    # Plot the box plot for PDR and fairness
-    fig2, ax3 = plt.subplots(figsize=(6, 4))
-    ax3.boxplot([all_pdr, all_fairness], labels=["PDR", "Fairness"], patch_artist=True,
-                boxprops=dict(facecolor="lightblue", color="blue"),
-                medianprops=dict(color="black"),
-                whiskerprops=dict(color="blue"),
-                capprops=dict(color="blue"),
-                flierprops=dict(marker="o", color="red", alpha=0.6))
-
-    ax3.set_title("Box Plot: PDR and Fairness Distribution")
-    ax3.set_ylabel("Values")
+    axes[0].boxplot(all_pdr, patch_artist=True,
+                    boxprops=dict(facecolor="lightblue", color="blue"),
+                    medianprops=dict(color="black"),
+                    whiskerprops=dict(color="blue"),
+                    capprops=dict(color="blue"),
+                    flierprops=dict(marker="o", color="red", alpha=0.6))
+    axes[0].set_title("PDR Statistics")
+    axes[0].set_ylabel("PDR (%)")
+    axes[0].set_ylim(0, 105)  # Set PDR range
+    # Box plot for Fairness
+    axes[1].boxplot(all_fairness, patch_artist=True,
+                    boxprops=dict(facecolor="lightblue", color="blue"),
+                    medianprops=dict(color="black"),
+                    whiskerprops=dict(color="blue"),
+                    capprops=dict(color="blue"),
+                    flierprops=dict(marker="o", color="red", alpha=0.6))
+    axes[1].set_title("Fairness Statistics")
+    axes[1].set_ylabel("Fairness")
+    axes[1].set_ylim(0, 1.05)  
+    axes[0].set_xticklabels([])  
+    axes[0].set_xticks([]) 
+    axes[1].set_xticklabels([]) 
+    axes[1].set_xticks([])  
     # ax3.set_ylim(0, 1)
     plt.tight_layout()
     plt.savefig("plots/box.png")
@@ -251,6 +252,10 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
                     for received, sent in zip(zip(*all_final_receives), zip(*all_final_sents))]
     pdr_std_per_node = [np.std([r / s if s > 0 else 0 for r, s in zip(received, sent)])
                         for received, sent in zip(zip(*all_final_receives), zip(*all_final_sents))]
+    
+    pdr_per_node_nofaulty = pdr_per_node[:2] + pdr_per_node[3:]
+    pdr_std_per_node_nofaulty = pdr_std_per_node[:2] + pdr_std_per_node[3:]
+
     overall_pdr = np.mean(all_pdr)
     overall_fairness = np.mean(all_fairness)
 
@@ -274,7 +279,7 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     ax3.set_xlabel("Nodes")
     ax3.set_ylabel("Percentage (%)")
     ax3.set_title("PDR for Each Node")
-    ax3.set_ylim(0, 100)
+    ax3.set_ylim(0, 105)
     ax3.grid(axis="y", linestyle="--", alpha=0.6)
 
     # Display Overall PDR & Jain's Fairness
