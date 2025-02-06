@@ -62,12 +62,13 @@ def plot_relative_position(log_file, node_idx):
     )
     axs.set_xlabel("Time (steps)", fontsize=24)  # Increase x-axis label size
     axs.set_ylabel("Distance (meters)", fontsize=24)  # Increase y-axis label size
-    axs.set_title("Distance from Gateway to Nodes Over Time", fontsize=24)  # Increase title size
+    axs.set_title(f"Distance from Gateway to Node {node_idx} Over Time", fontsize=24)  # Increase title size
     axs.grid()
 
     plt.tight_layout(pad=3)  # Add padding to prevent overlap
     plt.subplots_adjust(bottom=0.15)  # Ensure space at the bottom for legends
-    plt.show()
+    plt.savefig(f"plots/distance_{node_idx}.png")
+    #plt.show()
 
 
 def plot_mobile_gateway_with_nodes_advanced(log_file):
@@ -129,7 +130,9 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     # Adjust layout and make room for legend
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.25)  # Add extra space at the bottom for the legend
-    plt.show()
+
+    plt.savefig("plots/packets.png")
+    #plt.show()
 
 
 def create_heatmap(gw_positions, grid_size_x, grid_size_y):
@@ -173,7 +176,8 @@ def _plot_heatmap(grid, node_positions):
     plt.title('Mobile Gateway Heatmap')
     plt.xlabel('Grid X')
     plt.ylabel('Grid Y')
-    plt.show()
+    plt.savefig("plots/heatmap.png")
+    #plt.show()
 
 
 def plot_heatmap(log_file):
@@ -223,7 +227,7 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     plt.grid(True, linestyle="--", alpha=0.5)  # Optional grid for clarity
 
     plt.tight_layout()  # Ensure the layout doesn't overlap
-    plt.show()
+    #plt.show()
 
     # Plot the box plot for PDR and fairness
     fig2, ax3 = plt.subplots(figsize=(6, 4))
@@ -238,7 +242,8 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     ax3.set_ylabel("Values")
     # ax3.set_ylim(0, 1)
     plt.tight_layout()
-    plt.show()  # Show the box plot
+    plt.savefig("plots/box.png")
+    #plt.show()  # Show the box plot
 
     # Third plot: Bar plot for PDR & Fairness per node
     num_nodes = len(all_final_receives[0])
@@ -264,7 +269,7 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
                  ha="center", fontsize=10, fontweight="bold")
 
     ax3.set_xticks(x_indices)
-    ax3.set_xticklabels([f"Node {i + 1}" for i in range(num_nodes)])
+    ax3.set_xticklabels([f"Node {i}" for i in range(num_nodes)])
 
     ax3.set_xlabel("Nodes")
     ax3.set_ylabel("Percentage (%)")
@@ -280,4 +285,6 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
 
     ax3.legend()
     plt.tight_layout()
-    plt.show()
+
+    plt.savefig("plots/bar.png")
+    #plt.show()
