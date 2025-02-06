@@ -96,7 +96,7 @@ class TwoDEnv(gym.Env):
         # Environment.pos
         self.steps = 0
         self.max_steps = max_steps  # Maximum steps per episode
-        self.max_time = 86400
+        self.max_send_interval = 4000  # 86400 / 2
         # Environment state
         # Scaled reward values preserving relative ratios
         self.pos_reward_max = 0.0125
@@ -237,7 +237,7 @@ class TwoDEnv(gym.Env):
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
         positions = self.get_random_node_positions(num_positions=len(self.nodes),
-                                                   min_dist=2 * self.node_max_transmission_distance)
+                                                   min_dist=5)  # min_dist=2 * self.node_max_transmission_distance
         self.base_send_interval = random.choice([1500, 1750, 2000])
         self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
                                self.base_send_interval * 2]
@@ -274,7 +274,7 @@ class TwoDEnv(gym.Env):
     def get_state(self):
 
         # Other normalized components
-        normalized_expected_send_time = [(expected_time - self.steps) / self.max_time for expected_time in
+        normalized_expected_send_time = [(expected_time - self.steps) / self.max_send_interval for expected_time in
                                          self.expected_send_time]
 
         normalized_node_distances = [

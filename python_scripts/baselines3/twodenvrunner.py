@@ -97,13 +97,8 @@ class TensorboardCallback(BaseCallback):
 
 
 def main():
-    model_class = PPO  # (or DQN)
-    if model_class == PPO:
-        envs = 16
-    else:  # assuming DQN.
-        # TODO: below needs to be verified:
-        #  'Off-policy do not make good use of multiple environments at once.'
-        envs = 1
+
+    envs = 16
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
     gamma = 0.85  # base: 0.85
     ent_coef = 0.005  # base: 0.005
@@ -115,17 +110,24 @@ def main():
     print(f"{max_steps = }")
     print(f"{time_skip = }")
 
+    # for scenarios:
+    model_class = PPO  # (can be replaced with DQN)
+    use_ReLu = False  # default activation function is tanh
+    use_ResNet = False
+
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=100, verbose=1)
-    eval_callback = EvalCallback(env, eval_freq=steps_per_episode * 2, callback_after_eval=stop_train_callback,
+    eval_callback = EvalCallback(env, eval_freq=steps_per_episode * 2, #  callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     if model_class == PPO:
         policy_kwargs = dict(
-            # features_extractor_class=CustomPolicyNetwork,
-            # features_extractor_kwargs=dict(features_dim=64, num_blocks=n_blocks),
-            # activation_fn=nn.ReLU,
             share_features_extractor=True,
             net_arch=[64, 64, 64]
         )
+        if use_ReLu:
+            policy_kwargs["activation_fn"] = nn.ReLU
+        if use_ResNet:
+            policy_kwargs["features_extractor_class"] = CustomPolicyNetwork
+            policy_kwargs["features_extractor_kwargs"] = dict(features_dim=64, num_blocks=n_blocks)
         model = PPO("MlpPolicy", env, device="cpu", learning_rate=learning_rate, gamma=gamma, ent_coef=ent_coef,
                     batch_size=64,
                     clip_range=0.15,
@@ -150,10 +152,11 @@ def main():
     # "tpt": 'true packet time'
     # "fe": full episode, i.e. not early termination
     # "sm": small model (fewer inputs in observation)
-    tb_log_name = f"{model_type}_ept_sm;b_{n_blocks};g_{gamma};e_{ent_coef};lr_{learning_rate}"
+    tb_log_name = f"{model_type};{'relu' if use_ReLu else 'tanh'};{'resnet' if use_ResNet else 'mlp'};" \
+                  f"g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
-    model = model.learn(8_000_000, callback=[eval_callback, TensorboardCallback()],
+    model = model.learn(10_000_000, callback=[eval_callback, TensorboardCallback()],
                         tb_log_name=tb_log_name)
 
     print("Learning finished")
