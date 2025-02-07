@@ -13,16 +13,22 @@ inet4.4/**/*_m.cc
 tflite-micro-arduino-examples/Makefile
 tflite-micro-arduino-examples/src/Makefile
 tflite-micro-arduino-examples/out/
-
+tflite-micro-arduino-examples/.settings/language.settings.xml
 
 # modelfiles and training data:
-flora/simulations/scenarios/basecase/logFile.txt
-flora/simulations/scenarios/basecase/logFile_*.txt
-flora/simulations/scenarios/advancedcase/logFile_*.json
 python_scripts/g_model
 flora/simulations/scenarios/basecontrolcase/stationaryPacketLog.json
 inet4.4/src/inet/mobility/RL/modelfiles/
+python_scripts/baselines3/basecase/stable-model-best/
+python_scripts/baselines3/basecase/stable-model.zip
+python_scripts/baselines3/stable-model-2d-best/
+python_scripts/baselines3/stable-model.zip
 
+# temporary evaluation data (move to a different directory if you need to back it up)
+flora/simulations/scenarios/advancedcase/logFile_*.json
+python_scripts/baselines3/env_log.json
+
+# Python
 python_scripts/venv/
 python_scripts/__pycache__/
 python_scripts/.idea/
@@ -55,6 +61,8 @@ python_scripts/.idea/
 *.la
 *.a
 *.lib
+
+
 
 # Executables
 *.exe
