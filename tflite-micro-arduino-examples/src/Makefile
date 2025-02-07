@@ -2,7 +2,7 @@
 # OMNeT++/OMNEST Makefile for $(LIB_PREFIX)tflite-micro-arduino-examples
 #
 # This file was generated with the command:
-#  opp_makemake --make-lib -f --deep -O out -I. -Ithird_party/cmsis/CMSIS/Core/Include -L../out/$$\(CONFIGNAME\)
+#  opp_makemake --make-lib -f --deep -O out -I. -IC:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility/tflite-micro-arduino-examples/src/third_party/cmsis/CMSIS/Core/Include -L../out/$$\(CONFIGNAME\)
 #
 
 # Name of target to be created (-o option)
@@ -14,7 +14,7 @@ TARGET_IMPDEF = $(TARGET_NAME)$(IMPDEF_SUFFIX)
 TARGET_FILES = $(TARGET_DIR)/$(TARGET)
 
 # C++ include paths (with -I)
-INCLUDE_PATH = -I. -Ithird_party/cmsis/CMSIS/Core/Include
+INCLUDE_PATH = -I. -IC:/Users/augus/Desktop/MainFolder/University/Master/MscThesis/Project/Git/AI_Lora_Mobility/tflite-micro-arduino-examples/src/third_party/cmsis/CMSIS/Core/Include
 
 # Additional object and library files to link with
 EXTRA_OBJS =
