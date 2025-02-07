@@ -18,7 +18,7 @@ tflite-micro-arduino-examples/.settings/language.settings.xml
 # modelfiles and training data:
 python_scripts/g_model
 flora/simulations/scenarios/basecontrolcase/stationaryPacketLog.json
-inet4.4/src/inet/mobility/RL/modelfiles/
+inet4.4/src/inet/RL/modelfiles/
 python_scripts/baselines3/basecase/stable-model-best/
 python_scripts/baselines3/basecase/stable-model.zip
 python_scripts/baselines3/stable-model-2d-best/
