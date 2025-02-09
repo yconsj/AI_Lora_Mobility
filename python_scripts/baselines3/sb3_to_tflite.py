@@ -14,7 +14,6 @@ from baselines3.twod_env import TwoDEnv
 from tf_exporter import rewrite_policy_net_header
 from baselines3.utilities import load_config
 
-
 """
 THIS CODE IS BASED ON THE SIMPLE CONVERTER FOR Stable-basleines3 MODELS TO TfLite FOUND HERE:
 https://github.com/chunky/sb3_to_coral
@@ -26,6 +25,7 @@ class TFPolicy(tf.keras.Model):
     """
     TensorFlow policy model mimicking the structure of a Stable-Baselines3 PPO policy.
     """
+
     def __init__(self, input_dim, output_dim, hidden_layers):
         super().__init__()
         self.input_dim = input_dim
@@ -41,6 +41,7 @@ class TFPolicy(tf.keras.Model):
         """
         Generates a concrete function for TensorFlow model conversion.
         """
+
         @tf.function(input_signature=[tf.TensorSpec(shape=[None, self.input_dim], dtype=tf.float32)])
         def concrete_function(x):
             return self.call(x)
@@ -93,10 +94,10 @@ def sb3_to_tensorflow(sb3_model, env) -> TFPolicy:
     ]
     tf_layers, _ = extract_torch_layers(sb3_layers, input_dim)
 
-    return TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=tf_layers) #
+    return TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=tf_layers)  #
 
 
-def tf_to_tflite(tf_model, export_path):
+def tf_to_tflite(tf_model, export_path, extra_header_defs=None):
     """
     Converts a TensorFlow model to TensorFlow Lite format.
     """
@@ -115,7 +116,7 @@ def tf_to_tflite(tf_model, export_path):
         # Export additional information
         g_model_length = len(tflite_model)
         header_path = os.path.join(os.path.dirname(export_path), "policy_net_model.h")
-        rewrite_policy_net_header(header_path, export_path, g_model_length)
+        rewrite_policy_net_header(header_path, export_path, g_model_length, extra_header_defs=extra_header_defs)
     except Exception as e:
         print(f"Error during TFLite conversion: {e}")
 
@@ -151,16 +152,21 @@ def sb3_to_tflite_pipeline(relative_model_path):
 
     model = PPO.load(relative_model_path, print_system_info=True, custom_objects=custom_objects, device="cpu")
     env = make_vec_env(TwoDEnv, n_envs=1, env_kwargs=dict())
+    max_send_interval = env.get_attr("max_send_interval")[0]
 
     tf_model = sb3_to_tensorflow(model, env)
     test_sb3_tf_model_conversion(sb3_model=model, tf_model=tf_model)
 
     config = load_config("config.json")
     export_model_path = config['model_path']
-    tf_to_tflite(tf_model, export_model_path)
+
+    header_defs = {
+        "const int MAX_SEND_INTERVAL": max_send_interval
+    }
+
+    tf_to_tflite(tf_model, export_model_path, extra_header_defs=header_defs)
 
 
 if __name__ == '__main__':
     random.seed(0)
     sb3_to_tflite_pipeline("stable-model-2d-best/best_model")
-

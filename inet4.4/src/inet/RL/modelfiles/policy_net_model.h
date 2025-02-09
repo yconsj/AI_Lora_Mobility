@@ -9,4 +9,6 @@ const char* log_file_basename = "logFile"; // name for log file
 
 const char* training_info_path = "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/inet4.4/src/inet/RL/modelfiles/training_info.json"; // name for log file
 
+const int MAX_SEND_INTERVAL = 4000;
+
 #endif  // INET_MOBILITY_RL_MODELFILES_POLICY_NET_MODEL_H_

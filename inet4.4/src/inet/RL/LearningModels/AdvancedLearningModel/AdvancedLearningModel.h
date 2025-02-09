@@ -16,8 +16,6 @@
 #ifndef INET_RL_LEARNINGMODELS_ADVANCEDLEARNINGMODEL_H_
 #define INET_RL_LEARNINGMODELS_ADVANCEDLEARNINGMODEL_H_
 
-#include "inet/common/geometry/common/Coord.h"
-#include <vector>
 #include "tensorflow/lite/micro/system_setup.h"
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -28,8 +26,11 @@
 #include "../../MobilityModules/AdvancedRLMobility/AdvancedRLMobility.h"
 #include "inet/RL/include/json.hpp"
 #include "inet/RL/StateLogger/StateLogger.h"
+#include "inet/RL/modelfiles/policy_net_model.h"
 #include "inet/common/InitStages.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/geometry/common/Coord.h"
+#include "inet/mobility/contract/IMobility.h" // for accessing mobility
 
 #include <algorithm>  // std::generate
 #include <cassert>
@@ -43,14 +44,7 @@
 #include <array>
 #include <cmath>
 #include <deque>
-
-#include "inet/common/geometry/common/Coord.h"
-#include "inet/mobility/contract/IMobility.h" // for accessing mobility
 #include <random>  // For random sampling
-
-#include "../../MobilityModules/AdvancedRLMobility/AdvancedRLMobility.h"
-#include "inet/RL/modelfiles/policy_net_model.h"
-#include "inet/RL/StateLogger/StateLogger.h"  // Include the StateLogger header
 
 using json = nlohmann::json;
 
@@ -84,7 +78,7 @@ private:
     std::vector<uint8_t> model_data;
     double random_choice_probability = 0.0;
 
-    simtime_t sim_time_limit;
+    float send_interval_norm_factor;
     float max_cross_distance;
 
     std::vector<int> number_of_received_packets_per_node;

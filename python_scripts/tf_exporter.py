@@ -47,8 +47,10 @@ def tf_export(concrete_func, export_path, episode_num):
     #     print("xxd command not found. Please ensure WSL is installed and xxd is available.")
 
 
-def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length):
-    # TODO: EPISODE_NUM should be written in some other file, since Header is only parsed at compile-time, meaning EPISODE_NUM won't be updated during training
+def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length, extra_header_defs=None):
+    # INFO: any changes to a header file requires a re-compile of the OMNeT codebase to employ it.
+    # If any information needs to be inbetween compiles,
+    # then it must be written to some file that can be read at run-time. For example, using JSON format.
     config = load_config("config.json")
 
     header_file_basename = os.path.basename(header_file_path)
@@ -57,15 +59,17 @@ def rewrite_policy_net_header(header_file_path, model_file_path, g_model_length)
     ifdefguard = "INET_MOBILITY_RL_MODELFILES_" + header_file_basename.replace('.', '_').replace(' ', '_').upper() + "_"
 
     """Rewrite the policy_net_model.h file with updated constants."""
-    content = (
-        f"#ifndef {ifdefguard}\n"
-        f"#define {ifdefguard}\n\n"
-        f"constexpr int const_g_model_length = {g_model_length};\n\n"
-        f'const char* model_file_path = "{model_file_path}"; // Path to your TFLite model file\n\n'
-        f'const char* log_file_basename = "{log_file_basename}"; // name for log file\n\n'
-        f'const char* training_info_path = "{training_info_path}"; // name for log file\n\n'
-        f"#endif  // {ifdefguard}\n"
-    )
+    content = f"#ifndef {ifdefguard}\n"\
+              f"#define {ifdefguard}\n\n"\
+              f"constexpr int const_g_model_length = {g_model_length};\n\n"\
+              f'const char* model_file_path = "{model_file_path}"; // Path to your TFLite model file\n\n'\
+              f'const char* log_file_basename = "{log_file_basename}"; // name for log file\n\n'\
+              f'const char* training_info_path = "{training_info_path}"; // name for log file\n\n'
+
+    if isinstance(extra_header_defs,dict):
+        for key,value in extra_header_defs.items():
+            content += f"{key} = {value};\n\n"
+    content += f"#endif  // {ifdefguard}\n"
 
     with open(header_file_path, 'w', encoding='utf-8') as file:
         file.write(content)

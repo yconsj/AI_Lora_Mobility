@@ -135,10 +135,7 @@ void AdvancedLearningModel::initialize(int stage)
        EV << "initstage after mobility. fetch node values" <<omnetpp::endl;
        nodeValueInitialization();
 
-
-       cConfigOption simTimeConfig("sim-time-limit", true,cConfigOption::Type::CFG_DOUBLE, "s", "0", "sim-time-limit");
-       sim_time_limit = getSimulation()->getActiveEnvir()->getConfig()->getAsDouble(&simTimeConfig, 0);
-       EV << "sim_time_limit = " << sim_time_limit << endl;
+       send_interval_norm_factor = MAX_SEND_INTERVAL;
        max_cross_distance = getMobilityModule()->getMaxCrossDistance();
 
 
@@ -303,21 +300,29 @@ int AdvancedLearningModel::pollModel()
 
 
 int AdvancedLearningModel::selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic) {
+    if (num_outputs == 0) {
+        EV << "Error: num_outputs is zero, cannot determine output index.\n";
+        return -1;
+    }
     int selected_index = -1;
+
+    for (int i = 0; i < num_outputs; i++) {
+        EV << "model output [" << i << "] weight: " << model_output->data.f[i] << endl;
+
+    }
 
     if (deterministic) {
         float output = *(model_output->data.f);
-        EV << "model_output->data.f=" << output << endl;
         // Deterministic mode: choose the index with the highest weight
         selected_index = std::distance(model_output->data.f,
                           std::max_element(model_output->data.f, model_output->data.f + num_outputs));
         EV << "Deterministic mode: selected output index: " << selected_index
-           << " with highest weight: " << model_output->data.f[selected_index] << "\n";
+           << " with highest weight: " << model_output->data.f[selected_index] << endl;
         return selected_index;
     }
 
     // Stochastic mode
-    float random_value = (float)(rand()) / RAND_MAX; // Random value in [0, 1)
+    float random_value = rand() / RAND_MAX; // Random value in [0, 1)
     if (random_choice_probability > random_value) {
         // Choose a random integer from 0 to num_outputs - 1
         selected_index = rand() % num_outputs;
@@ -325,7 +330,7 @@ int AdvancedLearningModel::selectOutputIndex(float random_choice_probability, co
            << " with weight: " << model_output->data.f[selected_index] << "\n";
         return selected_index;
     } else {
-        random_value = static_cast<float>(rand()) / RAND_MAX; // Take a new random value in [0, 1)
+        random_value = rand() / RAND_MAX; // Take a new random value in [0, 1)
         // Sample one output based on the weights
         // Model uses softmax function on output, so it is already weighted and sums to 1.
         float cumulative_weight = 0.0f;
@@ -404,11 +409,11 @@ int AdvancedLearningModel::invokeModel() {
     std::vector<float> normalized_node_directions;
     for (int i = 0; i < nodes.size(); i++) {
 
-        double delta_time = expected_send_times[i].dbl() - simTime().dbl();
+        float delta_time = expected_send_times[i].dbl() - simTime().dbl();
         if (delta_time < 0) { // update expected send time
             expected_send_times[i] += (-delta_time) + send_intervals[i];
         }
-        float time = (expected_send_times[i].dbl() - simTime().dbl()) / sim_time_limit.dbl();
+        float time = (expected_send_times[i].dbl() - simTime().dbl()) / send_interval_norm_factor;
         normalized_expected_send_time.push_back(time);
 
         Coord node_pos = node_positions[i];

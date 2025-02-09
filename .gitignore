@@ -10,8 +10,6 @@ inet4.4/.settings/
 inet4.4/**/*_m.cc
 **/*.vci
 
-tflite-micro-arduino-examples/Makefile
-tflite-micro-arduino-examples/src/Makefile
 tflite-micro-arduino-examples/out/
 tflite-micro-arduino-examples/.settings/language.settings.xml
 

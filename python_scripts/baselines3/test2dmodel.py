@@ -30,15 +30,15 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
     all_final_receives = []
     all_final_sents = []
 
-
+    model_class = PPO  # or DQN
     test_best = True
+    do_action_debug = False
+    #   #
     if test_best:
-        if True:
-            model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
-        else:
-            model = DQN.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
+        model = model_class.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
     else:
-        model = PPO.load("stable-model", device="cpu", print_system_info=True)
+        model = model_class.load("stable-model", device="cpu", print_system_info=True)
+    print(f"{model.policy =}")
     model.set_random_seed(0)
     vec_env = make_vec_env(make_skipped_env, n_envs=1,
                            env_kwargs=dict(do_logging=do_logging, log_file=log_file, input_render_mode=None))
@@ -48,10 +48,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
             vec_env = make_vec_env(make_skipped_env, n_envs=1,
                                    env_kwargs=dict(do_logging=do_logging, log_file=log_file,
                                                    input_render_mode=rendering_mode))
-
-        # print(model.policy)
         obs = vec_env.reset()
-        # print(obs)
 
         # test trained model
         done = False
@@ -59,15 +56,14 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
         while not done:
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, done, info = vec_env.step(action)
-
-            # print(reward)
-            if counter % 100 == 0:
-                pass
-                # action_probabilities = get_action_probs(obs, model)
-                # print(f"State: {obs}")
-                # print(f"Action: {action}")
-                # print(f"Action Probabilities: {action_probabilities}")
-            counter += 1
+            if do_action_debug:
+                if counter % 100 == 0:
+                    action_probabilities = sb3_get_action_probabilities(obs, model)
+                    print(f"State: {obs}")
+                    print(f"Action: {action}")
+                    print(f"Action Probabilities: {action_probabilities}")
+                    print(f"Reward: {reward}")
+                counter += 1
 
         if do_logging:
             with open(log_file, 'r') as file:
@@ -86,7 +82,6 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
                     packets_missed_per_node[i].append(sent)
             final_receiveds = [packets_received_per_node[i][-1] for i in range(len(packets_received_per_node))]
             final_sents = [packets_sent_per_node[i][-1] for i in range(len(packets_sent_per_node))]
-            # final_misseds = [packets_missed_per_node[i][-1] for i in range(len(packets_missed_per_node))]
             all_final_receives.append(final_receiveds)
             all_final_sents.append(final_sents)
 

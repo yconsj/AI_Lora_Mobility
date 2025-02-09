@@ -190,7 +190,7 @@ def plot_distances(stats_dict):
     color_cycle = len(colors)
 
     for node_idx in range(number_of_nodes):
-        plt.figure(figsize=(7, 5))  # Create a new figure for each node
+        plt.figure(figsize=(12, 5))  # Create a new figure for each node
 
         # Extract distance values for the current node
         node_distances = [distances[t][node_idx] for t in range(len(timestamps))]
@@ -205,12 +205,12 @@ def plot_distances(stats_dict):
                         label="Transmission Time" if i == 0 else None)
 
         # Customize the plot
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Distance (meters)")
-        plt.title(f"Node {node_idx}")
+        plt.xlabel("Time (seconds)", fontsize=14)
+        plt.ylabel("Distance (meters)", fontsize=14)
+        plt.title(f"Node {node_idx}", fontsize=18)
         plt.legend(loc="best")
         plt.grid()
-
+        plt.tight_layout()
         # Show the figure (one per node)
         plt.show()
 
@@ -286,23 +286,23 @@ def plot_pdr_fairness(stats_dict, include_stationary=True, include_static_mobili
     plt.figure(figsize=(10, 6))
 
     # Plot Mobile Gateway PDR and Fairness
-    plt.plot(timestamps[:len(pdr_mobile)], pdr_mobile, label="Mobile GW PDR", color="blue", linestyle="--")
-    plt.plot(timestamps[:len(fairness_mobile)], fairness_mobile, label="Mobile GW Fairness", color="blue",
+    plt.plot(timestamps[:len(pdr_mobile)], pdr_mobile, label="Mobile GW PDR", color="C1", linestyle="--")
+    plt.plot(timestamps[:len(fairness_mobile)], fairness_mobile, label="Mobile GW Fairness", color="C1",
              linestyle=":")
 
     # Plot Stationary Gateway PDR and Fairness if enabled
     if include_stationary:
-        plt.plot(timestamps[:len(pdr_stationary)], pdr_stationary, label="Stationary GW PDR", color="green",
+        plt.plot(timestamps[:len(pdr_stationary)], pdr_stationary, label="Stationary GW PDR", color="C2",
                  linestyle="--")
         plt.plot(timestamps[:len(fairness_stationary)], fairness_stationary, label="Stationary GW Fairness",
-                 color="green", linestyle=":")
+                 color="C2", linestyle=":")
 
     # Plot Static Mobility Gateway PDR and Fairness if enabled
     if include_static_mobility:
         plt.plot(timestamps[:len(pdr_static_mobility)], pdr_static_mobility, label="Static Mobility GW PDR",
-                 color="red", linestyle="--")
+                 color="C3", linestyle="--")
         plt.plot(timestamps[:len(fairness_static_mobility)], fairness_static_mobility,
-                 label="Static Mobility GW Fairness", color="red", linestyle=":")
+                 label="Static Mobility GW Fairness", color="C3", linestyle=":")
 
     # Customize plot
     plt.xlabel("Time (seconds)", fontsize=14)
@@ -356,10 +356,11 @@ def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_
                    capprops=dict(color="blue"),
                    flierprops=dict(marker="o", color="red", alpha=0.6))
 
+    ax_pdr.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0f} %'))
     ax_pdr.set_xticklabels(tick_labels_pdr)
-    ax_pdr.set_ylim(0, 102)  # Slightly above 100
+    ax_pdr.set_ylim(0, 105)  # Slightly above 100
     ax_pdr.set_yticks(np.arange(0, 101, 20))  # Ensure last y-tick is exactly 100
-    ax_pdr.set_title("Box Plot: PDR Distribution")
+    ax_pdr.set_title("Box Plot: PDR Statistics")
     ax_pdr.set_ylabel("PDR (%)", fontsize=12)
     plt.tight_layout()
     plt.show()
@@ -386,9 +387,9 @@ def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_
                         flierprops=dict(marker="o", color="darkred", alpha=0.6))
 
     ax_fairness.set_xticklabels(tick_labels_fairness)
-    ax_fairness.set_ylim(0, 1.02)  # Fairness remains in [0,1]
+    ax_fairness.set_ylim(0, 1.05)  # Fairness remains in [0,1]
     ax_fairness.set_yticks(np.arange(0, 1.01, 0.20))  # Ensure last y-tick is exactly 100
-    ax_fairness.set_title("Box Plot: Fairness Distribution")
+    ax_fairness.set_title("Box Plot: Fairness Statistics")
     ax_fairness.set_ylabel("Fairness", fontsize=12)
     plt.tight_layout()
     plt.show()
@@ -396,24 +397,30 @@ def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_
     # Bar plot for PDR per node
     # TODO: Consider changing from standard-deviation 'error bars' to 'min/max values in batch' bars
 
-    fig3, ax4 = plt.subplots(figsize=(8, 5))
-    axis_right_x_pos = 1.02  # ax4.get_xlim()[1] + 0.2  # Get the maximum x value in the plot
+    fig3, ax_pdr_nodes = plt.subplots(figsize=(10, 7))
+    axis_right_x_pos = 1.02  # ax_pdr_nodes.get_xlim()[1] + 0.2  # Get the maximum x value in the plot
 
     num_nodes = len(final_pdr_mobile_per_node_list[0])
     pdr_mobile_per_node = np.mean(final_pdr_mobile_per_node_list, axis=0) * 100
     pdr_std_mobile = np.std(final_pdr_mobile_per_node_list, axis=0) * 100
-    max_pdr_value = 100
+    y_lim = 105
 
     x_indices = np.arange(num_nodes)
-    ax4.set_xticks(x_indices)
-    ax4.set_xticklabels([f"Node {i}" for i in range(num_nodes)])
+    ax_pdr_nodes.set_xticks(x_indices)
+    ax_pdr_nodes.set_xticklabels([f"Node {i}" for i in range(num_nodes)])
+    ax_pdr_nodes.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0f} %'))
+    ax_pdr_nodes.set_yticks(np.arange(0, 101, 20))
 
-    bar_width = 0.25 if include_stationary and include_static_mobility else 0.35
+    bars_per_node = 1 + int(include_stationary) + int(include_static_mobility)
+    bar_width = 0.5 / bars_per_node
+    bars_mobile_x_pos = x_indices - (bar_width * (bars_per_node - 1)) / bars_per_node
+    bars_stationary_x_pos = bars_mobile_x_pos + bar_width * int(include_stationary)
+    bars_static_mobility_x_pos = bars_stationary_x_pos + bar_width * int(include_static_mobility)
 
-    bars_mobile = ax4.bar(x_indices - bar_width, pdr_mobile_per_node, yerr=pdr_std_mobile, capsize=5,
+    bars_mobile = ax_pdr_nodes.bar(bars_mobile_x_pos, pdr_mobile_per_node, yerr=pdr_std_mobile, capsize=5,
                           color='steelblue', alpha=0.7, width=bar_width, label="Mobile")
     for bar, pdr in zip(bars_mobile, pdr_mobile_per_node): # Annotate bars
-        ax4.text(bar.get_x() + bar.get_width() / 2, max_pdr_value + 6,
+        ax_pdr_nodes.text(bar.get_x() + bar.get_width() / 2, y_lim * 1.06,
                  f"{pdr:.1f}%", ha="center", va="bottom",
                  fontsize=10, fontweight="bold")
 
@@ -421,10 +428,10 @@ def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_
         pdr_stationary_per_node = np.mean(final_pdr_stationary_per_node_list, axis=0) * 100
         pdr_std_stationary = np.std(final_pdr_stationary_per_node_list, axis=0) * 100
 
-        bars_stationary = ax4.bar(x_indices, pdr_stationary_per_node, yerr=pdr_std_stationary, capsize=5,
+        bars_stationary = ax_pdr_nodes.bar(bars_stationary_x_pos, pdr_stationary_per_node, yerr=pdr_std_stationary, capsize=5,
                                   color='lightgreen', alpha=0.7, width=bar_width, label="Stationary")
         for bar, pdr in zip(bars_stationary, pdr_stationary_per_node):
-            ax4.text(bar.get_x() + bar.get_width() / 2, max_pdr_value + 3,
+            ax_pdr_nodes.text(bar.get_x() + bar.get_width() / 2, y_lim * 1.03,
                      f"{pdr:.1f}%", ha="center", va="bottom",
                      fontsize=10, fontweight="bold")
 
@@ -432,52 +439,52 @@ def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_
         pdr_static_mobility_per_node = np.mean(final_pdr_static_mobility_per_node_list, axis=0) * 100
         pdr_std_static_mobility = np.std(final_pdr_static_mobility_per_node_list, axis=0) * 100
 
-        bars_static_mobility = ax4.bar(x_indices + bar_width, pdr_static_mobility_per_node, yerr=pdr_std_static_mobility,
+        bars_static_mobility = ax_pdr_nodes.bar(bars_static_mobility_x_pos, pdr_static_mobility_per_node, yerr=pdr_std_static_mobility,
                                        capsize=5, color='tomato', alpha=0.7, width=bar_width, label="Static Mobility")
         for bar, pdr in zip(bars_static_mobility, pdr_static_mobility_per_node):
-            ax4.text(bar.get_x() + bar.get_width() / 2, max_pdr_value + 0,
+            ax_pdr_nodes.text(bar.get_x() + bar.get_width() / 2, y_lim * 1.0,
                      f"{pdr:.1f}%", ha="center", va="bottom",
                      fontsize=10, fontweight="bold")
 
-    ax4.set_xlabel("Nodes")
-    ax4.set_ylabel("PDR (%)", fontsize=12)
+    ax_pdr_nodes.set_xlabel("Nodes")
+    ax_pdr_nodes.set_ylabel("PDR (%)", fontsize=12)
     fig3.suptitle(f"PDR for Each Node (Mobile"
                   f"{' vs Stationary' if include_stationary else ''}"
                   f"{' vs Static Mobility' if include_static_mobility else ''})",
-                  fontsize=14, fontweight="bold", x=0.5, y=0.95)
-    ax4.set_ylim(0, max_pdr_value)
-    ax4.grid(axis="y", linestyle="--", alpha=0.6)
+                  fontsize=14, fontweight="bold", x=0.5, y=0.97)
+    ax_pdr_nodes.set_ylim(0, y_lim)
+    ax_pdr_nodes.grid(axis="y", linestyle="--", alpha=0.6)
 
     # Display Overall PDR & Jain's Fairness
     overall_pdr_mobile = np.mean(final_pdr_mobile_list)
     overall_fairness_mobile = np.mean(final_fairness_mobile_list)
 
-    ax4.text(axis_right_x_pos, .70, f"Fairness (Mobile) = {overall_fairness_mobile:.2f}",
-             color="purple", fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
-    ax4.text(axis_right_x_pos , .60, f"Overall PDR (Mobile) = {overall_pdr_mobile:.2f}%",
-             fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
+    ax_pdr_nodes.text(axis_right_x_pos, .70, f"Fairness (Mobile) = {overall_fairness_mobile:.2f}",
+             color="purple", fontsize=12, fontweight="bold", transform=ax_pdr_nodes.transAxes, ha="left")
+    ax_pdr_nodes.text(axis_right_x_pos , .60, f"Overall PDR (Mobile) = {overall_pdr_mobile:.2f}%",
+             fontsize=12, fontweight="bold", transform=ax_pdr_nodes.transAxes, ha="left")
 
     if include_stationary:
         overall_pdr_stationary = np.mean(final_pdr_stationary_list)
         overall_fairness_stationary = np.mean(final_fairness_stationary_list)
 
-        ax4.text(axis_right_x_pos, .50, f"Fairness (Stationary) = {overall_fairness_stationary:.2f}",
-                 color="green", fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
-        ax4.text(axis_right_x_pos, .40, f"Overall PDR (Stationary) = {overall_pdr_stationary:.2f}%",
-                 fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
+        ax_pdr_nodes.text(axis_right_x_pos, .50, f"Fairness (Stationary) = {overall_fairness_stationary:.2f}",
+                 color="green", fontsize=12, fontweight="bold", transform=ax_pdr_nodes.transAxes, ha="left")
+        ax_pdr_nodes.text(axis_right_x_pos, .40, f"Overall PDR (Stationary) = {overall_pdr_stationary:.2f}%",
+                 fontsize=12, fontweight="bold", transform=ax_pdr_nodes.transAxes, ha="left")
 
     if include_static_mobility:
         overall_pdr_static_mobility = np.mean(final_pdr_static_mobility_list)
         overall_fairness_static_mobility = np.mean(final_fairness_static_mobility_list)
 
-        ax4.text(axis_right_x_pos, .30, f"Fairness (Static Mobility) = {overall_fairness_static_mobility:.2f}",
-                 color="red", fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
-        ax4.text(axis_right_x_pos, .20, f"Overall PDR (Static Mobility) = {overall_pdr_static_mobility:.2f}%",
-                 fontsize=12, fontweight="bold", transform=ax4.transAxes, ha="left")
+        ax_pdr_nodes.text(axis_right_x_pos, .30, f"Fairness (Static Mobility) = {overall_fairness_static_mobility:.2f}",
+                 color="red", fontsize=12, fontweight="bold", transform=ax_pdr_nodes.transAxes, ha="left")
+        ax_pdr_nodes.text(axis_right_x_pos, .20, f"Overall PDR (Static Mobility) = {overall_pdr_static_mobility:.2f}%",
+                 fontsize=12, fontweight="bold", transform=ax_pdr_nodes.transAxes, ha="left")
 
     plt.subplots_adjust(top=0.85)
-    ax4.legend()
-    plt.tight_layout()
+    ax_pdr_nodes.legend()
+    plt.tight_layout(pad=1.01)
     plt.show()
 
 
@@ -497,12 +504,12 @@ def main():
         print("Log file path is not specified in the configuration.")
         return
 
-    include_stationary = True
-    include_static_mobility = False
-    batch_size = 100
-    if False:
+    include_stationary = False
+    include_static_mobility = True
+    batch_size = 10
+    if True:
         print("Starting simulation...")
-        env.run_simulation(ini_config="scenario_4_b", batch_size=batch_size)
+        env.run_simulation(ini_config="scenario_5_b", batch_size=batch_size)
 
     # Data storage for batch results
     final_pdr_mobile_per_node_list = []
