@@ -506,7 +506,7 @@ def main():
 
     include_stationary = False
     include_static_mobility = True
-    batch_size = 10
+    batch_size = 100
     if True:
         print("Starting simulation...")
         env.run_simulation(ini_config="scenario_5_b", batch_size=batch_size)
