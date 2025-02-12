@@ -124,6 +124,7 @@ def tf_to_tflite(tf_model, export_path, extra_header_defs=None):
 def test_sb3_tf_model_conversion(sb3_model, tf_model: TFPolicy):
     """
     Validates the conversion from SB3 model to TensorFlow by comparing output probabilities.
+    Computes and prints the mean absolute and relative difference between the outputs.
     """
     tolerance = {"abs": 2e-6, "rel": 2e-5}
 
@@ -131,14 +132,25 @@ def test_sb3_tf_model_conversion(sb3_model, tf_model: TFPolicy):
     tf_input_dim = tf_model.input_dim
 
     assert sb3_input_dim == tf_input_dim, f"Input dimensions must match. {sb3_input_dim = } || {tf_input_dim = } "
-
-    for _ in range(1000):
+    abs_diffs = []
+    rel_diffs = []
+    for _ in range(10_000):
         random_input = np.random.random((1, sb3_input_dim)).astype(np.float32)
         sb3_output = sb3_get_action_probabilities(random_input.flatten(), sb3_model).flatten()
-
         tf_output = tf_model.call(tf.convert_to_tensor(random_input)).numpy().flatten()
+
+        abs_diff = np.abs(sb3_output - tf_output)
+        rel_diff = np.abs(abs_diff / (np.abs(sb3_output) + 1e-8))  # Avoid division by zero
+
+        abs_diffs.append(abs_diff)
+        rel_diffs.append(rel_diff)
+
         if not np.allclose(sb3_output, tf_output, atol=tolerance["abs"], rtol=tolerance["rel"]):
             print(f"Mismatch detected!\nSB3: {sb3_output}\nTF: {tf_output}")
+    mean_abs_diff = np.mean(abs_diffs)
+    mean_rel_diff = np.mean(rel_diffs)
+    print(f"Mean Absolute Difference: {mean_abs_diff}")
+    print(f"Mean Relative Difference: {mean_rel_diff}")
     print("Completed test")
 
 
