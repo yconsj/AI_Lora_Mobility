@@ -51,10 +51,13 @@ class TFPolicy(tf.keras.Model):
 
 def extract_torch_layers(module, input_dim):
     """
-    Converts PyTorch layers into equivalent TensorFlow layers.
+    Extracts PyTorch layers and counts layers, nodes, and edges.
     """
     layers = []
     prev_dim = input_dim
+    layer_count = 0
+    node_count = input_dim  # Start with input nodes
+    edge_count = 0
 
     for layer in module:
         print(f"{layer = }")
@@ -63,38 +66,85 @@ def extract_torch_layers(module, input_dim):
             tf_layer = tf.keras.layers.Dense(layer.out_features, activation=None)
             tf_layer.build(input_shape=(None, prev_dim))
             tf_layer.set_weights([layer.weight.detach().cpu().numpy().T, layer.bias.detach().cpu().numpy()])
+
+            # Update counts
+            layer_count += 1
+            node_count += layer.out_features
+            edge_count += prev_dim * layer.out_features  # Each node is connected to all previous ones
+
             prev_dim = layer.out_features
             layers.append(tf_layer)
-        elif isinstance(layer, torch.nn.Tanh):
-            layers.append(tf.keras.layers.Activation("tanh"))
-        elif isinstance(layer, torch.nn.ReLU):
-            layers.append(tf.keras.layers.Activation("relu"))
+
+        elif isinstance(layer, torch.nn.Tanh) or isinstance(layer, torch.nn.ReLU):
+            layers.append(tf.keras.layers.Activation("tanh" if isinstance(layer, torch.nn.Tanh) else "relu"))
+            layer_count += 0  # Count activations as layers but they don't contribute to edges/nodes
+
         elif isinstance(layer, (torch.nn.Sequential, list)):
-            # Handle nested structures
-            sub_layers, prev_dim = extract_torch_layers(layer, prev_dim)
+            # Handle nested structures recursively
+            sub_layers, prev_dim, sub_layer_count, sub_node_count, sub_edge_count = extract_torch_layers(layer,
+                                                                                                         prev_dim)
             layers.extend(sub_layers)
+
+            # Update global counts
+            layer_count += sub_layer_count
+            node_count += sub_node_count
+            edge_count += sub_edge_count
+
         else:
             raise ValueError(f"Unhandled layer type: {type(layer)}")
 
-    return layers, prev_dim
+    return layers, prev_dim, layer_count, node_count, edge_count
 
 
-def sb3_to_tensorflow(sb3_model, env) -> TFPolicy:
+def sb3_to_tensorflow(sb3_model, env):
     """
-    Converts a Stable-Baselines3 model to a TensorFlow-compatible model.
+    Converts an SB3 model to TensorFlow and computes layer, node, and edge counts.
     """
+
+    do_profiling = True
+
     input_dim = env.observation_space.shape[0]
     output_dim = env.action_space.n
 
     print(f"{sb3_model.policy = }")
+
     # Extract layers from SB3 model
     sb3_layers = [
         sb3_model.policy.mlp_extractor.policy_net,
         sb3_model.policy.action_net
     ]
-    tf_layers, _ = extract_torch_layers(sb3_layers, input_dim)
+    mlp_extractor_layers = [sb3_model.policy.mlp_extractor.policy_net]
+    actor_layers = [sb3_model.policy.action_net]
+    critic_layers = [sb3_model.policy.value_net]
 
-    return TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=tf_layers)  #
+    tf_extractor_layers, extractor_output_dim, extractor_layer_count, extractor_node_count, extractor_edge_count = \
+        extract_torch_layers(mlp_extractor_layers, input_dim)
+    # Add output layer nodes
+    #extractor_node_count += output_dim
+
+    tf_actor_layers, actor_output_dim, actor_layer_count, actor_node_count, actor_edge_count = extract_torch_layers(actor_layers, extractor_output_dim)
+    actor_node_count += actor_output_dim
+
+    tf_full_actor_model = tf_extractor_layers + tf_actor_layers
+
+    if do_profiling:
+        _, critic_output_dim, critic_layer_count, critic_node_count, critic_edge_count = extract_torch_layers(critic_layers, extractor_output_dim)
+        critic_node_count += critic_output_dim
+
+        print(f"Extractor layers: {extractor_layer_count}\n"
+              f"Actor layers: {actor_layer_count}\n"
+              f"Critic layers: {critic_layer_count}\n"
+              f"Total layers:{extractor_layer_count +  actor_layer_count + critic_layer_count}")
+        print(f"Extractor nodes: {extractor_node_count}\n"
+              f"Actor nodes: {actor_node_count}\n"
+              f"Critic nodes: {critic_node_count}\n"
+              f"Total nodes:{extractor_node_count +  actor_node_count + critic_node_count}")
+        print(f"Extractor edges: {extractor_edge_count}\n"
+              f"Actor edges: {actor_edge_count}\n"
+              f"Critic edges: {critic_edge_count}\n"
+              f"Total edges:{extractor_edge_count +  actor_edge_count + critic_edge_count}")
+
+    return TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=tf_full_actor_model)
 
 
 def tf_to_tflite(tf_model, export_path, extra_header_defs=None):
