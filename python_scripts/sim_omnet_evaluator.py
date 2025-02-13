@@ -509,7 +509,7 @@ def main():
     batch_size = 100
     if True:
         print("Starting simulation...")
-        env.run_simulation(ini_config="scenario_5_b", batch_size=batch_size)
+        env.run_simulation(ini_config="scenario_5_c", batch_size=batch_size)
 
     # Data storage for batch results
     final_pdr_mobile_per_node_list = []
