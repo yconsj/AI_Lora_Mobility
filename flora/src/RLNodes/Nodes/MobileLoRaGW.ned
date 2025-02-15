@@ -31,7 +31,6 @@ import inet.networklayer.contract.IRoutingTable;
 import inet.common.MessageDispatcher;
 import inet.linklayer.ethernet.contract.IEthernetLayer;
 import inet.protocolelement.contract.IProtocolLayer;
-import flora.RLNodes.CustomLoRaGWRadio.CustomLoRaGWRadio;
 
 module MobileLoRaGW like INetworkNode
 {

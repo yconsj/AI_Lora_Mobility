@@ -96,12 +96,12 @@ def extract_torch_layers(module, input_dim):
     return layers, prev_dim, layer_count, node_count, edge_count
 
 
-def sb3_to_tensorflow(sb3_model, env):
+def sb3_to_tensorflow(sb3_model, env, do_profiling = False):
     """
     Converts an SB3 model to TensorFlow and computes layer, node, and edge counts.
     """
 
-    do_profiling = True
+
 
     input_dim = env.observation_space.shape[0]
     output_dim = env.action_space.n

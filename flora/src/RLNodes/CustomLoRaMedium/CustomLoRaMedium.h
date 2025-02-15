@@ -37,7 +37,6 @@
 namespace flora {
 class CustomLoRaMedium : public LoRaMedium
 {
-    friend class CustomLoRaGWRadio;
     friend class LoRaGWRadio;
     friend class LoRaRadio;
 
