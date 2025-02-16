@@ -1,7 +1,8 @@
 # AI_LoRa_Mobility
 
-This project investigates the use of AI (reinforcement learning) for LoRa mobility using OMNeT++.
-The Python scripts interact with the simulation via an Excel file, updating an XML file with new parameters after each simulation run.
+This project investigates the use of AI (reinforcement learning) for LoRa mobility using OMNeT++.  
+Python scripts are used to train a model, evaluate it in a low-fidelity Stable-Baselines3 (SB3) environment, export it to a high-fidelity OMNeT++ simulation, and evaluate its performance.
+This project uses [OMNeT++ Official Website](https://omnetpp.org/intro/)), [INET](https://inet.omnetpp.org/), [FLoRa](https://flora.aalto.fi/), [TensorFlow Lite Micro (Arduino)](https://github.com/tensorflow/tflite-micro-arduino-examples)
 
 ## Installation and Setup
 
@@ -54,10 +55,17 @@ python python_scripts/baselines3/test2dmodel.py
 ```
 
 ### Exporting a Trained Model
-Convert a trained model to TensorFlow Lite:
+Before using the trained model in OMNeT++, it must be converted to TensorFlow Lite:
 ```sh
 python python_scripts/baselines3/sb3_to_tflite.py
 ```
+This script also generates a header file containing necessary information for OMNeT++ evaluation.
+
+### Running the Simulation in OMNeT++
+#### Building the Project
+- Before running the OMNeT++ simulation, ensure the model has been exported using the export script.
+- Build the OMNeT++ project to include the newly generated header file.
+- If the model architecture (number of layers/nodes) changes, rerun the export script and rebuild the project to ensure compatibility.
 
 ### Evaluating a Trained Model in OMNeT++
 To evaluate a trained model (`stable-model-2d-best/stable-model.zip`) in **OMNeT++**, run:
@@ -69,6 +77,6 @@ python python_scripts/sim_omnet_evaluator.py
   ```sh
   flora/simulations/scenarios/advancedcase/omnetpp.ini
   ```
-
+  
 ---
 This project serves as a framework for integrating reinforcement learning with LoRa mobility in OMNeT++. Further refinements can expand its capabilities for real-world deployment.
