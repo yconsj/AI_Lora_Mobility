@@ -1,0 +1,28 @@
+Copyright (c) [2025] The Project Contributors
+
+This project includes code under multiple licenses:
+
+LGPL-3.0-or-later (GNU Lesser General Public License v3.0 or later):
+
+Modifications to INET and FLoRa are licensed under the LGPL-3.0-or-later, in compliance with their original licensing terms.
+
+If you distribute modified versions of these components, you must provide access to the source code of those modifications.
+
+Apache-2.0:
+
+Code from tflite-micro-arduino-examples remains under the Apache-2.0 license.
+
+This allows use, modification, and redistribution with attribution.
+
+Apache-2.0:
+Original code written for this project that is not part of the FLoRa or INET directories, is licensed under Apache-2.0, allowing reuse and modification under the specified terms.
+
+License Compliance Notes:
+
+Any modifications to INET or FLoRa must remain LGPL-3.0-or-later.
+
+If you distribute a binary that includes LGPL components, ensure compliance with LGPL requirements, such as allowing users to replace those components.
+
+Apache-2.0 components can be used freely, provided attribution is given.
+
+For full license texts, refer to the corresponding LICENSE files in their respective projects.
