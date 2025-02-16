@@ -109,42 +109,31 @@ def sb3_to_tensorflow(sb3_model, env, do_profiling = False):
     print(f"{sb3_model.policy = }")
 
     # Extract layers from SB3 model
-    sb3_layers = [
+    actor_layers = [
         sb3_model.policy.mlp_extractor.policy_net,
         sb3_model.policy.action_net
     ]
-    mlp_extractor_layers = [sb3_model.policy.mlp_extractor.policy_net]
-    actor_layers = [sb3_model.policy.action_net]
-    critic_layers = [sb3_model.policy.value_net]
 
-    tf_extractor_layers, extractor_output_dim, extractor_layer_count, extractor_node_count, extractor_edge_count = \
-        extract_torch_layers(mlp_extractor_layers, input_dim)
-    # Add output layer nodes
-    #extractor_node_count += output_dim
-
-    tf_actor_layers, actor_output_dim, actor_layer_count, actor_node_count, actor_edge_count = extract_torch_layers(actor_layers, extractor_output_dim)
+    tf_actor_layers, actor_output_dim, actor_layer_count, actor_node_count, actor_edge_count = extract_torch_layers(actor_layers, input_dim)
     actor_node_count += actor_output_dim
 
-    tf_full_actor_model = tf_extractor_layers + tf_actor_layers
-
     if do_profiling:
-        _, critic_output_dim, critic_layer_count, critic_node_count, critic_edge_count = extract_torch_layers(critic_layers, extractor_output_dim)
+        critic_layers = [sb3_model.policy.mlp_extractor.value_net, sb3_model.policy.value_net]
+
+        _, critic_output_dim, critic_layer_count, critic_node_count, critic_edge_count = extract_torch_layers(critic_layers, input_dim)
         critic_node_count += critic_output_dim
 
-        print(f"Extractor layers: {extractor_layer_count}\n"
-              f"Actor layers: {actor_layer_count}\n"
+        print(f"Actor layers: {actor_layer_count}\n"
               f"Critic layers: {critic_layer_count}\n"
-              f"Total layers:{extractor_layer_count +  actor_layer_count + critic_layer_count}")
-        print(f"Extractor nodes: {extractor_node_count}\n"
-              f"Actor nodes: {actor_node_count}\n"
+              f"Total layers:{actor_layer_count + critic_layer_count}")
+        print(f"Actor nodes: {actor_node_count}\n"
               f"Critic nodes: {critic_node_count}\n"
-              f"Total nodes:{extractor_node_count +  actor_node_count + critic_node_count}")
-        print(f"Extractor edges: {extractor_edge_count}\n"
-              f"Actor edges: {actor_edge_count}\n"
+              f"Total nodes:{actor_node_count + critic_node_count}")
+        print(f"Actor edges: {actor_edge_count}\n"
               f"Critic edges: {critic_edge_count}\n"
-              f"Total edges:{extractor_edge_count +  actor_edge_count + critic_edge_count}")
+              f"Total edges:{actor_edge_count + critic_edge_count}")
 
-    return TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=tf_full_actor_model)
+    return TFPolicy(input_dim=input_dim, output_dim=output_dim, hidden_layers=tf_actor_layers)
 
 
 def tf_to_tflite(tf_model, export_path, extra_header_defs=None):
@@ -216,7 +205,7 @@ def sb3_to_tflite_pipeline(relative_model_path):
     env = make_vec_env(TwoDEnv, n_envs=1, env_kwargs=dict())
     max_send_interval = env.get_attr("max_send_interval")[0]
 
-    tf_model = sb3_to_tensorflow(model, env)
+    tf_model = sb3_to_tensorflow(model, env, do_profiling=True)
     test_sb3_tf_model_conversion(sb3_model=model, tf_model=tf_model)
 
     config = load_config("config.json")

@@ -121,7 +121,7 @@ def main():
     if model_class == PPO:
         policy_kwargs = dict(
             share_features_extractor=True,
-            net_arch=[64, 64, 64]
+            #net_arch=[64, 64, 64]
         )
         if use_ReLu:
             policy_kwargs["activation_fn"] = nn.ReLU
@@ -156,7 +156,7 @@ def main():
                   f"g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
-    model = model.learn(10_000_000, callback=[eval_callback, TensorboardCallback()],
+    model = model.learn(1_000, callback=[eval_callback, TensorboardCallback()], # 10_00
                         tb_log_name=tb_log_name)
 
     print("Learning finished")
