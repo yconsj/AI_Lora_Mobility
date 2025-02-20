@@ -1,3 +1,4 @@
+import heapq
 import json
 import os
 import numpy as np
@@ -38,3 +39,17 @@ def jains_fairness_index(received_per_node: list[int], sent_per_node: list[int])
                                where=sent_per_node != 0)
     return _jains_fairness_index(delivery_rates)
 
+
+def n_smallest_indices(lst, n):
+    smallest_values = heapq.nsmallest(n, lst)  # Get n smallest values
+    indices = []
+    seen = set()
+
+    for value in smallest_values:
+        for i, num in enumerate(lst):
+            if num == value and i not in seen:
+                indices.append(i)
+                seen.add(i)  # Ensure unique indices are used
+                break  # Move to the next smallest value
+
+    return indices

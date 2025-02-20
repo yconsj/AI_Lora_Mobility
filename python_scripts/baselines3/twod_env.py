@@ -9,7 +9,7 @@ import numpy as np
 from gymnasium import spaces
 from scipy.stats import truncnorm
 
-from utilities import jains_fairness_index
+from utilities import jains_fairness_index, n_smallest_indices
 
 
 class FrameSkip(gym.Wrapper):
@@ -82,7 +82,7 @@ def schedule_first_packets(send_intervals, initial_delay=0):
 
 class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none", do_logging=False, log_file=None,
-                 use_deterministic_transmissions=False, max_steps=86400 / 4):
+                 use_deterministic_transmissions=False, max_steps=int(86400 / 4)):
 
         super(TwoDEnv, self).__init__()
         # Define action and observation space
@@ -96,7 +96,7 @@ class TwoDEnv(gym.Env):
         # Environment.pos
         self.steps = 0
         self.max_steps = max_steps  # Maximum steps per episode
-        self.max_send_interval = 4000  # 86400 / 2
+        self.max_send_interval =  8000# 4000 # 86400 / 2
         # Environment state
         # Scaled reward values preserving relative ratios
         self.pos_reward_max = 0.0125
@@ -107,6 +107,7 @@ class TwoDEnv(gym.Env):
         self.packet_reward_max = 1.0  # TODO: consider increasing this
         self.packet_reward_min = 0.0
         self.fairness_reward = 0.0625
+        self.use_deterministic_transmissions = use_deterministic_transmissions
 
         # speed of gw is based on this article http://unmannedcargo.org/chinese-supermarket-delivery-drone/
         unscaled_speed = 11  # meter per second
@@ -120,45 +121,29 @@ class TwoDEnv(gym.Env):
         self.steps = 0
         self.ploss_scale = 50  # adjusts the dropoff of transmission probability by distance
         self.node_max_transmission_distance = 40
-        node_pos = [
-            (self.max_distance_x // 6, self.max_distance_y // 6),
-            (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y - (self.max_distance_y // 6)),
-            (self.max_distance_x // 6, self.max_distance_y - (self.max_distance_y // 6)),
-            (self.max_distance_x - (self.max_distance_x // 6), self.max_distance_y // 6)
-        ]
 
-        self.base_send_interval = random.choice([1500, 1750, 2000])  # 1500  #  # TODO: try with random send intervals?
-        self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
-                               self.base_send_interval * 2]
-        random.shuffle(self.send_intervals)
-        self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
+        self.number_of_sim_nodes = 20
+        self.number_of_model_nodes = 20
+
+        self.base_send_interval = 0
+        self.send_intervals = [0] * self.number_of_sim_nodes
+        self.first_packets = [0] * self.number_of_sim_nodes
 
         self.send_std = 5
 
         # random.shuffle(self.first_packets)
-        self.nodes = [
-            Node(node_pos[i],
-                 TransmissionModel(max_transmission_distance=self.node_max_transmission_distance,
-                                   ploss_scale=self.ploss_scale,
-                                   use_deterministic_transmissions=use_deterministic_transmissions),
-                 time_to_first_packet=self.first_packets[i],
-                 send_interval=self.send_intervals[i],
-                 use_deterministic_transmissions=use_deterministic_transmissions,
-                 send_std=self.send_std)
-            for i in range(len(node_pos))
-        ]
+        self.nodes = [None for _ in range(self.number_of_sim_nodes)]
 
-        self.elapsed_times = [0] * len(self.nodes)
-        self.loss_counts = [0] * len(self.nodes)
+        self.elapsed_times = [0] * self.number_of_sim_nodes
+        self.loss_counts = [0] * self.number_of_sim_nodes
         self.expected_send_time = self.first_packets.copy()
 
-        self.expected_max_packets_sent = self.max_steps // min(self.send_intervals)
         self.total_reward = 0
         self.total_misses = 0
         self.total_received = 0
         self.fairness = 0.0
-        self.received_per_node = [0] * len(self.nodes)
-        self.misses_per_node = [0] * len(self.nodes)
+        self.received_per_node = [0] * self.number_of_sim_nodes
+        self.misses_per_node = [0] * self.number_of_sim_nodes
         self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
         # Observation_space =
         #                     expected time until sending                      |n
@@ -169,16 +154,16 @@ class TwoDEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=np.array(
                 [0] * (
-                        len(self.nodes) +
-                        len(self.nodes) +
-                        len(self.nodes)
+                        self.number_of_model_nodes +
+                        self.number_of_model_nodes +
+                        self.number_of_model_nodes
                 )
                 , dtype=np.float32),
             high=np.array(
                 [1] * (
-                        len(self.nodes) +
-                        len(self.nodes) +
-                        len(self.nodes)
+                        self.number_of_model_nodes +
+                        self.number_of_model_nodes +
+                        self.number_of_model_nodes
                 )
                 , dtype=np.float32))
         # rendering attributes
@@ -199,6 +184,8 @@ class TwoDEnv(gym.Env):
         self.log_dynamic_data = []  # Store logs before writing to the file
 
     def get_random_node_positions(self, num_positions=4, min_dist=20):
+        """ can get stuck in a loop if num_positions and min_dist is too large,
+        such that its not possible to place all nodes successfully"""
         positions = []
         for _ in range(num_positions):
             while True:
@@ -236,18 +223,25 @@ class TwoDEnv(gym.Env):
         self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
-        positions = self.get_random_node_positions(num_positions=len(self.nodes),
+        node_positions = self.get_random_node_positions(num_positions=self.number_of_sim_nodes,
                                                    min_dist=5)  # min_dist=2 * self.node_max_transmission_distance
-        self.base_send_interval = random.choice([1500, 1750, 2000])
-        self.send_intervals = [self.base_send_interval, self.base_send_interval, self.base_send_interval * 2,
-                               self.base_send_interval * 2]
+        self.base_send_interval = 3500  # random.choice([2000, 2500, 3000])
+        self.send_intervals = [self.base_send_interval * random.choice([1, 2])
+                               for _ in range(self.number_of_sim_nodes)]
         random.shuffle(self.send_intervals)
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
-        for i in range(len(self.nodes)):
-            self.nodes[i].pos = positions[i]
-            self.nodes[i].set_send_interval(self.send_intervals[i])
-            self.nodes[i].time_to_first_packet = self.first_packets[i]
-            self.nodes[i].reset()
+        self.nodes = [
+            Node(node_positions[i],
+                 TransmissionModel(max_transmission_distance=self.node_max_transmission_distance,
+                                   ploss_scale=self.ploss_scale,
+                                   use_deterministic_transmissions=self.use_deterministic_transmissions),
+                 time_to_first_packet=self.first_packets[i],
+                 send_interval=self.send_intervals[i],
+                 use_deterministic_transmissions=self.use_deterministic_transmissions,
+                 send_std=self.send_std)
+            for i in range(self.number_of_sim_nodes)
+        ]
+        for i in range(self.number_of_sim_nodes):
             self.elapsed_times[i] = 0
             self.loss_counts[i] = 0
             self.received_per_node[i] = 0
@@ -271,21 +265,30 @@ class TwoDEnv(gym.Env):
         state = self.get_state()
         return np.array(state, dtype=np.float32), {}
 
-    def get_state(self):
+    def select_node_indices_for_state(self):
+        # sorted(...)?
+        return n_smallest_indices(self.expected_send_time, self.number_of_model_nodes)
 
+    def get_state(self):
+        indices = self.select_node_indices_for_state()
         # Other normalized components
-        normalized_expected_send_time = [(expected_time - self.steps) / self.max_send_interval for expected_time in
-                                         self.expected_send_time]
+        normalized_expected_send_time = [
+            (expected_time - self.steps) / self.max_send_interval
+            for expected_time in
+            [self.expected_send_time[idx]
+             for idx in indices]]
 
         normalized_node_distances = [
             math.dist(self.pos, node.pos) / self.max_cross_distance
-            for node in self.nodes
-        ]
+            for node in
+            [self.nodes[idx]
+             for idx in indices]]
 
         normalized_node_directions = [
             calculate_direction(*self.pos, *node.pos) / 360
-            for node in self.nodes
-        ]
+            for node in
+            [self.nodes[idx]
+             for idx in indices]]
         # Combine all normalized and one-hot encoded components into the state
         state = (
                 normalized_expected_send_time +

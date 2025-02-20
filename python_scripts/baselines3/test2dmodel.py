@@ -20,7 +20,8 @@ def sb3_get_action_probabilities(input_state, input_model):
 
 def make_skipped_env(do_logging, log_file, input_render_mode):
     time_skip = 10
-    env = eval_twod_env(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file)
+    # env = eval_twod_env(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file)
+    env = TwoDEnv(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file, max_steps=86400)
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
@@ -98,5 +99,5 @@ if __name__ == '__main__':
     random.seed(0)
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
-    rendering_mode = None  # "cv2"
-    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=50, rendering_mode=rendering_mode)
+    rendering_mode = None # "cv2"
+    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=10, rendering_mode=rendering_mode)

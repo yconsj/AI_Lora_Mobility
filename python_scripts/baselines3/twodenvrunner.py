@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 def make_skipped_env():
     time_skip = 10
     # TODO: use_deterministic_transmissions=False
-    env = TwoDEnv(render_mode="none", use_deterministic_transmissions=False)
+    env = TwoDEnv(render_mode="none", use_deterministic_transmissions=False, max_steps=86400)
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
@@ -156,7 +156,7 @@ def main():
                   f"g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
-    model = model.learn(1_000, callback=[eval_callback, TensorboardCallback()], # 10_00
+    model = model.learn(10_000_000, callback=[eval_callback, TensorboardCallback()],  # 10_00
                         tb_log_name=tb_log_name)
 
     print("Learning finished")

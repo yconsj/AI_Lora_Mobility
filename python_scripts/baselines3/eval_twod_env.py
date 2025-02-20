@@ -15,17 +15,24 @@ from twod_env import TwoDEnv, schedule_first_packets, _generate_color_frame
 
 
 class eval_twod_env(TwoDEnv):
-    def __init__(self, render_mode="none", do_logging=False, log_file=None, node_positions= [(50,50),(250,250),(50,250),(250,50)], gateway_positon = (150,10), send_intervals = [1600,1600,1600,1600]):
+    def __init__(self, render_mode="none", do_logging=False, log_file=None, node_positions=None,
+                 gateway_positon=(150, 10),
+                 send_intervals=None):
         super().__init__(render_mode, do_logging, log_file)
+        if send_intervals is None:
+            send_intervals = [1600, 1600, 1600, 1600]
+        if node_positions is None:
+            node_positions = [(50, 50), (250, 250), (50, 250), (250, 50)]
         self.pos = gateway_positon
         self.send_intervals = send_intervals
         self.positions = node_positions
+
     def reset(self, seed=None, options=None):
         self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
         self.prev_pos = self.pos
         self.total_misses = 0
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
-        self.nodes[2].transmission_model.probability_modifier = 0 # set node 3 to have 0 prob of success transmit
+        self.nodes[2].transmission_model.probability_modifier = 0  # set node 3 to have 0 prob of success transmit
         for i in range(len(self.nodes)):
             self.nodes[i].pos = self.positions[i]
             self.nodes[i].set_send_interval(self.send_intervals[i])
@@ -53,5 +60,3 @@ class eval_twod_env(TwoDEnv):
         self.log_dynamic_data = []
         state = self.get_state()
         return np.array(state, dtype=np.float32), {}
-
-

@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from utilities import jains_fairness_index
 
+def generate_n_colors(n, cmap="tab10"):
+    cmap = plt.get_cmap(cmap)
+    return [cmap(i / n) for i in range(n)]
 
 def plot_relative_positions(log_file, number_of_nodes=4):
     for node_idx in range(number_of_nodes):
@@ -28,7 +31,8 @@ def plot_relative_position(log_file, node_idx):
             packets_sent_per_node[i].append(sent)
 
     # Colors for different nodes
-    node_colors = ["tab:red", "xkcd:bluish", "xkcd:dark grass green", "tab:orange"]
+    # ["tab:red", "xkcd:bluish", "xkcd:dark grass green", "tab:orange"]
+    node_colors = generate_n_colors(50, cmap="tab10")  # You can use 'viridis', 'tab20', etc.
 
     # Initialize figure with 2 subplots
     fig, axs = plt.subplots(1, 1, figsize=(16, 8))  # Adjusted figure size for better spacing
@@ -42,7 +46,6 @@ def plot_relative_position(log_file, node_idx):
     for i in range(len(transmission_occureds)):
         time = timestamps[i]
         if transmission_occureds[i][node_idx]:
-            color = node_colors[node_idx]
             axs.axvline(x=time, color="black", linestyle="--", alpha=0.7)
 
     # Custom legend for node-specific distances and transmission times
