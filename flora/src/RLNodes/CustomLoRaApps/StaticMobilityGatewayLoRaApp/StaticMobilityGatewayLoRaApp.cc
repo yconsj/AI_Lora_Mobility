@@ -47,7 +47,7 @@ int getLoRaNodeIndex(MacAddress node_mac_address) {
     const char* lora_node_nic_string = "LoRaNic";
     const char* lora_node_mac_string = "mac";
 
-    for (int node_index = 0; node_index < number_of_nodes; node_index++) {
+    for (int node_index = 0; node_index < number_of_model_nodes; node_index++) {
         cModule *loRa_node = network->getSubmodule(lora_nodes_string, node_index);
         flora::LoRaMac *loRa_node_mac = check_and_cast<flora::LoRaMac *>(loRa_node->getSubmodule(lora_node_nic_string)
                 ->getSubmodule(lora_node_mac_string)

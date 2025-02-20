@@ -36,7 +36,7 @@ float* model_output_buffer = nullptr;
 // Define dimensions
 
 const int kInputHeight = 1;
-const int kInputWidth = 3 * number_of_nodes;
+const int kInputWidth = 3 * number_of_model_nodes;
 const int kOutputHeight = 1;
 const int kOutputWidth = 5;
 
@@ -70,9 +70,23 @@ void AdvancedLearningModel::initialize(int stage)
     cSimpleModule::initialize(stage);
     if (stage == 0)
     {
-
         EV << "initializing AdvancedLearningModel " << endl;
 
+        // NODE DATA INITIALIZATION (STAGE 0)
+        cModule *network = getSimulation()->getSystemModule();
+        const char* lora_mod_str = "loRaNodes";
+        number_of_sim_nodes = network->getSubmoduleVectorSize(lora_mod_str);
+        if (number_of_sim_nodes < number_of_model_nodes) {
+            throw cRuntimeError("AdvancedLearningModel: Number of LoRa nodes in scenario must at least be equal to number of nodes in model");
+        }
+        nodes.resize(number_of_sim_nodes, nullptr);
+        for (int node_index = 0; node_index < number_of_sim_nodes; ++node_index) {
+            cModule *lora_node_module = network->getSubmodule(lora_mod_str, node_index);
+            nodes[node_index] = lora_node_module;
+        }
+
+
+        // MODEL INITIALIZATION
         // Load the model data from a file
         model_data = ReadModelFromFile(model_file_path);
 
@@ -144,31 +158,13 @@ void AdvancedLearningModel::initialize(int stage)
 
 
 void AdvancedLearningModel::nodeValueInitialization() {
-    std::vector<cModule *> loRaNodes;
-    cModule *network = getSimulation()->getSystemModule();
+    node_positions.resize(number_of_sim_nodes, Coord(0,0,0));
+    expected_send_times.resize(number_of_sim_nodes, 0);
+    send_intervals.resize(number_of_sim_nodes, 0);
+    number_of_received_packets_per_node.resize(number_of_sim_nodes, 0);
 
-    const char* lora_mod_str = "loRaNodes";
-    int number_of_lora_nodes_in_scenario = network->getSubmoduleVectorSize(lora_mod_str);
-    if (number_of_lora_nodes_in_scenario != number_of_nodes) {
-        throw cRuntimeError("AdvancedLearningModel: Number of LoRa nodes does not match the expected number of nodes in the scenario");
-    }
-    for (int i = 0; i < number_of_lora_nodes_in_scenario; i++) {
-        cModule *lora_node_module = network->getSubmodule(lora_mod_str, i);
-        loRaNodes.push_back(lora_node_module);
-    }
-
-
-    EV << "loRaNodes.size() = " << loRaNodes.size() << endl;
-    nodes.resize(loRaNodes.size(), nullptr);
-    node_positions.resize(loRaNodes.size(), Coord(0,0,0));
-    expected_send_times.resize(loRaNodes.size(), 0);
-    send_intervals.resize(loRaNodes.size(), 0);
-    number_of_received_packets_per_node.resize(loRaNodes.size(), 0);
-
-    for (size_t i = 0; i < loRaNodes.size(); ++i) {
-        cModule *loRaNode = loRaNodes[i];
-        int node_index = loRaNode->getIndex();
-        nodes[node_index] = loRaNode;
+    for (size_t node_index = 0; node_index < nodes.size(); ++node_index) {
+        cModule* loRaNode = nodes[node_index];
         EV << "node_index: " << node_index << endl;
 
         // Retrieve LoRa application
@@ -363,6 +359,33 @@ void AdvancedLearningModel::setPacketInfo(int index) {
     return;
 }
 
+std::vector<int> AdvancedLearningModel::n_smallest_indices(const std::vector<float>& lst, int n) {
+    if (n <= 0 || lst.empty()) return {};
+
+    // Use a max-heap of size n to track the n smallest values
+    std::priority_queue<std::pair<float, int>> max_heap;
+
+    for (int i = 0; i < lst.size(); ++i) {
+        max_heap.push({lst[i], i});
+        if (max_heap.size() > n) {
+            max_heap.pop();  // Remove the largest element in the heap
+        }
+    }
+
+    std::vector<int> indices;
+    while (!max_heap.empty()) {
+        indices.push_back(max_heap.top().second);
+        max_heap.pop();
+    }
+
+    std::reverse(indices.begin(), indices.end()); // Restore original order
+    return indices;
+}
+
+std::vector<int> AdvancedLearningModel::select_node_indices_for_state(const std::vector<float>& expected_times) {
+    return n_smallest_indices(expected_times, number_of_sim_nodes);
+}
+
 int AdvancedLearningModel::invokeModel() {
     if (interpreter == nullptr) {
         EV << "Interpreter is not initialized." << omnetpp::endl;
@@ -396,8 +419,7 @@ int AdvancedLearningModel::invokeModel() {
     state = (
         normalized_expected_send_time +
         normalized_node_distances +
-        normalized_node_directions +
-        onehot_encoded_recent_packets
+        normalized_node_directions
     )
 */
 
@@ -426,28 +448,32 @@ int AdvancedLearningModel::invokeModel() {
         normalized_node_directions.push_back(norm_direction);
     }
 
+    std::vector<int> node_indices = select_node_indices_for_state(normalized_expected_send_time);
 
     // Insert input data for the model from state values
     // Inserting the normalized expected send times
-    int index = 0;  // Start with index 0 in model_input->data.f
+    int model_input_index = 0;  // Start with index 0 in model_input->data.f
     for (int i = 0; i < normalized_expected_send_time.size(); ++i) {
-        EV << "expected_send_time = " << normalized_expected_send_time[i] << endl;
-        model_input->data.f[index] = normalized_expected_send_time[i];
-        index++;
+        int node_index = node_indices[i];
+        EV << "expected_send_time = " << normalized_expected_send_time[node_index] << endl;
+        model_input->data.f[model_input_index] = normalized_expected_send_time[node_index];
+        model_input_index++;
     }
 
     // Inserting the normalized node distances
     for (int i = 0; i < normalized_node_distances.size(); ++i) {
-        EV << "distances = " << normalized_node_distances[i] << endl;
-        model_input->data.f[index] = normalized_node_distances[i];
-        index++;
+        int node_index = node_indices[i];
+        EV << "distances = " << normalized_node_distances[node_index] << endl;
+        model_input->data.f[model_input_index] = normalized_node_distances[node_index];
+        model_input_index++;
     }
 
     // Inserting the normalized node directions
     for (int i = 0; i < normalized_node_directions.size(); ++i) {
-        EV << "directions = " << normalized_node_directions[i] << endl;
-        model_input->data.f[index] = normalized_node_directions[i];
-        index++;
+        int node_index = node_indices[i];
+        EV << "directions = " << normalized_node_directions[node_index] << endl;
+        model_input->data.f[model_input_index] = normalized_node_directions[node_index];
+        model_input_index++;
     }
 
 
@@ -456,7 +482,7 @@ int AdvancedLearningModel::invokeModel() {
         //model_input->data.f[i] = (model_input_buffer[i]);
         EV << "model_input->data.f" << i << ": "  << model_input->data.f[i] << omnetpp::endl;
         if (!std::isfinite(model_input->data.f[i])) {
-            EV << "Invalid input detected at index " << i << ": " << model_input->data.f[i] << omnetpp::endl;
+            EV << "Invalid input detected at model_input_index " << i << ": " << model_input->data.f[i] << omnetpp::endl;
             throw cRuntimeError("NaN or inf detected in model input");
         }
     }

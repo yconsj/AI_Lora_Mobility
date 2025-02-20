@@ -99,5 +99,5 @@ if __name__ == '__main__':
     random.seed(0)
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
-    rendering_mode = None # "cv2"
-    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=10, rendering_mode=rendering_mode)
+    rendering_mode = None  # "cv2"
+    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=100, rendering_mode=rendering_mode)

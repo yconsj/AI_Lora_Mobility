@@ -212,7 +212,9 @@ def plot_distances(stats_dict):
         plt.grid()
         plt.tight_layout()
         # Show the figure (one per node)
-        plt.show()
+        plt.savefig(f"omnet_output_plots/distance_{node_idx}.png")
+        plt.close()
+        #plt.show()
 
 
 def plot_packets_received(stats_dict, include_stationary=True, include_static_mobility=True):
@@ -397,7 +399,7 @@ def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_
     # Bar plot for PDR per node
     # TODO: Consider changing from standard-deviation 'error bars' to 'min/max values in batch' bars
 
-    fig3, ax_pdr_nodes = plt.subplots(figsize=(10, 7))
+    fig3, ax_pdr_nodes = plt.subplots(figsize=(15, 7))
     axis_right_x_pos = 1.02  # ax_pdr_nodes.get_xlim()[1] + 0.2  # Get the maximum x value in the plot
 
     num_nodes = len(final_pdr_mobile_per_node_list[0])
@@ -407,12 +409,12 @@ def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_
 
     x_indices = np.arange(num_nodes)
     ax_pdr_nodes.set_xticks(x_indices)
-    ax_pdr_nodes.set_xticklabels([f"Node {i}" for i in range(num_nodes)])
+    ax_pdr_nodes.set_xticklabels([f"Node\n{i}" for i in range(num_nodes)])
     ax_pdr_nodes.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0f} %'))
     ax_pdr_nodes.set_yticks(np.arange(0, 101, 20))
 
     bars_per_node = 1 + int(include_stationary) + int(include_static_mobility)
-    bar_width = 0.5 / bars_per_node
+    bar_width = 0.975 / bars_per_node
     bars_mobile_x_pos = x_indices - (bar_width * (bars_per_node - 1)) / bars_per_node
     bars_stationary_x_pos = bars_mobile_x_pos + bar_width * int(include_stationary)
     bars_static_mobility_x_pos = bars_stationary_x_pos + bar_width * int(include_static_mobility)
@@ -482,9 +484,9 @@ def plot_batch_performance(final_pdr_mobile_per_node_list, final_pdr_stationary_
         ax_pdr_nodes.text(axis_right_x_pos, .20, f"Overall PDR (Static Mobility) = {overall_pdr_static_mobility:.2f}%",
                  fontsize=12, fontweight="bold", transform=ax_pdr_nodes.transAxes, ha="left")
 
-    plt.subplots_adjust(top=0.85)
     ax_pdr_nodes.legend()
     plt.tight_layout(pad=1.01)
+    plt.subplots_adjust(top=0.85, right=0.75, left=0.055)
     plt.show()
 
 
@@ -504,12 +506,12 @@ def main():
         print("Log file path is not specified in the configuration.")
         return
 
-    include_stationary = False
+    include_stationary = True
     include_static_mobility = True
-    batch_size = 100
+    batch_size = 25
     if True:
         print("Starting simulation...")
-        env.run_simulation(ini_config="scenario_5_c", batch_size=batch_size)
+        env.run_simulation(ini_config="scenario_more_nodes", batch_size=batch_size)
 
     # Data storage for batch results
     final_pdr_mobile_per_node_list = []

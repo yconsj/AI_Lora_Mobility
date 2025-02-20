@@ -44,13 +44,19 @@
 #include <array>
 #include <cmath>
 #include <deque>
+#include <queue>   // Required for std::priority_queue
+#include <set>
+#include <algorithm>
+
 #include <random>  // For random sampling
 
 using json = nlohmann::json;
 
 namespace inet {
 const size_t recent_packets_length = 1;
-const size_t number_of_nodes = 4;
+const size_t number_of_model_nodes = 20;
+size_t number_of_sim_nodes = 0;
+
 
 class AdvancedLearningModel : public omnetpp::cSimpleModule {
 public:
@@ -73,6 +79,8 @@ private:
     virtual std::vector<uint8_t> ReadModelFromFile(const char* filename);
     int selectOutputIndex(float random_choice_probability, const TfLiteTensor* model_output, size_t num_outputs, bool deterministic);
     double calculateNormalizedAngle(const Coord& coord1, const Coord& coord2);
+    std::vector<int> n_smallest_indices(const std::vector<float>& lst, int n);
+    std::vector<int> select_node_indices_for_state(const std::vector<float>& expected_times);
 private:
 
     std::vector<uint8_t> model_data;

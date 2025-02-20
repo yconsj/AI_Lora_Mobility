@@ -24,6 +24,7 @@
 #include "inet/RL/include/json.hpp"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/common/geometry/common/Coord.h"
+#include "inet/common/InitStages.h"
 
 using json = nlohmann::json;
 
@@ -51,7 +52,8 @@ public:
 
 protected:
     virtual void finish() override;
-    virtual void initialize() override;
+    virtual void initialize(int stage) override;
+    int numInitStages() const override { return NUM_INIT_STAGES; }
 private:
     std::map<MacAddress, cModule*> macToModuleMap; // MAC to module mapping
     std::vector<std::vector<double>> transmission_times_vec;

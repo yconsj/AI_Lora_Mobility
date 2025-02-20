@@ -28,17 +28,20 @@ StateLogger::StateLogger() {
     // TODO Auto-generated constructor stub
 }
 
-void StateLogger::initialize() {
-    runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
-    transmission_times_vec.resize(number_of_nodes, std::vector<double>());
-    transmissions_per_node_current_vec.resize(number_of_nodes, 0);
+void StateLogger::initialize(int stage) {
+    cSimpleModule::initialize(stage);
+    if (stage == INITSTAGE_PHYSICAL_LAYER) {
+        runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
+        transmission_times_vec.resize(number_of_sim_nodes, std::vector<double>());
+        transmissions_per_node_current_vec.resize(number_of_sim_nodes, 0);
 
-    cModule *network = getSimulation()->getSystemModule();
-    int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
-    transmission_id_vec.resize(number_of_nodes, -1);
-    stationary_gw_received_packets_per_node_current_vec.resize(number_of_nodes, 0);
+        cModule *network = getSimulation()->getSystemModule();
+        int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
+        transmission_id_vec.resize(number_of_sim_nodes, -1);
+        stationary_gw_received_packets_per_node_current_vec.resize(number_of_sim_nodes, 0);
 
-    static_mobility_gw_received_packets_per_node_current_vec.resize(number_of_nodes, 0);
+        static_mobility_gw_received_packets_per_node_current_vec.resize(number_of_sim_nodes, 0);
+    }
 }
 
 void StateLogger::addTransmissionTime(int node_index) {
@@ -115,7 +118,7 @@ void StateLogger::writeToFile() {
         // Create a JSON object
         json outputJson;
 
-        outputJson["static"]["number_of_nodes"] = number_of_nodes;
+        outputJson["static"]["number_of_nodes"] = number_of_sim_nodes;
         outputJson["mobile_gw_data"]["node_distances"] = node_distances_vec;
         outputJson["mobile_gw_data"]["gw_positions_x"] = gw_positions_x_vec;
         outputJson["mobile_gw_data"]["gw_positions_y"] = gw_positions_y_vec;
