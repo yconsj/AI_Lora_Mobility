@@ -204,6 +204,7 @@ def sb3_to_tflite_pipeline(relative_model_path):
     model = PPO.load(relative_model_path, print_system_info=True, custom_objects=custom_objects, device="cpu")
     env = make_vec_env(TwoDEnv, n_envs=1, env_kwargs=dict())
     max_send_interval = env.get_attr("max_send_interval")[0]
+    number_of_model_nodes = env.get_attr("number_of_model_nodes")[0]
 
     tf_model = sb3_to_tensorflow(model, env, do_profiling=True)
     test_sb3_tf_model_conversion(sb3_model=model, tf_model=tf_model)
@@ -212,6 +213,7 @@ def sb3_to_tflite_pipeline(relative_model_path):
     export_model_path = config['model_path']
 
     header_defs = {
+        "const size_t NUMBER_OF_MODEL_NODES": number_of_model_nodes,
         "const int MAX_SEND_INTERVAL": max_send_interval
     }
 

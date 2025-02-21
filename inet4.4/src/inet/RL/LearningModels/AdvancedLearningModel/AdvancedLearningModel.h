@@ -54,7 +54,6 @@ using json = nlohmann::json;
 
 namespace inet {
 const size_t recent_packets_length = 1;
-const size_t number_of_model_nodes = 20;
 size_t number_of_sim_nodes = 0;
 
 

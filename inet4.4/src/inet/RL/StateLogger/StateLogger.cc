@@ -31,16 +31,19 @@ StateLogger::StateLogger() {
 void StateLogger::initialize(int stage) {
     cSimpleModule::initialize(stage);
     if (stage == INITSTAGE_PHYSICAL_LAYER) {
-        runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
-        transmission_times_vec.resize(number_of_sim_nodes, std::vector<double>());
-        transmissions_per_node_current_vec.resize(number_of_sim_nodes, 0);
-
         cModule *network = getSimulation()->getSystemModule();
-        int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
-        transmission_id_vec.resize(number_of_sim_nodes, -1);
-        stationary_gw_received_packets_per_node_current_vec.resize(number_of_sim_nodes, 0);
+        const char* lora_mod_str = "loRaNodes";
+        size_t n_sim_nodes =  network->getSubmoduleVectorSize(lora_mod_str);
+        runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
+        transmission_times_vec.resize(n_sim_nodes, std::vector<double>());
+        transmissions_per_node_current_vec.resize(n_sim_nodes, 0);
 
-        static_mobility_gw_received_packets_per_node_current_vec.resize(number_of_sim_nodes, 0);
+        // cModule *network = getSimulation()->getSystemModule();
+        int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
+        transmission_id_vec.resize(n_sim_nodes, -1);
+        stationary_gw_received_packets_per_node_current_vec.resize(n_sim_nodes, 0);
+
+        static_mobility_gw_received_packets_per_node_current_vec.resize(n_sim_nodes, 0);
     }
 }
 

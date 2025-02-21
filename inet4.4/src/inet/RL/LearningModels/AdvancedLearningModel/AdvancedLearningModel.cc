@@ -36,7 +36,7 @@ float* model_output_buffer = nullptr;
 // Define dimensions
 
 const int kInputHeight = 1;
-const int kInputWidth = 3 * number_of_model_nodes;
+const int kInputWidth = 3 * NUMBER_OF_MODEL_NODES;
 const int kOutputHeight = 1;
 const int kOutputWidth = 5;
 
@@ -76,7 +76,7 @@ void AdvancedLearningModel::initialize(int stage)
         cModule *network = getSimulation()->getSystemModule();
         const char* lora_mod_str = "loRaNodes";
         number_of_sim_nodes = network->getSubmoduleVectorSize(lora_mod_str);
-        if (number_of_sim_nodes < number_of_model_nodes) {
+        if (number_of_sim_nodes < NUMBER_OF_MODEL_NODES) {
             throw cRuntimeError("AdvancedLearningModel: Number of LoRa nodes in scenario must at least be equal to number of nodes in model");
         }
         nodes.resize(number_of_sim_nodes, nullptr);
@@ -383,7 +383,7 @@ std::vector<int> AdvancedLearningModel::n_smallest_indices(const std::vector<flo
 }
 
 std::vector<int> AdvancedLearningModel::select_node_indices_for_state(const std::vector<float>& expected_times) {
-    return n_smallest_indices(expected_times, number_of_sim_nodes);
+    return n_smallest_indices(expected_times, NUMBER_OF_MODEL_NODES);
 }
 
 int AdvancedLearningModel::invokeModel() {
@@ -453,7 +453,7 @@ int AdvancedLearningModel::invokeModel() {
     // Insert input data for the model from state values
     // Inserting the normalized expected send times
     int model_input_index = 0;  // Start with index 0 in model_input->data.f
-    for (int i = 0; i < normalized_expected_send_time.size(); ++i) {
+    for (int i = 0; i < NUMBER_OF_MODEL_NODES; ++i) {
         int node_index = node_indices[i];
         EV << "expected_send_time = " << normalized_expected_send_time[node_index] << endl;
         model_input->data.f[model_input_index] = normalized_expected_send_time[node_index];
@@ -461,7 +461,7 @@ int AdvancedLearningModel::invokeModel() {
     }
 
     // Inserting the normalized node distances
-    for (int i = 0; i < normalized_node_distances.size(); ++i) {
+    for (int i = 0; i < NUMBER_OF_MODEL_NODES; ++i) {
         int node_index = node_indices[i];
         EV << "distances = " << normalized_node_distances[node_index] << endl;
         model_input->data.f[model_input_index] = normalized_node_distances[node_index];
@@ -469,7 +469,7 @@ int AdvancedLearningModel::invokeModel() {
     }
 
     // Inserting the normalized node directions
-    for (int i = 0; i < normalized_node_directions.size(); ++i) {
+    for (int i = 0; i < NUMBER_OF_MODEL_NODES; ++i) {
         int node_index = node_indices[i];
         EV << "directions = " << normalized_node_directions[node_index] << endl;
         model_input->data.f[model_input_index] = normalized_node_directions[node_index];

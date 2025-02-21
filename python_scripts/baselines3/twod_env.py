@@ -82,7 +82,9 @@ def schedule_first_packets(send_intervals, initial_delay=0):
 
 class TwoDEnv(gym.Env):
     def __init__(self, render_mode="none", do_logging=False, log_file=None,
-                 use_deterministic_transmissions=False, max_steps=int(86400 / 4)):
+                 use_deterministic_transmissions=False, max_steps=int(86400 / 4),
+                 number_of_model_nodes=4,
+                 number_of_sim_nodes=20):
 
         super(TwoDEnv, self).__init__()
         # Define action and observation space
@@ -122,8 +124,8 @@ class TwoDEnv(gym.Env):
         self.ploss_scale = 50  # adjusts the dropoff of transmission probability by distance
         self.node_max_transmission_distance = 40
 
-        self.number_of_sim_nodes = 20
-        self.number_of_model_nodes = 20
+        self.number_of_model_nodes = number_of_model_nodes
+        self.number_of_sim_nodes = number_of_sim_nodes
 
         self.base_send_interval = 0
         self.send_intervals = [0] * self.number_of_sim_nodes
