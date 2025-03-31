@@ -98,7 +98,7 @@ class TwoDEnv(gym.Env):
         # Environment.pos
         self.steps = 0
         self.max_steps = max_steps  # Maximum steps per episode
-        self.max_send_interval =  8000# 4000 # 86400 / 2
+        self.max_send_interval = 8000  # 4000 # 86400 / 2
         # Environment state
         # Scaled reward values preserving relative ratios
         self.pos_reward_max = 0.0125
@@ -130,12 +130,21 @@ class TwoDEnv(gym.Env):
         self.base_send_interval = 0
         self.send_intervals = [0] * self.number_of_sim_nodes
         self.first_packets = [0] * self.number_of_sim_nodes
-
         self.send_std = 5
 
         # random.shuffle(self.first_packets)
-        self.nodes = [None for _ in range(self.number_of_sim_nodes)]
-
+        # Create nodes, but with placeholder episode-values (position, first_packet, send_interval), which will be changed in reset()
+        self.nodes = [
+            Node((0, 0),
+                 TransmissionModel(max_transmission_distance=self.node_max_transmission_distance,
+                                   ploss_scale=self.ploss_scale,
+                                   use_deterministic_transmissions=self.use_deterministic_transmissions),
+                 time_to_first_packet=self.first_packets[i],
+                 send_interval=self.send_intervals[i],
+                 use_deterministic_transmissions=self.use_deterministic_transmissions,
+                 send_std=self.send_std)
+            for i in range(self.number_of_sim_nodes)
+        ]
         self.elapsed_times = [0] * self.number_of_sim_nodes
         self.loss_counts = [0] * self.number_of_sim_nodes
         self.expected_send_time = self.first_packets.copy()
@@ -169,7 +178,7 @@ class TwoDEnv(gym.Env):
                 )
                 , dtype=np.float32))
         # rendering attributes
-        self.width, self.height = self.max_distance_x + 50, self.max_distance_y + 50  # Size of the window
+        self.width, self.height = self.max_distance_x + 20, self.max_distance_y + 20  # Size of the window
         self.offset_x = int((self.width - self.max_distance_x) / 2)
         self.offset_y = int((self.height - self.max_distance_y) / 2)
         self.point_radius = 1
@@ -226,24 +235,18 @@ class TwoDEnv(gym.Env):
         self.total_misses = 0
         self.pos = (random.randint(0, self.max_distance_x), random.randint(0, self.max_distance_y))
         node_positions = self.get_random_node_positions(num_positions=self.number_of_sim_nodes,
-                                                   min_dist=5)  # min_dist=2 * self.node_max_transmission_distance
+                                                        min_dist=5)  # min_dist=2 * self.node_max_transmission_distance
         self.base_send_interval = 3500  # random.choice([2000, 2500, 3000])
         self.send_intervals = [self.base_send_interval * random.choice([1, 2])
                                for _ in range(self.number_of_sim_nodes)]
         random.shuffle(self.send_intervals)
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
-        self.nodes = [
-            Node(node_positions[i],
-                 TransmissionModel(max_transmission_distance=self.node_max_transmission_distance,
-                                   ploss_scale=self.ploss_scale,
-                                   use_deterministic_transmissions=self.use_deterministic_transmissions),
-                 time_to_first_packet=self.first_packets[i],
-                 send_interval=self.send_intervals[i],
-                 use_deterministic_transmissions=self.use_deterministic_transmissions,
-                 send_std=self.send_std)
-            for i in range(self.number_of_sim_nodes)
-        ]
+
         for i in range(self.number_of_sim_nodes):
+            self.nodes[i].reset()
+            self.nodes[i].pos = node_positions[i]
+            self.nodes[i].set_send_interval(self.send_intervals[i])
+            self.nodes[i].time_to_first_packet = self.first_packets[i]
             self.elapsed_times[i] = 0
             self.loss_counts[i] = 0
             self.received_per_node[i] = 0
@@ -480,62 +483,68 @@ class TwoDEnv(gym.Env):
     def render(self):
         """Render the environment with reception-based background and dynamic elements."""
 
-        # Calculate padding for top, left, bottom, and right
-        pad_top, pad_left = self.offset_y, self.offset_x
-        pad_bottom, pad_right = pad_top, pad_left  # // 2
-        # print(f"{pad_top, pad_left, pad_bottom, pad_right = }")
+        # High-resolution scale factor
+        scale_factor = 2  # Adjust this factor to increase resolution
+        high_res_width = int(self.width * scale_factor)
+        high_res_height = int(self.height * scale_factor)
 
-        # Add padding to the color frame using np.pad
+        # Calculate padding for top, left, bottom, and right
+        pad_top, pad_left = int(self.offset_y) * scale_factor, int(self.offset_x) * scale_factor
+        pad_bottom, pad_right = pad_top, pad_left
+
+        # Scale up the background frame directly
+        scaled_background_frame = cv2.resize(self.background_frame, (0, 0), fx=scale_factor, fy=scale_factor,
+                                             interpolation=cv2.INTER_LINEAR)
+        # cv2.resize(frame, (0, 0), fx=1.5, fy=1.5, interpolation=cv2.INTER_NEAREST)
+
+        # Add padding to the scaled color frame using np.pad
         padded_color_frame = np.pad(
-            self.background_frame,
+            scaled_background_frame,
             ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
             mode='constant', constant_values=0
         )
 
-        # Create a new frame (background) and place the padded color frame into it
-        frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+        # Create a high-resolution frame (background)
+        frame = np.zeros((high_res_height, high_res_width, 3), dtype=np.uint8)
         frame[
         :padded_color_frame.shape[0],
         :padded_color_frame.shape[1]
         ] = padded_color_frame[
-            :self.height,
-            :self.width
+            :high_res_height,
+            :high_res_width
             ]
 
         # Draw nodes and their transmission circles
-        for node in self.nodes:
-            cv2.circle(frame, center=(self.offset_x + node.pos[0], self.offset_y + node.pos[1]),
-                       radius=int(node.transmission_model.max_transmission_distance), color=(255, 0, 0), thickness=2)
-        i = 0
-        for node in self.nodes:
-            cv2.putText(frame, str(i), (node.pos[0], self.offset_y + node.pos[1]),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=1)
-            i += 1
+        for i, node in enumerate(self.nodes):
+            center = (
+                int((node.pos[0] + self.offset_x) * scale_factor), int((node.pos[1] + self.offset_y) * scale_factor))
+            radius = int(node.transmission_model.max_transmission_distance * scale_factor)
+            cv2.circle(frame, center=center, radius=radius, color=(255, 0, 0), thickness=3, lineType=cv2.LINE_AA)
+        # draw text on top of the blue circles
+        for i, node in enumerate(self.nodes):
+            center = (
+                int((node.pos[0] + self.offset_x) * scale_factor), int((node.pos[1] + self.offset_y) * scale_factor))
+            cv2.putText(frame, str(i), center, cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), thickness=2,
+                        lineType=cv2.LINE_AA)
 
-        # Draw the moving point
-        gw_x = int(self.pos[0])
-        gw_y = int(self.pos[1])
-        gw_box_size = 2
-        cv2.rectangle(frame, pt1=(self.offset_x + gw_x - gw_box_size, self.offset_y + gw_y - gw_box_size),
-                      pt2=(self.offset_x + gw_x + gw_box_size, self.offset_y + gw_y + gw_box_size),
-                      color=self.point_color)
-
-        # Resize frame for better visualization
-        enlarged_image = cv2.resize(frame, (0, 0), fx=1.5, fy=1.5, interpolation=cv2.INTER_NEAREST)
+        # Draw the moving point as a filled square
+        gw_x = int((self.pos[0] + self.offset_x) * scale_factor)
+        gw_y = int((self.pos[1] + self.offset_y) * scale_factor)
+        gw_box_size = int(2 * scale_factor)
+        cv2.rectangle(frame, pt1=(gw_x - gw_box_size, gw_y - gw_box_size),
+                      pt2=(gw_x + gw_box_size, gw_y + gw_box_size),
+                      color=self.point_color, thickness=-1)  # FILL with -1
 
         # Render text data and stats
-        canvas = self.render_text_data(enlarged_image)
+        canvas = self.render_text_data(frame)
 
         # Enable resizable window and update the content dynamically
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)  # Make the window resizable
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         cv2.imshow(self.window_name, canvas)
-
-        # Wait for resizing to reflect (fullscreen updates dynamically)
         cv2.waitKey(2)
 
     def render_text_data(self, image):
         """Render text stats and dynamic node data on a canvas."""
-        # Define stats list
         stats = [
             f"Total received: {self.total_received}",
             f"Total misses: {self.total_misses}",
@@ -544,20 +553,17 @@ class TwoDEnv(gym.Env):
         ]
 
         # Calculate text-related dimensions
-        line_height = 25  # Spacing between text lines
+        line_height = 35  # Spacing between text lines
         num_lines = len(stats)
-        text_height = num_lines * line_height + 20  # Padding for text
+        text_height = num_lines * line_height + 40  # Padding for text
 
         # Create a canvas larger than the image to include space for stats
         canvas = np.zeros((image.shape[0] + text_height, image.shape[1], 3), dtype=np.uint8)
-
-        # Place the enlarged image on the canvas
         canvas[:image.shape[0], :, :] = image
 
-        # Font settings
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.8
-        font_thickness = 1
+        font_scale = 1
+        font_thickness = 2
         text_color = (255, 255, 255)  # white
 
         # Add stats below the image
@@ -565,14 +571,14 @@ class TwoDEnv(gym.Env):
         text_offset_y = image.shape[0] + 20
         for i, text in enumerate(stats):
             cv2.putText(canvas, text, (text_offset_x, text_offset_y + (i * line_height)),
-                        font, fontScale=font_scale, color=text_color, thickness=font_thickness)
+                        font, fontScale=font_scale, color=text_color, thickness=font_thickness, lineType=cv2.LINE_AA)
 
         # Initialize variables for dynamic text rendering
         line_height = 30  # Define consistent vertical spacing
 
         # Initialize variables for dynamic text rendering
-        text_offset_y = image.shape[0]
-        base_offset_x = 300  # Initial horizontal position for node data
+        text_offset_y = image.shape[0] + 20
+        base_offset_x = 400  # Initial horizontal position for node data
         id_offset = base_offset_x
         remaining_time_offset = base_offset_x + 30  # Offset for remaining time
         send_interval_offset = remaining_time_offset + 80  # Offset for combined " | send_interval" text
@@ -585,14 +591,15 @@ class TwoDEnv(gym.Env):
             # Text values
             node_id_text = f"{i}:"
             remaining_time_text = f"{round(node.time_of_next_packet - self.steps)}"
-            combined_text = f"| {self.send_intervals[i]}"  # Combine separator and send interval
+            combined_text = f" | {self.send_intervals[i]}"  # Combine separator and send interval
 
             # Draw the text parts with fixed offsets
-            cv2.putText(canvas, node_id_text, (id_offset, y_coord), font, font_scale, text_color, font_thickness)
+            cv2.putText(canvas, node_id_text, (id_offset, y_coord), font, font_scale, text_color, font_thickness,
+                        lineType=cv2.LINE_AA)
             cv2.putText(canvas, remaining_time_text, (remaining_time_offset, y_coord), font, font_scale, text_color,
-                        font_thickness)
+                        font_thickness, lineType=cv2.LINE_AA)
             cv2.putText(canvas, combined_text, (send_interval_offset, y_coord), font, font_scale, text_color,
-                        font_thickness)
+                        font_thickness, lineType=cv2.LINE_AA)
 
         return canvas
 
