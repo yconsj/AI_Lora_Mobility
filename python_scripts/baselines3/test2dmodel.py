@@ -18,15 +18,18 @@ def sb3_get_action_probabilities(input_state, input_model):
     return probabilities_np
 
 
-def make_skipped_env(do_logging, log_file, input_render_mode):
+def make_skipped_env(do_logging, log_file, input_render_mode, do_eval_env=True):
     time_skip = 10
-    # env = eval_twod_env(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file)
-    env = TwoDEnv(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file, max_steps=86400)
+    if do_eval_env:
+        env = eval_twod_env(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file)
+    else:
+        env = TwoDEnv(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file, max_steps=86400)
+
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
 
-def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
+def evaluate_episodes(do_logging, log_file, n_episodes, mv_rendering_mode=None):
     # Store the number of packets received by gw and sent, for each node, at the final state of each episode.
     all_final_receives = []
     all_final_sents = []
@@ -48,7 +51,7 @@ def evaluate_episodes(do_logging, log_file, n_episodes, rendering_mode=None):
         if (ep_idx + 1) == n_episodes:  # only (potentially) render the last episode in the batch.
             vec_env = make_vec_env(make_skipped_env, n_envs=1,
                                    env_kwargs=dict(do_logging=do_logging, log_file=log_file,
-                                                   input_render_mode=rendering_mode))
+                                                   input_render_mode=mv_rendering_mode))
         obs = vec_env.reset()
 
         # test trained model
@@ -100,4 +103,4 @@ if __name__ == '__main__':
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
     rendering_mode = None  # "cv2"
-    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=100, rendering_mode=rendering_mode)
+    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=100, mv_rendering_mode=rendering_mode)

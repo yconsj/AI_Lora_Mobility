@@ -2,7 +2,7 @@ from stable_baselines3.common.env_checker import check_env
 from baselines3.twod_env import TwoDEnv, FrameSkip
 
 skip = 10
-env = TwoDEnv(render_mode="cv2")
+env = TwoDEnv(render_mode="cv2", number_of_sim_nodes=4, )
 env = FrameSkip(env, skip=skip)  # Frame skip for action repeat
 
 episodes = 1
