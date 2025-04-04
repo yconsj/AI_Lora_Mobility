@@ -383,6 +383,12 @@ std::vector<int> AdvancedLearningModel::n_smallest_indices(const std::vector<flo
 }
 
 std::vector<int> AdvancedLearningModel::select_node_indices_for_state(const std::vector<float>& expected_times) {
+    // Original method:
+    /*std::vector<int> indices(expected_times.size());
+    std::iota(indices.begin(), indices.end(), 0); // Fill with 0, 1, 2, ..., expected_times.size() - 1
+    return indices; // {0,1,2,3};
+    */
+    // Sorted
     return n_smallest_indices(expected_times, NUMBER_OF_MODEL_NODES);
 }
 
@@ -429,6 +435,7 @@ int AdvancedLearningModel::invokeModel() {
     std::vector<float> node_distances;
     std::vector<float> normalized_node_distances;
     std::vector<float> normalized_node_directions;
+    EV << "GW Position: ("<< gw_pos.x << ","<< gw_pos.y << ")" << omnetpp::endl;
     for (int i = 0; i < nodes.size(); i++) {
 
         float delta_time = expected_send_times[i].dbl() - simTime().dbl();
@@ -446,15 +453,25 @@ int AdvancedLearningModel::invokeModel() {
 
         float norm_direction = calculateNormalizedAngle(getCoord(), node_pos);
         normalized_node_directions.push_back(norm_direction);
+
+        EV << "Node index:" << i << omnetpp::endl;
+        EV << "Position: ("<< node_pos.x << ","<< node_pos.y << ")" << omnetpp::endl;
+        EV << "time: "<< time << omnetpp::endl;
+        EV << "distance: "<< node_distance << omnetpp::endl;
+        EV << "direction: "<< norm_direction << omnetpp::endl;
+
     }
 
     std::vector<int> node_indices = select_node_indices_for_state(normalized_expected_send_time);
+
 
     // Insert input data for the model from state values
     // Inserting the normalized expected send times
     int model_input_index = 0;  // Start with index 0 in model_input->data.f
     for (int i = 0; i < NUMBER_OF_MODEL_NODES; ++i) {
         int node_index = node_indices[i];
+        EV << "Node index: "<< node_index << omnetpp::endl;
+
         EV << "expected_send_time = " << normalized_expected_send_time[node_index] << endl;
         model_input->data.f[model_input_index] = normalized_expected_send_time[node_index];
         model_input_index++;

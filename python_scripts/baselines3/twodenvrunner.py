@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 def make_skipped_env():
     time_skip = 10
     # TODO: use_deterministic_transmissions=False
-    env = TwoDEnv(render_mode="none", use_deterministic_transmissions=False, max_steps=86400)
+    env = TwoDEnv(render_mode="none", max_steps=86400, number_of_model_nodes=4, number_of_sim_nodes=4)
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
@@ -100,7 +100,7 @@ def main():
 
     envs = 16
     env = make_vec_env(make_skipped_env, n_envs=envs, vec_env_cls=SubprocVecEnv)
-    gamma = 0.85  # base: 0.85
+    gamma = 0.9  # base: 0.85
     ent_coef = 0.005  # base: 0.005
     learning_rate = 1e-4  # base: 6e-5
     n_blocks = 0
@@ -116,7 +116,7 @@ def main():
     use_ResNet = False
 
     stop_train_callback = StopTrainingOnNoModelImprovement(max_no_improvement_evals=50, min_evals=100, verbose=1)
-    eval_callback = EvalCallback(env, eval_freq=steps_per_episode * 2, #  callback_after_eval=stop_train_callback,
+    eval_callback = EvalCallback(env, eval_freq=steps_per_episode * 2,  #  callback_after_eval=stop_train_callback,
                                  verbose=1, best_model_save_path="stable-model-2d-best")
     if model_class == PPO:
         policy_kwargs = dict(
@@ -156,7 +156,7 @@ def main():
                   f"g_{gamma};e_{ent_coef};lr_{learning_rate}"
     print(f"Learning started, tb_log: {tb_log_name}")
     env.reset()
-    model = model.learn(10_000_000, callback=[eval_callback, TensorboardCallback()],  # 10_00
+    model = model.learn(2_000_000, callback=[eval_callback, TensorboardCallback()],  # 10_00
                         tb_log_name=tb_log_name)
 
     print("Learning finished")

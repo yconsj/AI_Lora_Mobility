@@ -20,16 +20,22 @@ def sb3_get_action_probabilities(input_state, input_model):
 
 def make_skipped_env(do_logging, log_file, input_render_mode, do_eval_env=True):
     time_skip = 10
+    number_of_sim_nodes = 5
+
     if do_eval_env:
-        env = eval_twod_env(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file)
+        send_intervals = [1600] * number_of_sim_nodes
+        node_positions = [(random.randint(0, 300), random.randint(0, 300)) for _ in range(number_of_sim_nodes)]
+        env = eval_twod_env(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file,
+                            send_intervals=send_intervals, node_positions=node_positions)
     else:
-        env = TwoDEnv(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file, max_steps=86400)
+        env = TwoDEnv(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file,
+                      max_steps=86400, number_of_sim_nodes=number_of_sim_nodes)
 
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 
 
-def evaluate_episodes(do_logging, log_file, n_episodes, mv_rendering_mode=None):
+def evaluate_episodes(do_logging, log_file, n_episodes, mv_rendering_mode=None, do_eval_env=True):
     # Store the number of packets received by gw and sent, for each node, at the final state of each episode.
     all_final_receives = []
     all_final_sents = []
@@ -45,13 +51,15 @@ def evaluate_episodes(do_logging, log_file, n_episodes, mv_rendering_mode=None):
     print(f"{model.policy =}")
     model.set_random_seed(0)
     vec_env = make_vec_env(make_skipped_env, n_envs=1,
-                           env_kwargs=dict(do_logging=do_logging, log_file=log_file, input_render_mode=None))
+                           env_kwargs=dict(do_logging=do_logging, log_file=log_file,
+                                           input_render_mode=None, do_eval_env=do_eval_env)
+                           )
     for ep_idx in range(n_episodes):
         print(f"Starting episode {ep_idx}")
         if (ep_idx + 1) == n_episodes:  # only (potentially) render the last episode in the batch.
             vec_env = make_vec_env(make_skipped_env, n_envs=1,
                                    env_kwargs=dict(do_logging=do_logging, log_file=log_file,
-                                                   input_render_mode=mv_rendering_mode))
+                                                   input_render_mode=mv_rendering_mode, do_eval_env=do_eval_env))
         obs = vec_env.reset()
 
         # test trained model
@@ -102,5 +110,6 @@ if __name__ == '__main__':
     random.seed(0)
     # Protect the entry point for multiprocessing
     multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
-    rendering_mode = None  # "cv2"
-    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=100, mv_rendering_mode=rendering_mode)
+    rendering_mode = "cv2" if True else None
+    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=5,
+                      mv_rendering_mode=rendering_mode, do_eval_env=False)

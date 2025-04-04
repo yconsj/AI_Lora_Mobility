@@ -18,6 +18,11 @@
 #include "inet/RL/LearningModels/AdvancedLearningModel/AdvancedLearningModel.h"
 #include <omnetpp.h>
 #include <iostream>
+#include <iomanip>
+#include <fstream>
+#include <sstream>
+
+
 
 
 namespace inet {
@@ -106,48 +111,103 @@ void StateLogger::logStep(
 }
 
 
+void StateLogger::writeUnifiedCSVWithRuns(const std::string& filename) {
+    bool writeHeader = (runnumber == 0);
+
+    std::ofstream file;
+    if (writeHeader) {
+        file.open(filename, std::ios::out | std::ios::trunc);  // overwrite
+    } else {
+        file.open(filename, std::ios::out | std::ios::app);    // append
+    }
+
+    if (!file.is_open()) {
+        EV << "Failed to open CSV file: " << filename << "\n";
+        return;
+    }
+
+    size_t num_timesteps = times_vec.size();
+    size_t num_nodes = node_distances_vec.empty() ? 0 : node_distances_vec[0].size();
+
+    std::ostringstream buffer;
+    buffer << std::fixed << std::setprecision(3);
+
+    if (writeHeader) {
+        buffer << "run,t,gw_x,gw_y,action";
+        for (size_t i = 0; i < num_nodes; ++i) buffer << ",node" << i << "_dist";
+        for (size_t i = 0; i < num_nodes; ++i) buffer << ",node" << i << "_tx";
+        for (size_t i = 0; i < num_nodes; ++i) buffer << ",node" << i << "_rx_mobile";
+        for (size_t i = 0; i < num_nodes; ++i) buffer << ",node" << i << "_rx_stationary";
+        for (size_t i = 0; i < num_nodes; ++i) buffer << ",node" << i << "_rx_staticmob";
+        buffer << "\n";
+    }
+
+    for (size_t t = 0; t < num_timesteps; ++t) {
+        buffer << runnumber << "," << times_vec[t] << "," << gw_positions_x_vec[t] << "," << gw_positions_y_vec[t] << "," << actions_vec[t];
+        for (size_t i = 0; i < num_nodes; ++i) buffer << "," << node_distances_vec[t][i];
+        for (size_t i = 0; i < num_nodes; ++i) buffer << "," << transmissions_per_node_vec[t][i];
+        for (size_t i = 0; i < num_nodes; ++i) buffer << "," << mobile_gw_number_of_received_packets_per_node_vec[t][i];
+        for (size_t i = 0; i < num_nodes; ++i) buffer << "," << stationary_gw_number_of_received_packets_per_node_vec[t][i];
+        for (size_t i = 0; i < num_nodes; ++i) buffer << "," << static_mobility_gw_number_of_received_packets_per_node_vec[t][i];
+        buffer << "\n";
+    }
+
+    file << buffer.str();
+    file.close();
+}
+
+
 void StateLogger::writeToFile() {
     runnumber = getSimulation()->getActiveEnvir()->getConfigEx()->getActiveRunNumber();
-
     if (runnumber < 0) {
         throw cRuntimeError("Failed to fetch runnumber");
     }
 
-    // Construct the filename based on the current runnumber
-    std::string filename = std::string(log_file_basename) + "_" + std::to_string(runnumber) + ".json";
-    std::ofstream outFile(filename);
+    std::string csv_file = std::string(log_file_basename) + "_data.csv";
+    std::string json_file = std::string(log_file_basename) + ".json";
 
+    writeUnifiedCSVWithRuns(csv_file);
+
+    json allRunsJson;
+
+    // Read existing JSON if not run 0
+    if (runnumber != 0) {
+        std::ifstream inFile(json_file);
+        if (inFile.is_open()) {
+            try {
+                inFile >> allRunsJson;
+            } catch (const std::exception& e) {
+                EV << "Warning: Failed to parse existing JSON. Starting fresh.\n";
+            }
+            inFile.close();
+        }
+    }
+
+    // Create run-specific JSON
+    json runJson;
+    runJson["static"]["number_of_nodes"] = number_of_sim_nodes;
+    runJson["file_reference"] = csv_file;
+
+    // --- Add transmission_times ---
+    json tx_json;
+    for (size_t i = 0; i < transmission_times_vec.size(); ++i) {
+        tx_json[std::to_string(i)] = transmission_times_vec[i];
+    }
+    runJson["transmission_times"] = tx_json;
+
+    // Add this run to the global metadata
+    allRunsJson[std::to_string(runnumber)] = runJson;
+
+    std::ofstream outFile(json_file);
     if (outFile.is_open()) {
-        // Create a JSON object
-        json outputJson;
-
-        outputJson["static"]["number_of_nodes"] = number_of_sim_nodes;
-        outputJson["mobile_gw_data"]["node_distances"] = node_distances_vec;
-        outputJson["mobile_gw_data"]["gw_positions_x"] = gw_positions_x_vec;
-        outputJson["mobile_gw_data"]["gw_positions_y"] = gw_positions_y_vec;
-        outputJson["mobile_gw_data"]["number_of_received_packets_per_node"] = mobile_gw_number_of_received_packets_per_node_vec;
-        outputJson["mobile_gw_data"]["times"] = times_vec;
-        outputJson["mobile_gw_data"]["actions"] = actions_vec;
-
-
-        // Add transmission times to the JSON object
-        outputJson["nodes"]["transmission_times"] = transmission_times_vec;
-        outputJson["nodes"]["transmissions_per_node"] = transmissions_per_node_vec;
-
-        outputJson["stationary_gw_data"]["stationary_gw_number_of_received_packets_per_node"] =
-                stationary_gw_number_of_received_packets_per_node_vec;
-
-        outputJson["static_mobility_gw_data"]["static_mobility_gw_number_of_received_packets_per_node"] =
-                static_mobility_gw_number_of_received_packets_per_node_vec;
-
-        // Write the JSON object to the file
-        outFile << outputJson.dump(4);  // Pretty print with 4-space indentation
-
+        outFile << allRunsJson.dump(2);  // Indented for readability
         outFile.close();
     } else {
-        EV << "Error opening file to write log data.\n";
+        EV << "Error opening metadata JSON file: " << json_file << "\n";
     }
 }
+
+
 
 
 void StateLogger::finish() {
