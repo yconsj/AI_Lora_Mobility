@@ -3,6 +3,7 @@ package flora.simulations.scenarios.advancedcase;
 
 import flora.RLNodes.Nodes.MobileLoRaGW;
 import flora.RLNodes.Nodes.StationaryLoRaGW;
+import flora.RLNodes.Nodes.SmartStationaryLoRaGW;
 import flora.RLNodes.Nodes.StaticMobilityLoRaGW;
 import inet.node.inet.StandardHost;
 import inet.visualizer.common.IntegratedVisualizer;
@@ -24,7 +25,8 @@ network AdvancedCaseNetwork
     parameters:
         int numberOfNodes = default(1);
         int numberOfMobileGateways = default(1);
-        int numberOfStationaryGateways = default(1);
+        int numberOfStationaryGateways = default(0);
+        int numberOfSmartStationaryGateways = default(0);
         int networkSizeX = default(500);
         int networkSizeY = default(500);
         @display("bgb=562,417");
@@ -38,6 +40,7 @@ network AdvancedCaseNetwork
         };
         StationaryLoraGw[numberOfStationaryGateways] : StationaryLoRaGW;
         StaticMobilityLoRaGW: StaticMobilityLoRaGW;
+        SmartStationaryLoraGw[numberOfSmartStationaryGateways] : SmartStationaryLoRaGW;
         stateLogger : StateLogger;
         LoRaMedium: CustomLoRaMedium { // LoRaMedium
             @display("p=309,102");

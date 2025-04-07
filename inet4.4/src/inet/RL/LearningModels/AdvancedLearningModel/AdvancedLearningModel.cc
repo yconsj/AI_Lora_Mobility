@@ -383,13 +383,15 @@ std::vector<int> AdvancedLearningModel::n_smallest_indices(const std::vector<flo
 }
 
 std::vector<int> AdvancedLearningModel::select_node_indices_for_state(const std::vector<float>& expected_times) {
+    bool use_node_sorting = false;
+
+    if (use_node_sorting) {
+        return n_smallest_indices(expected_times, NUMBER_OF_MODEL_NODES);
+    }
     // Original method:
-    /*std::vector<int> indices(expected_times.size());
+    std::vector<int> indices(expected_times.size());
     std::iota(indices.begin(), indices.end(), 0); // Fill with 0, 1, 2, ..., expected_times.size() - 1
     return indices; // {0,1,2,3};
-    */
-    // Sorted
-    return n_smallest_indices(expected_times, NUMBER_OF_MODEL_NODES);
 }
 
 int AdvancedLearningModel::invokeModel() {
