@@ -205,6 +205,8 @@ def sb3_to_tflite_pipeline(relative_model_path):
     env = make_vec_env(TwoDEnv, n_envs=1, env_kwargs=dict())
     max_send_interval = env.get_attr("max_send_interval")[0]
     number_of_model_nodes = env.get_attr("number_of_model_nodes")[0]
+    model_use_node_priority = env.get_attr("model_use_node_priority")[0]
+    use_node_index_sorting = env.get_attr("use_node_index_sorting")[0]
 
     tf_model = sb3_to_tensorflow(model, env, do_profiling=True)
     test_sb3_tf_model_conversion(sb3_model=model, tf_model=tf_model)
@@ -213,8 +215,10 @@ def sb3_to_tflite_pipeline(relative_model_path):
     export_model_path = config['model_path']
 
     header_defs = {
-        "const size_t NUMBER_OF_MODEL_NODES": number_of_model_nodes,
-        "const int MAX_SEND_INTERVAL": max_send_interval
+        "constexpr size_t NUMBER_OF_MODEL_NODES": number_of_model_nodes,
+        "constexpr int MAX_SEND_INTERVAL": max_send_interval,
+        "constexpr bool MODEL_USE_NODE_PRIORITY": str(model_use_node_priority).lower(),
+        "constexpr bool USE_NODE_INDEX_SORTING": str(use_node_index_sorting).lower()
     }
 
     tf_to_tflite(tf_model, export_model_path, extra_header_defs=header_defs)

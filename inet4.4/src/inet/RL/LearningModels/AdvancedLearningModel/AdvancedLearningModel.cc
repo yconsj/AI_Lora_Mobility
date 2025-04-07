@@ -36,7 +36,9 @@ float* model_output_buffer = nullptr;
 // Define dimensions
 
 const int kInputHeight = 1;
-const int kInputWidth = 3 * NUMBER_OF_MODEL_NODES;
+constexpr int kInputWidth = MODEL_USE_NODE_PRIORITY
+                             ? 4 * NUMBER_OF_MODEL_NODES
+                             : 3 * NUMBER_OF_MODEL_NODES;
 const int kOutputHeight = 1;
 const int kOutputWidth = 5;
 
@@ -383,9 +385,7 @@ std::vector<int> AdvancedLearningModel::n_smallest_indices(const std::vector<flo
 }
 
 std::vector<int> AdvancedLearningModel::select_node_indices_for_state(const std::vector<float>& expected_times) {
-    bool use_node_sorting = true;
-
-    if (use_node_sorting) {
+    if (USE_NODE_INDEX_SORTING) {
         return n_smallest_indices(expected_times, NUMBER_OF_MODEL_NODES);
     }
     // Original method:
@@ -494,6 +494,26 @@ int AdvancedLearningModel::invokeModel() {
         model_input->data.f[model_input_index] = normalized_node_directions[node_index];
         model_input_index++;
     }
+
+    if (MODEL_USE_NODE_PRIORITY) {
+        // Inserting the node priority (based on packets received from each node)
+        int totalReceived = 0;
+        for (int count : number_of_received_packets_per_node) {
+            totalReceived += count;
+        }
+        for (int i = 0; i < NUMBER_OF_MODEL_NODES; ++i) {
+            int node_index = node_indices[i];
+            float priority = 1.0f;
+            if (totalReceived > 0) {
+                priority -= static_cast<float>(number_of_received_packets_per_node[node_index]) / totalReceived;
+            }
+            EV << "Priority[" << node_index << "] = " << priority << endl;
+            model_input->data.f[model_input_index] = priority;
+            model_input_index++;
+        }
+    }
+
+
 
 
     // Place the quantized input in the model's input tensor

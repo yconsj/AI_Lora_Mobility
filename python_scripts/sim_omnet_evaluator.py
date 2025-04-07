@@ -220,12 +220,12 @@ def main():
         print("Log file path is not specified in the configuration.")
         return
 
-    include_stationary = False
-    include_static_mobility = True
-    batch_size = 100
+    include_stationary = True
+    include_static_mobility = False
+    batch_size = 100  # 100
     if True:
         print("Starting simulation...")
-        env.run_simulation(ini_config="scenario_5_a", batch_size=batch_size)
+        env.run_simulation(ini_config="scenario_smart_stationary_gateways", batch_size=batch_size)
 
     # Data storage for batch results
     final_pdr_mobile_per_node_list = []

@@ -4,9 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from utilities import jains_fairness_index
 
+
 def generate_n_colors(n, cmap="tab10"):
     cmap = plt.get_cmap(cmap)
     return [cmap(i / n) for i in range(n)]
+
 
 def plot_relative_positions(log_file, number_of_nodes=4):
     for node_idx in range(number_of_nodes):
@@ -71,7 +73,7 @@ def plot_relative_position(log_file, node_idx):
     plt.tight_layout(pad=3)  # Add padding to prevent overlap
     plt.subplots_adjust(bottom=0.15)  # Ensure space at the bottom for legends
     plt.savefig(f"plots/distance_{node_idx}.png")
-    #plt.show()
+    # plt.show()
 
 
 def plot_mobile_gateway_with_nodes_advanced(log_file):
@@ -135,7 +137,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     plt.subplots_adjust(bottom=0.25)  # Add extra space at the bottom for the legend
 
     plt.savefig("plots/packets.png")
-    #plt.show()
+    # plt.show()
 
 
 def create_heatmap(gw_positions, grid_size_x, grid_size_y):
@@ -180,7 +182,7 @@ def _plot_heatmap(grid, node_positions):
     plt.xlabel('Grid X')
     plt.ylabel('Grid Y')
     plt.savefig("plots/heatmap.png")
-    #plt.show()
+    # plt.show()
 
 
 def plot_heatmap(log_file):
@@ -239,15 +241,15 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
                     flierprops=dict(marker="o", color="red", alpha=0.6))
     axes[1].set_title("Fairness Statistics")
     axes[1].set_ylabel("Fairness")
-    axes[1].set_ylim(0, 1.05)  
-    axes[0].set_xticklabels([])  
-    axes[0].set_xticks([]) 
-    axes[1].set_xticklabels([]) 
-    axes[1].set_xticks([])  
+    axes[1].set_ylim(0, 1.05)
+    axes[0].set_xticklabels([])
+    axes[0].set_xticks([])
+    axes[1].set_xticklabels([])
+    axes[1].set_xticks([])
     # ax3.set_ylim(0, 1)
     plt.tight_layout()
     plt.savefig("plots/box.png")
-    #plt.show()  # Show the box plot
+    # plt.show()  # Show the box plot
 
     # Third plot: Bar plot for PDR & Fairness per node
     num_nodes = len(all_final_receives[0])
@@ -255,7 +257,7 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
                     for received, sent in zip(zip(*all_final_receives), zip(*all_final_sents))]
     pdr_std_per_node = [np.std([r / s if s > 0 else 0 for r, s in zip(received, sent)])
                         for received, sent in zip(zip(*all_final_receives), zip(*all_final_sents))]
-    
+
     pdr_per_node_nofaulty = pdr_per_node[:2] + pdr_per_node[3:]
     pdr_std_per_node_nofaulty = pdr_std_per_node[:2] + pdr_std_per_node[3:]
 
@@ -295,4 +297,4 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     plt.tight_layout()
 
     plt.savefig("plots/bar.png")
-    #plt.show()
+    # plt.show()
