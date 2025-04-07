@@ -21,8 +21,8 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 def make_skipped_env():
     time_skip = 10
-    # TODO: use_deterministic_transmissions=False
-    env = TwoDEnv(render_mode="none", max_steps=86400, number_of_model_nodes=4, number_of_sim_nodes=4)
+    env = TwoDEnv(render_mode="none", max_steps=86400,
+                  number_of_model_nodes=4, number_of_sim_nodes=4, use_node_index_sorting=False)
     env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
     return env
 

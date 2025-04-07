@@ -110,6 +110,7 @@ class TwoDEnv(gym.Env):
         self.packet_reward_min = 0.0
         self.fairness_reward = 0.0625
         self.use_node_index_sorting = use_node_index_sorting
+        self.model_use_node_priority = False
 
         # speed of gw is based on this article http://unmannedcargo.org/chinese-supermarket-delivery-drone/
         unscaled_speed = 11  # meter per second
@@ -154,29 +155,21 @@ class TwoDEnv(gym.Env):
         self.received_per_node = [0] * self.number_of_sim_nodes
         self.misses_per_node = [0] * self.number_of_sim_nodes
         self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
+
         # Observation_space =
         #                     expected time until sending                      |n
         #                     distance from gw to each node                    |n
         #                     direction from gw to each node                   |n
         #                                                                      |3n
 
+        model_input_size = self.number_of_model_nodes * 4 if self.model_use_node_priority \
+            else self.number_of_model_nodes * 3
+
         self.observation_space = spaces.Box(
             low=np.array(
-                [0] * (
-                        self.number_of_model_nodes +
-                        self.number_of_model_nodes +
-                        self.number_of_model_nodes +
-                        self.number_of_model_nodes
-                )
-                , dtype=np.float32),
+                [0] * model_input_size, dtype=np.float32),
             high=np.array(
-                [1] * (
-                        self.number_of_model_nodes +
-                        self.number_of_model_nodes +
-                        self.number_of_model_nodes +
-                        self.number_of_model_nodes
-                )
-                , dtype=np.float32))
+                [1] * model_input_size, dtype=np.float32))
         # rendering attributes
         self.width, self.height = self.max_distance_x + 20, self.max_distance_y + 20  # Size of the window
         self.offset_x = int((self.width - self.max_distance_x) / 2)
@@ -308,13 +301,14 @@ class TwoDEnv(gym.Env):
             for idx in indices
         ]
 
-        # Combine all normalized and one-hot encoded components into the state
+        # Combine all normalized into the state
         state = (
                 normalized_expected_send_time +
                 normalized_node_distances +
-                normalized_node_directions +
-                node_weight
+                normalized_node_directions
         )
+        if self.model_use_node_priority:
+            state += node_weight
         return state
 
     def get_packet_reward(self, sending_node_idx: int):
@@ -397,7 +391,7 @@ class TwoDEnv(gym.Env):
         elif action == 3:  # up
             self.pos = self.pos[0], min(self.pos[1] + self.scaled_speed, self.max_distance_y)
         elif action == 4:  # down
-            self.pos = self.pos[0], max((self.pos[1] - self.scaled_speed), 0)
+            self.pos = self.pos[0], max(self.pos[1] - self.scaled_speed, 0)
 
         reward += self.get_pos_reward(self.nodes[idx_next_sending_node])
         distance_after_action = math.dist(self.pos, self.nodes[idx_next_sending_node].pos)
