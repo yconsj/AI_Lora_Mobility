@@ -383,7 +383,7 @@ std::vector<int> AdvancedLearningModel::n_smallest_indices(const std::vector<flo
 }
 
 std::vector<int> AdvancedLearningModel::select_node_indices_for_state(const std::vector<float>& expected_times) {
-    bool use_node_sorting = false;
+    bool use_node_sorting = true;
 
     if (use_node_sorting) {
         return n_smallest_indices(expected_times, NUMBER_OF_MODEL_NODES);

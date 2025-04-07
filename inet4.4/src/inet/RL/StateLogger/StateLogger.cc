@@ -44,7 +44,7 @@ void StateLogger::initialize(int stage) {
         transmissions_per_node_current_vec.resize(n_sim_nodes, 0);
 
         // cModule *network = getSimulation()->getSystemModule();
-        int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw");
+        int number_of_stationary_gw = network->getSubmoduleVectorSize("StationaryLoraGw") + network->getSubmoduleVectorSize("SmartStationaryLoraGw");
         transmission_id_vec.resize(n_sim_nodes, -1);
         stationary_gw_received_packets_per_node_current_vec.resize(n_sim_nodes, 0);
 

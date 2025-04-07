@@ -106,25 +106,20 @@ void StationaryGatewayLoRaApp::handleMessage(cMessage *msg)
         //send(msg, "upperLayerOut");
         //sendPacket();
     } else if (msg->arrivedOn("socketIn")) {
-        // FIXME : debug for now to see if LoRaMAC frame received correctly from network server
-        EV << "Received UDP packet" << endl;
-        auto pkt = check_and_cast<Packet*>(msg);
+        EV << "Received UDP message" << endl;
+
+        auto *pkt = dynamic_cast<inet::Packet *>(msg);
+        if (!pkt) {
+            EV_WARN << "Non-packet message received on socketIn: " << msg->getClassName() << endl;
+            delete msg;  // or handle it as needed
+            return;
+        }
+
         const auto &frame = pkt->peekAtFront<LoRaMacFrame>();
-
         if (frame == nullptr)
-            throw cRuntimeError("Packet type error");
-        //EV << frame->getLoRaTP() << endl;
-        //delete frame;
-
-       /* auto loraTag = pkt->addTagIfAbsent<LoRaTag>();
-        pkt->setBandwidth(loRaBW);
-        pkt->setCarrierFrequency(loRaCF);
-        pkt->setSpreadFactor(loRaSF);
-        pkt->setCodeRendundance(loRaCR);
-        pkt->setPower(W(loRaTP));*/
+            throw cRuntimeError("LoRaMacFrame missing in packet");
 
         send(pkt, "lowerLayerOut");
-        //
     }
 }
 

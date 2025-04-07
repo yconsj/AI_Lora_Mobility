@@ -1,7 +1,7 @@
 #ifndef INET_MOBILITY_RL_MODELFILES_POLICY_NET_MODEL_H_
 #define INET_MOBILITY_RL_MODELFILES_POLICY_NET_MODEL_H_
 
-constexpr int const_g_model_length = 40536;
+constexpr int const_g_model_length = 23412;
 
 const char* model_file_path = "D:/Skrivebord2/University/MscThesis/project/repo/AI_Lora_Mobility/inet4.4/src/inet/RL/modelfiles/gen_model.tflite"; // Path to your TFLite model file
 
@@ -11,6 +11,6 @@ const char* training_info_path = "D:/Skrivebord2/University/MscThesis/project/re
 
 const size_t NUMBER_OF_MODEL_NODES = 4;
 
-const int MAX_SEND_INTERVAL = 4000;
+const int MAX_SEND_INTERVAL = 8000;
 
 #endif  // INET_MOBILITY_RL_MODELFILES_POLICY_NET_MODEL_H_
