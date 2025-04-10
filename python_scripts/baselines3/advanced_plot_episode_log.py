@@ -72,7 +72,7 @@ def plot_relative_position(log_file, node_idx):
 
     plt.tight_layout(pad=3)  # Add padding to prevent overlap
     plt.subplots_adjust(bottom=0.15)  # Ensure space at the bottom for legends
-    plt.savefig(f"plots/distance_{node_idx}.png")
+    plt.savefig(f"plots/distance_{node_idx}.pdf")
     # plt.show()
 
 
@@ -136,7 +136,7 @@ def plot_mobile_gateway_with_nodes_advanced(log_file):
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.25)  # Add extra space at the bottom for the legend
 
-    plt.savefig("plots/packets.png")
+    plt.savefig("plots/packets.pdf")
     # plt.show()
 
 
@@ -181,7 +181,7 @@ def _plot_heatmap(grid, node_positions):
     plt.title('Mobile Gateway Heatmap')
     plt.xlabel('Grid X')
     plt.ylabel('Grid Y')
-    plt.savefig("plots/heatmap.png")
+    plt.savefig("plots/heatmap.pdf")
     # plt.show()
 
 
@@ -248,7 +248,7 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     axes[1].set_xticks([])
     # ax3.set_ylim(0, 1)
     plt.tight_layout()
-    plt.savefig("plots/box.png")
+    plt.savefig("plots/box.pdf")
     # plt.show()  # Show the box plot
 
     # Third plot: Bar plot for PDR & Fairness per node
@@ -296,5 +296,5 @@ def plot_batch_episode_performance(all_final_receives: list[list[int]], all_fina
     ax3.legend()
     plt.tight_layout()
 
-    plt.savefig("plots/bar.png")
+    plt.savefig("plots/bar.pdf")
     # plt.show()
