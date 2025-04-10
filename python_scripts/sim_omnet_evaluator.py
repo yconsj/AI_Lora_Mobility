@@ -63,7 +63,14 @@ def max_smooth(arr, axis=None):
     return arr  # Return unchanged if it's not 1D or 2D with axis specified
 
 
-def extract_episode_stats(df: pd.DataFrame, number_of_nodes: int, transmission_times: list[list[float]]):
+def extract_episode_stats(df: pd.DataFrame, run_meta: dict):
+    number_of_nodes = run_meta["static"]["number_of_nodes"]
+    # Unpack area bounds
+    min_x, min_y, _ = run_meta["static"]["area_min"]
+    max_x, max_y, _ = run_meta["static"]["area_max"]
+    transmission_times = run_meta["tx_times_list"]
+    node_positions = run_meta["static"].get("node_positions", [])
+
     timestamps = df["t"].to_numpy()
     actions = df["action"].to_numpy()
     gw_x = df["gw_x"].to_numpy()
@@ -114,7 +121,15 @@ def extract_episode_stats(df: pd.DataFrame, number_of_nodes: int, transmission_t
 
     return {
         "number_of_nodes": number_of_nodes,
+        "min_x": min_x,
+        "max_x": max_x,
+        "min_y": min_y,
+        "max_y": max_y,
+        "node_positions": node_positions,
         "distances": distances.tolist(),
+        "gw_x": gw_x.tolist(),
+        "gw_y": gw_y.tolist(),
+
         "transmission_times": transmission_times,
         "packets_sent": total_packets_sent.tolist(),
         "packets_sent_per_node": tx_per_node.tolist(),
@@ -156,12 +171,18 @@ def load_all_run_data(log_path: str):
     run_data = {}
     for run_key, run_meta in metadata.items():
         run_number = int(run_key)
-        node_count = run_meta["static"]["number_of_nodes"]
-        tx_times_raw = run_meta.get("transmission_times", {})
+        static = run_meta.get("static", {})
+        node_count = static.get("number_of_nodes", 0)
+        tx_times_raw = run_meta.pop("transmission_times", {})
+
+        # Convert dict of strings -> list into a list of lists ordered by node index
         tx_times_list = [tx_times_raw.get(str(i), []) for i in range(node_count)]
 
+        # Insert it directly into run_meta for convenience later
+        run_meta["tx_times_list"] = tx_times_list
+
         df_run = df[df["run"] == run_number].reset_index(drop=True)
-        run_data[run_number] = (df_run, node_count, tx_times_list)
+        run_data[run_number] = (df_run, run_meta)
 
     return run_data
 
@@ -211,7 +232,9 @@ def main():
     # Initialize OmnetEnv from the existing module
     env = OmnetEnv()
 
-    if False:
+    do_model_conversion = False
+    if do_model_conversion:
+        # will require a recompile in OMNeT++ if the model size was changed
         sb3_to_tflite_pipeline("baselines3/stable-model-2d-best/best_model")
     config = load_config("config.json")
     # Get log path from the configuration
@@ -220,12 +243,14 @@ def main():
         print("Log file path is not specified in the configuration.")
         return
 
-    include_stationary = True
-    include_static_mobility = False
     batch_size = 100  # 100
-    if True:
+    execute_sim = True
+    if execute_sim:
         print("Starting simulation...")
         env.run_simulation(ini_config="scenario_smart_stationary_gateways", batch_size=batch_size)
+
+    include_stationary = True
+    include_static_mobility = False
 
     # Data storage for batch results
     final_pdr_mobile_per_node_list = []
@@ -243,8 +268,8 @@ def main():
     print("Reading log data...")
     all_runs = load_all_run_data(log_path)
     for batch_idx in range(batch_size):
-        df_run, num_nodes, transmission_times = all_runs[batch_idx]
-        data = extract_episode_stats(df_run, num_nodes, transmission_times)
+        df_run, run_meta = all_runs[batch_idx]
+        data = extract_episode_stats(df_run, run_meta)
 
         # Extract final batch values
         final_pdr_mobile_per_node_list.append(data["pdr_mobile_per_node"][-1])
