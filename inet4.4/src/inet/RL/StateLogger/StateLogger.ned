@@ -19,5 +19,13 @@ package inet.RL.StateLogger;
 module StateLogger
 {
 	parameters :
+		// For logging purposes
+		double constraintAreaMinX @unit(m);
+        double constraintAreaMaxX @unit(m);
+        double constraintAreaMinY @unit(m);
+        double constraintAreaMaxY @unit(m);
+        double constraintAreaMinZ @unit(m);
+        double constraintAreaMaxZ @unit(m);
+        
 		@class(StateLogger);
 }

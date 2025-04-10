@@ -185,7 +185,43 @@ void StateLogger::writeToFile() {
 
     // Create run-specific JSON
     json runJson;
+    Coord areaMin, areaMax;
+    areaMin.x = par("constraintAreaMinX").doubleValue();
+    areaMin.y = par("constraintAreaMinY").doubleValue();
+    areaMin.z = par("constraintAreaMinZ").doubleValue();
+    areaMax.x = par("constraintAreaMaxX").doubleValue();
+    areaMax.y = par("constraintAreaMaxY").doubleValue();
+    areaMax.z = par("constraintAreaMaxZ").doubleValue();
+    runJson["static"]["area_min"] = {areaMin.x, areaMin.y, areaMin.z};
+    runJson["static"]["area_max"] = {areaMax.x, areaMax.y, areaMax.z};
     runJson["static"]["number_of_nodes"] = number_of_sim_nodes;
+
+    // Add node positions from loRaNodes module instances
+    json node_positions_json = json::array();
+    const char* lora_mod_str = "loRaNodes";
+
+    cModule* network = getSimulation()->getSystemModule();
+    cModule* loraContainer = network->getSubmodule("loRaNodes");
+
+
+    for (int node_index = 0; node_index < number_of_sim_nodes; ++node_index) {
+        cModule *lora_node_module = network->getSubmodule(lora_mod_str, node_index);
+        if (!lora_node_module) {
+            EV << "Warning: loRaNode[" << node_index << "] not found.\n";
+            continue;
+        }
+        auto *mobility = check_and_cast<StationaryMobility *>(lora_node_module->getSubmodule("mobility"));
+
+        // get stationary lora node positions
+        if (!mobility) {
+            throw cRuntimeError("Error, node missing mobility module in LoRa application for node %d", node_index);
+        }
+        Coord pos =  mobility->getCurrentPosition();
+        node_positions_json.push_back({pos.x, pos.y, pos.z});
+    }
+
+    runJson["static"]["node_positions"] = node_positions_json;
+
     runJson["file_reference"] = csv_file;
 
     // --- Add transmission_times ---
