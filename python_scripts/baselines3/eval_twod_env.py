@@ -15,26 +15,29 @@ from twod_env import TwoDEnv, schedule_first_packets, _generate_color_frame
 
 
 class eval_twod_env(TwoDEnv):
-    def __init__(self, render_mode="none", do_logging=False, log_file=None, node_positions=None,
-                 gateway_positon=(150, 10),
-                 send_intervals=None):
-        if send_intervals is None:
-            send_intervals = [1600, 1600, 1600, 1600]
-        if node_positions is None:
-            node_positions = [(50, 50), (250, 250), (50, 250), (250, 50)]
-        super().__init__(render_mode, do_logging, log_file, number_of_sim_nodes=len(node_positions))
+    def __init__(self, **kwargs):
+        # Provide defaults if not already passed
+        node_positions = kwargs.pop("node_positions", [(50, 50), (250, 250), (50, 250), (250, 50)])
+        send_intervals = kwargs.pop("send_intervals", [1600] * len(node_positions))
+        gateway_position = kwargs.pop("gateway_position", (150, 150))
 
-        self.pos = gateway_positon
+        # Ensure node count matches length of positions
+        kwargs.setdefault("number_of_sim_nodes", len(node_positions))
+
+        # Pass remaining args to parent class
+        super().__init__(**kwargs)
+
+        self.pos = gateway_position
         self.send_intervals = send_intervals
         self.positions = node_positions
 
     def reset(self, seed=None, options=None):
-        self.recent_packets = deque([-1] * self.recent_packets_length, maxlen=self.recent_packets_length)
-        self.prev_pos = self.pos
         self.total_misses = 0
         self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
-        #self.nodes[2].transmission_model.probability_modifier = 0  # set node 3 to have 0 prob of success transmit
+        # self.nodes[2].transmission_model.probability_modifier = 0  # set node 3 to have 0 prob of success transmit
+
         for i in range(len(self.nodes)):
+
             self.nodes[i].pos = self.positions[i]
             self.nodes[i].set_send_interval(self.send_intervals[i])
             self.nodes[i].time_to_first_packet = self.first_packets[i]

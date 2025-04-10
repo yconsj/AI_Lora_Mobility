@@ -1,115 +1,154 @@
 import json
-import multiprocessing
 import random
+import multiprocessing
 
-from stable_baselines3 import PPO, DQN
+from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
-from advanced_plot_episode_log import plot_mobile_gateway_with_nodes_advanced, plot_heatmap, \
-    plot_batch_episode_performance, plot_relative_positions
+
+from advanced_plot_episode_log import (
+    plot_mobile_gateway_with_nodes_advanced,
+    plot_heatmap,
+    plot_batch_episode_performance,
+    plot_relative_positions,
+)
 from twod_env import TwoDEnv, FrameSkip
 from eval_twod_env import eval_twod_env
 
+REWARD_KEYS = [
+    'reception_reward_sum',
+    'miss_reward_sum',
+    'position_reward_sum',
+    'action_reward_sum',
+]
 
-def sb3_get_action_probabilities(input_state, input_model):
-    obs = input_model.policy.obs_to_tensor(input_state)[0]
-    dis = input_model.policy.get_distribution(obs)
-    probabilities = dis.distribution.probs
-    probabilities_np = probabilities.detach().cpu().numpy()
-    return probabilities_np
+
+def sb3_get_action_probabilities(obs, model):
+    obs_tensor = model.policy.obs_to_tensor(obs)[0]
+    dist = model.policy.get_distribution(obs_tensor)
+    return dist.distribution.probs.detach().cpu().numpy()
 
 
-def make_skipped_env(do_logging, log_file, input_render_mode, do_eval_env=True):
+def make_skipped_env(do_logging, log_file, input_render_mode, do_eval_env=True, **kwargs):
+    """Creates a TwoD environment with optional evaluation mode and frame skipping."""
     time_skip = 10
-    number_of_sim_nodes = 5
+    node_positions = [(50, 50), (250, 250), (50, 250), (250, 50)]
+    send_intervals = [1600] * len(node_positions)
 
-    if do_eval_env:
-        send_intervals = [1600] * number_of_sim_nodes
-        node_positions = [(random.randint(0, 300), random.randint(0, 300)) for _ in range(number_of_sim_nodes)]
-        env = eval_twod_env(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file,
-                            send_intervals=send_intervals, node_positions=node_positions)
-    else:
-        env = TwoDEnv(render_mode=input_render_mode, do_logging=do_logging, log_file=log_file,
-                      max_steps=86400, number_of_sim_nodes=number_of_sim_nodes)
+    env_kwargs = dict(
+        render_mode=input_render_mode,
+        do_logging=do_logging,
+        log_file=log_file,
+        max_steps=86400,
+        number_of_sim_nodes=len(node_positions),
+        model_use_node_priority=False,
+        use_node_index_sorting=True,
+        **kwargs,
+    )
 
-    env = FrameSkip(env, skip=time_skip)  # Frame skip for action repeat
-    return env
+    env = eval_twod_env(node_positions=node_positions, send_intervals=send_intervals, **env_kwargs) if do_eval_env \
+        else TwoDEnv(**env_kwargs)
+
+    return FrameSkip(env, skip=time_skip)
+
+
+def log_reward_breakdown(step_idx, reward, info, obs, model):
+    print(f"\nStep {step_idx}, reward = {reward[0]:.3f}")
+    total = sum(info.get(k, 0.0) for k in REWARD_KEYS) or 1.0
+    for key in REWARD_KEYS:
+        val = info.get(key, 0.0)
+        print(f"{key}: {val:.3f}, fraction: {val / total:.2%}")
+    print(f"Observation: {obs[0]}")
+    print(f"Action probabilities: {sb3_get_action_probabilities(obs, model)}")
+
+
+def extract_final_node_stats(log_file):
+    with open(log_file, 'r') as file:
+        data = json.load(file)
+
+    dynamic = data["dynamic"]
+    node_count = len(dynamic[0]['packets_received_per_node'])
+
+    received = [[] for _ in range(node_count)]
+    sent = [[] for _ in range(node_count)]
+
+    for entry in dynamic:
+        for i in range(node_count):
+            received[i].append(entry['packets_received_per_node'][i])
+            sent[i].append(entry['packets_sent_per_node'][i])
+
+    final_received = [r[-1] for r in received]
+    final_sent = [s[-1] for s in sent]
+    return final_received, final_sent, data["static"]["number_of_nodes"]
 
 
 def evaluate_episodes(do_logging, log_file, n_episodes, mv_rendering_mode=None, do_eval_env=True):
-    # Store the number of packets received by gw and sent, for each node, at the final state of each episode.
-    all_final_receives = []
-    all_final_sents = []
+    all_final_receives, all_final_sents = [], []
 
-    model_class = PPO  # or DQN
-    test_best = True
-    do_action_debug = False
-    #   #
-    if test_best:
-        model = model_class.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
-    else:
-        model = model_class.load("stable-model", device="cpu", print_system_info=True)
-    print(f"{model.policy =}")
+    model = PPO.load("stable-model-2d-best/best_model", device="cpu", print_system_info=True)
+    print(f"{model.policy = }")
     model.set_random_seed(0)
-    vec_env = make_vec_env(make_skipped_env, n_envs=1,
-                           env_kwargs=dict(do_logging=do_logging, log_file=log_file,
-                                           input_render_mode=None, do_eval_env=do_eval_env)
-                           )
-    for ep_idx in range(n_episodes):
-        print(f"Starting episode {ep_idx}")
-        if (ep_idx + 1) == n_episodes:  # only (potentially) render the last episode in the batch.
-            vec_env = make_vec_env(make_skipped_env, n_envs=1,
-                                   env_kwargs=dict(do_logging=do_logging, log_file=log_file,
-                                                   input_render_mode=mv_rendering_mode, do_eval_env=do_eval_env))
-        obs = vec_env.reset()
 
-        # test trained model
-        done = False
-        counter = 0
+    # Create non-rendering env once for all but the last episode
+    vec_env = make_vec_env(
+        make_skipped_env,
+        n_envs=1,
+        env_kwargs=dict(
+            do_logging=do_logging,
+            log_file=log_file,
+            input_render_mode=None,
+            do_eval_env=do_eval_env,
+        )
+    )
+
+    for ep_idx in range(n_episodes):
+        is_last = (ep_idx + 1 == n_episodes)
+
+        # Replace env with rendering-enabled one only for the final episode
+        if is_last and mv_rendering_mode:
+            vec_env.close()  # Important to close the existing one before replacing
+            vec_env = make_vec_env(make_skipped_env, n_envs=1,
+                                   env_kwargs=dict(
+                                       do_logging=do_logging,
+                                       log_file=log_file,
+                                       input_render_mode=mv_rendering_mode,
+                                       do_eval_env=do_eval_env,
+                                   )
+                                   )
+
+        print(f"Starting episode {ep_idx + 1}/{n_episodes}")
+        obs = vec_env.reset()
+        done, step_counter = False, 0
+
         while not done:
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = vec_env.step(action)
-            if do_action_debug:
-                if counter % 100 == 0:
-                    action_probabilities = sb3_get_action_probabilities(obs, model)
-                    print(f"State: {obs}")
-                    print(f"Action: {action}")
-                    print(f"Action Probabilities: {action_probabilities}")
-                    print(f"Reward: {reward}")
-                counter += 1
+            obs, reward, done, infos = vec_env.step(action)
+            info = infos[0]
+
+            if step_counter % 100 == 0:
+                log_reward_breakdown(step_counter, reward, info, obs, model)
+            step_counter += 1
 
         if do_logging:
-            with open(log_file, 'r') as file:
-                data = json.load(file)
-            dynamic_data = data["dynamic"]
-            packets_received_per_node = [[] for _ in range(len(dynamic_data[0]['packets_received_per_node']))]
-            packets_sent_per_node = [[] for _ in range(len(dynamic_data[0]['packets_sent_per_node']))]
-            packets_missed_per_node = [[] for _ in range(len(dynamic_data[0]['packets_missed_per_node']))]
+            final_rx, final_tx, num_nodes = extract_final_node_stats(log_file)
+            all_final_receives.append(final_rx)
+            all_final_sents.append(final_tx)
 
-            for entry in dynamic_data:
-                for i, received in enumerate(entry['packets_received_per_node']):
-                    packets_received_per_node[i].append(received)
-                for i, sent in enumerate(entry['packets_sent_per_node']):
-                    packets_sent_per_node[i].append(sent)
-                for i, sent in enumerate(entry['packets_missed_per_node']):
-                    packets_missed_per_node[i].append(sent)
-            final_receiveds = [packets_received_per_node[i][-1] for i in range(len(packets_received_per_node))]
-            final_sents = [packets_sent_per_node[i][-1] for i in range(len(packets_sent_per_node))]
-            all_final_receives.append(final_receiveds)
-            all_final_sents.append(final_sents)
-
-            if ep_idx + 1 == n_episodes:  # only do these plots for the last episode in the batch.
-                number_of_nodes = data["static"]["number_of_nodes"]
-                plot_relative_positions(log_file, number_of_nodes=number_of_nodes)
+            if is_last:
+                plot_relative_positions(log_file, number_of_nodes=num_nodes)
                 plot_mobile_gateway_with_nodes_advanced(log_file)
                 plot_heatmap(log_file=log_file)
+
     if do_logging:
         plot_batch_episode_performance(all_final_receives, all_final_sents)
 
 
 if __name__ == '__main__':
     random.seed(0)
-    # Protect the entry point for multiprocessing
-    multiprocessing.set_start_method('spawn')  # Ensure spawn is used on Windows
-    rendering_mode = "cv2" if True else None
-    evaluate_episodes(do_logging=True, log_file="env_log.json", n_episodes=5,
-                      mv_rendering_mode=rendering_mode, do_eval_env=False)
+    multiprocessing.set_start_method('spawn')
+    evaluate_episodes(
+        do_logging=True,
+        log_file="env_log.json",
+        n_episodes=1,
+        mv_rendering_mode="cv2",
+        do_eval_env=True
+    )

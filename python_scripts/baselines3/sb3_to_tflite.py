@@ -96,12 +96,10 @@ def extract_torch_layers(module, input_dim):
     return layers, prev_dim, layer_count, node_count, edge_count
 
 
-def sb3_to_tensorflow(sb3_model, env, do_profiling = False):
+def sb3_to_tensorflow(sb3_model, env, do_profiling=False):
     """
     Converts an SB3 model to TensorFlow and computes layer, node, and edge counts.
     """
-
-
 
     input_dim = env.observation_space.shape[0]
     output_dim = env.action_space.n
@@ -114,13 +112,15 @@ def sb3_to_tensorflow(sb3_model, env, do_profiling = False):
         sb3_model.policy.action_net
     ]
 
-    tf_actor_layers, actor_output_dim, actor_layer_count, actor_node_count, actor_edge_count = extract_torch_layers(actor_layers, input_dim)
+    tf_actor_layers, actor_output_dim, actor_layer_count, actor_node_count, actor_edge_count = extract_torch_layers(
+        actor_layers, input_dim)
     actor_node_count += actor_output_dim
 
     if do_profiling:
         critic_layers = [sb3_model.policy.mlp_extractor.value_net, sb3_model.policy.value_net]
 
-        _, critic_output_dim, critic_layer_count, critic_node_count, critic_edge_count = extract_torch_layers(critic_layers, input_dim)
+        _, critic_output_dim, critic_layer_count, critic_node_count, critic_edge_count = extract_torch_layers(
+            critic_layers, input_dim)
         critic_node_count += critic_output_dim
 
         print(f"Actor layers: {actor_layer_count}\n"
@@ -202,7 +202,9 @@ def sb3_to_tflite_pipeline(relative_model_path):
     }
 
     model = PPO.load(relative_model_path, print_system_info=True, custom_objects=custom_objects, device="cpu")
-    env = make_vec_env(TwoDEnv, n_envs=1, env_kwargs=dict())
+    env = make_vec_env(TwoDEnv, n_envs=1,
+                       env_kwargs=dict(use_node_index_sorting=True,
+                                       model_use_node_priority=False))
     max_send_interval = env.get_attr("max_send_interval")[0]
     number_of_model_nodes = env.get_attr("number_of_model_nodes")[0]
     model_use_node_priority = env.get_attr("model_use_node_priority")[0]

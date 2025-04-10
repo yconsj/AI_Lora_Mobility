@@ -10,6 +10,7 @@ import cv2
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from matplotlib import pyplot as plt
 from scipy.stats import truncnorm
 
 from utilities import jains_fairness_index, n_smallest_indices
@@ -92,7 +93,7 @@ class TwoDEnv(gym.Env):
         self.log_file: Optional[str] = kwargs.pop("log_file", None)
         self.max_steps: int = kwargs.pop("max_steps", int(86400 / 4))
         self.number_of_model_nodes: int = kwargs.pop("number_of_model_nodes", 4)
-        self.number_of_sim_nodes: int = kwargs.pop("number_of_sim_nodes", 20)
+        self.number_of_sim_nodes: int = kwargs.pop("number_of_sim_nodes", 4)
         self.use_node_index_sorting: bool = kwargs.pop("use_node_index_sorting", True)
         self.model_use_node_priority: bool = kwargs.pop("model_use_node_priority", True)
 
@@ -101,17 +102,23 @@ class TwoDEnv(gym.Env):
             warnings.warn(f"Unused kwargs in TwoDEnv constructor: {list(kwargs.keys())}", stacklevel=2)
 
         # --- Simulation constants ---
-        self.max_send_interval = 8000
+        self.max_send_interval = 8000  # 8000  # "Final_model" used 4000, new models use 8000
 
         # Reward shaping
         self.packet_reward_max = 1.0
         self.packet_reward_min = 0.0
         self.fairness_reward = 0.0625
-        self.pos_reward_max = 0.0125 / 2
+        self.pos_reward_max = 0.0125 / 2  # 0.0125 / 2
         self.pos_reward_min = -self.pos_reward_max
         self.good_action_reward = self.pos_reward_max / 4
         self.miss_penalty_max = 0.5
         self.miss_penalty_min = self.miss_penalty_max / 2
+
+        # Reward magnitude statistics (per episode)
+        self.reception_reward_sum = 0.0
+        self.miss_reward_sum = 0.0
+        self.position_reward_sum = 0.0
+        self.action_reward_sum = 0.0
 
         # --- Environment space & mobility setup ---
         self.steps = 0
@@ -238,6 +245,11 @@ class TwoDEnv(gym.Env):
         self.total_misses = 0
         self.fairness = 0.0
 
+        self.reception_reward_sum = 0.0
+        self.miss_reward_sum = 0.0
+        self.position_reward_sum = 0.0
+        self.action_reward_sum = 0.0
+
         # Randomize gateway position
         self.pos = (
             random.randint(0, self.max_distance_x),
@@ -249,9 +261,9 @@ class TwoDEnv(gym.Env):
             num_positions=self.number_of_sim_nodes,
             min_dist=5  # can parameterize later
         )
-        self.base_send_interval = random.choice([2000, 2500, 3000, 3500])
+        self.base_send_interval = random.choice([1000, 2000, 2500, 3000, 3500])
         self.send_intervals = [
-            self.base_send_interval * random.choice([1, 2])
+            self.base_send_interval * random.choice([1, 2, 3])
             for _ in range(self.number_of_sim_nodes)
         ]
         random.shuffle(self.send_intervals)
@@ -320,8 +332,11 @@ class TwoDEnv(gym.Env):
         node = self.nodes[sending_node_idx]
         distance = math.dist(self.pos, node.pos)
         reception_prob = node.transmission_model.get_reception_prob(distance)
-        priority_weight = 0.5 + self.calculate_node_priority(sending_node_idx) / 2.0
-        return self.packet_reward_max * reception_prob * priority_weight
+        reward = self.packet_reward_max * reception_prob
+        if self.model_use_node_priority:
+            priority_weight = 0.5 + self.calculate_node_priority(sending_node_idx) / 2.0
+            reward *= priority_weight
+        return reward
 
     def get_pos_reward(self, node: 'Node'):
         distance = math.dist(self.pos, node.pos)
@@ -351,7 +366,12 @@ class TwoDEnv(gym.Env):
         return -min(self.miss_penalty_max, max(self.miss_penalty_min, penalty))
 
     def get_good_action_reward(self, distance_before, distance_after):
-        return self.good_action_reward if distance_after < distance_before else -2 * self.good_action_reward
+        if (distance_before < self.node_max_transmission_distance and
+            distance_after < self.node_max_transmission_distance) \
+                or distance_after < distance_before:
+            return self.good_action_reward
+        else:
+            return -2 * self.good_action_reward
 
     def step(self, action):
         reward = 0
@@ -380,9 +400,13 @@ class TwoDEnv(gym.Env):
 
         self.pos = (x, y)
 
-        reward += self.get_pos_reward(node)
+        pos_reward = self.get_pos_reward(node)
+        self.position_reward_sum += abs(pos_reward)
+        reward += pos_reward
         distance_after = math.dist(self.pos, node.pos)
-        reward += self.get_good_action_reward(distance_before, distance_after)
+        action_reward = self.get_good_action_reward(distance_before, distance_after)
+        self.action_reward_sum += abs(action_reward)
+        reward += action_reward
 
         # Transmissions
         transmission_flags = [True] * len(self.nodes)
@@ -393,7 +417,9 @@ class TwoDEnv(gym.Env):
             if result == PACKET_STATUS.NOT_SENT:
                 transmission_flags[i] = False
             elif result == PACKET_STATUS.RECEIVED:
-                reward += self.get_packet_reward(i)
+                reception_reward = self.get_packet_reward(i)
+                self.reception_reward_sum += abs(reception_reward)
+                reward += reception_reward
                 self.total_received += 1
                 self.received_per_node[i] += 1
                 self.elapsed_times[i] = 0
@@ -405,7 +431,9 @@ class TwoDEnv(gym.Env):
                 self.total_misses += 1
                 self.misses_per_node[i] += 1
                 self.loss_counts[i] += 1
-                reward += self.get_miss_penalty(node)
+                miss_reward = self.get_miss_penalty(node)
+                reward += miss_reward
+                self.miss_reward_sum += abs(miss_reward)
 
         # Update expected send time
         for i, t in enumerate(self.expected_send_time):
@@ -420,7 +448,11 @@ class TwoDEnv(gym.Env):
         info = {
             'total_received': self.total_received,
             'total_misses': self.total_misses,
-            'fairness': self.fairness
+            'fairness': self.fairness,
+            'reception_reward_sum': self.reception_reward_sum,
+            'miss_reward_sum': self.miss_reward_sum,
+            'position_reward_sum': self.position_reward_sum,
+            'action_reward_sum': self.action_reward_sum
         }
 
         if self.do_logging:
@@ -529,6 +561,20 @@ class TwoDEnv(gym.Env):
 
         # Render text data and stats
         canvas = self.render_text_data(frame)
+
+        do_env_image_export = False
+        if do_env_image_export and (self.steps == 3000):
+            # export canvas to "plots/sb3_env.pdf"
+            # Convert BGR (OpenCV default) to RGB
+            rgb_canvas = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
+
+            # Plot using matplotlib and save as vector-friendly PDF
+            fig, ax = plt.subplots(figsize=(10, 10), dpi=300)
+            ax.axis('off')
+            ax.imshow(rgb_canvas)
+            plt.tight_layout()
+            plt.savefig("plots/sb3_env_render.pdf", format="pdf", bbox_inches="tight")
+            plt.close()
 
         # Enable resizable window and update the content dynamically
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
