@@ -88,7 +88,7 @@ class TwoDEnv(gym.Env):
         super(TwoDEnv, self).__init__()
 
         # Configurable parameters with type hints and defaults
-        self.render_mode: str = kwargs.pop("render_mode", "none")
+        self.render_mode: Optional[str] = kwargs.pop("render_mode", None)
         self.do_logging: bool = kwargs.pop("do_logging", False)
         self.log_file: Optional[str] = kwargs.pop("log_file", None)
         self.max_steps: int = kwargs.pop("max_steps", int(86400 / 4))

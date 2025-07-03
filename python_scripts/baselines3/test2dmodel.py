@@ -14,12 +14,7 @@ from advanced_plot_episode_log import (
 from twod_env import TwoDEnv, FrameSkip
 from eval_twod_env import eval_twod_env
 
-REWARD_KEYS = [
-    'reception_reward_sum',
-    'miss_reward_sum',
-    'position_reward_sum',
-    'action_reward_sum',
-]
+
 
 
 def sb3_get_action_probabilities(obs, model):
@@ -31,7 +26,7 @@ def sb3_get_action_probabilities(obs, model):
 def make_skipped_env(do_logging, log_file, input_render_mode, do_eval_env=True, **kwargs):
     """Creates a TwoD environment with optional evaluation mode and frame skipping."""
     time_skip = 10
-    node_positions = [(50, 50), (250, 250), (50, 250), (250, 50)]
+    node_positions = [(50, 50), (50, 250), (250, 250), (250, 50)]
     send_intervals = [1600] * len(node_positions)
 
     env_kwargs = dict(
@@ -41,7 +36,7 @@ def make_skipped_env(do_logging, log_file, input_render_mode, do_eval_env=True, 
         max_steps=86400,
         number_of_sim_nodes=len(node_positions),
         model_use_node_priority=False,
-        use_node_index_sorting=True,
+        use_node_index_sorting=False,
         **kwargs,
     )
 
@@ -52,6 +47,12 @@ def make_skipped_env(do_logging, log_file, input_render_mode, do_eval_env=True, 
 
 
 def log_reward_breakdown(step_idx, reward, info, obs, model):
+    REWARD_KEYS = [
+        'reception_reward_sum',
+        'miss_reward_sum',
+        'position_reward_sum',
+        'action_reward_sum',
+    ]
     print(f"\nStep {step_idx}, reward = {reward[0]:.3f}")
     total = sum(info.get(k, 0.0) for k in REWARD_KEYS) or 1.0
     for key in REWARD_KEYS:
@@ -149,6 +150,6 @@ if __name__ == '__main__':
         do_logging=True,
         log_file="env_log.json",
         n_episodes=1,
-        mv_rendering_mode="cv2",
+        mv_rendering_mode=None,#"cv2",
         do_eval_env=True
     )

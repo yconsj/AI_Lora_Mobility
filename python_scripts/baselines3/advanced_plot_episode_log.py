@@ -1,8 +1,22 @@
 import json
-from matplotlib import lines
+import os
+
+from matplotlib import lines, rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 from utilities import jains_fairness_index
+
+# Global matplotlib configuration for publication quality
+rcParams.update({
+    'font.size': 22,           # Set global font size
+    'pdf.fonttype': 42,        # TrueType fonts (no Type 3)
+    'ps.fonttype': 42,
+    'axes.labelsize': 22,      # Axis labels
+    'xtick.labelsize': 22,     # X tick labels
+    'ytick.labelsize': 22,     # Y tick labels
+    'axes.titlesize': 22,      # Title
+    'legend.fontsize': 22,     # Legend text
+})
 
 
 def generate_n_colors(n, cmap="tab10"):
@@ -166,10 +180,14 @@ def create_heatmap(gw_positions, grid_size_x, grid_size_y):
     return grid
 
 
-def _plot_heatmap(grid, node_positions):
+def _plot_heatmap(grid, node_positions, output_dir="plots", filename="heatmap.pdf"):
     """
     Plots the heatmap using Matplotlib.
     """
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    output_path = os.path.join(output_dir, filename)
+
     plt.figure(figsize=(10, 8))
     # invert y-axis to match with render screen, where y ascends in the downwards direction:
     plt.imshow(grid, origin='upper', cmap='hot')
@@ -181,7 +199,10 @@ def _plot_heatmap(grid, node_positions):
     plt.title('Mobile Gateway Heatmap')
     plt.xlabel('Grid X')
     plt.ylabel('Grid Y')
-    plt.savefig("plots/heatmap.pdf")
+    plt.tight_layout()
+    plt.savefig(output_path, format='pdf')  # Ensure PDF format
+    plt.close()
+
     # plt.show()
 
 

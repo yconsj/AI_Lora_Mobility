@@ -17,7 +17,7 @@ from twod_env import TwoDEnv, schedule_first_packets, _generate_color_frame
 class eval_twod_env(TwoDEnv):
     def __init__(self, **kwargs):
         # Provide defaults if not already passed
-        node_positions = kwargs.pop("node_positions", [(50, 50), (250, 250), (50, 250), (250, 50)])
+        node_positions = kwargs.pop("node_positions", [(50, 50), (50, 250), (250, 250), (250, 50)])
         send_intervals = kwargs.pop("send_intervals", [1600] * len(node_positions))
         gateway_position = kwargs.pop("gateway_position", (150, 150))
 
@@ -33,7 +33,9 @@ class eval_twod_env(TwoDEnv):
 
     def reset(self, seed=None, options=None):
         self.total_misses = 0
-        self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
+        # self.first_packets = schedule_first_packets(self.send_intervals, initial_delay=600)
+        self.first_packets = [600, 1000, 1400, 1800]
+
         # self.nodes[2].transmission_model.probability_modifier = 0  # set node 3 to have 0 prob of success transmit
 
         for i in range(len(self.nodes)):
